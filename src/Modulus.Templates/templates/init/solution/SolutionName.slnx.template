@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/src/">
+    <Folder Name="/src/BuildingBlocks/">
+      <Project Path="src/BuildingBlocks.Domain/BuildingBlocks.Domain.csproj" />
+      <Project Path="src/BuildingBlocks.Application/BuildingBlocks.Application.csproj" />
+      <Project Path="src/BuildingBlocks.Infrastructure/BuildingBlocks.Infrastructure.csproj" />
+      <Project Path="src/BuildingBlocks.Integration/BuildingBlocks.Integration.csproj" />
+    </Folder>
+    <Project Path="src/{{SolutionName}}.WebApi/{{SolutionName}}.WebApi.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/{{SolutionName}}.Tests.Common/{{SolutionName}}.Tests.Common.csproj" />
+    <Project Path="tests/{{SolutionName}}.Tests.Architecture/{{SolutionName}}.Tests.Architecture.csproj" />
+    <Project Path="tests/{{SolutionName}}.Tests.Integration/{{SolutionName}}.Tests.Integration.csproj" />
+  </Folder>
+</Solution>

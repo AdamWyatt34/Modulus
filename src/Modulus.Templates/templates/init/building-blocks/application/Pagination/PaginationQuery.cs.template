@@ -1,0 +1,16 @@
+namespace {{RootNamespace}}.BuildingBlocks.Application.Pagination;
+
+public abstract record PaginationQuery
+{
+    private const int MaxPageSize = 100;
+
+    public int Page { get; init; } = 1;
+
+    private int _pageSize = 10;
+
+    public int PageSize
+    {
+        get => _pageSize;
+        init => _pageSize = value > MaxPageSize ? MaxPageSize : value < 1 ? 1 : value;
+    }
+}

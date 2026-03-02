@@ -1,0 +1,24 @@
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
+using Modulus.Mediator.Abstractions;
+using {{RootNamespace}}.BuildingBlocks.Infrastructure.Endpoints;
+using {{RootNamespace}}.WebApi.Extensions;
+using {{RootNamespace}}.{{ModuleName}}.Application.Samples;
+
+namespace {{RootNamespace}}.{{ModuleName}}.Api.Endpoints;
+
+public sealed class GetSample : IEndpoint
+{
+    public void MapEndpoint(IEndpointRouteBuilder app)
+    {
+        app.MapGet("/", async (IMediator mediator, CancellationToken ct) =>
+        {
+            var result = await mediator.Query(new GetSampleQuery(), ct);
+            return result.Match(Results.Ok, ApiResults.Problem);
+        })
+        .WithName("Get{{ModuleName}}Sample")
+        .Produces<string>(StatusCodes.Status200OK)
+        .ProducesProblem(StatusCodes.Status500InternalServerError);
+    }
+}

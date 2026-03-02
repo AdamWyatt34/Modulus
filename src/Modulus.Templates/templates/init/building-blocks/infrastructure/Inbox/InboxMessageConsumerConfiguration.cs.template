@@ -1,0 +1,14 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Modulus.Messaging.Abstractions;
+
+namespace {{RootNamespace}}.BuildingBlocks.Infrastructure.Inbox;
+
+public class InboxMessageConsumerConfiguration : IEntityTypeConfiguration<InboxMessageConsumer>
+{
+    public void Configure(EntityTypeBuilder<InboxMessageConsumer> builder)
+    {
+        builder.HasKey(e => new { e.InboxMessageId, e.Name });
+        builder.Property(e => e.Name).IsRequired().HasMaxLength(500);
+    }
+}

@@ -1,0 +1,15 @@
+namespace {{RootNamespace}}.{{ModuleName}}.Application.Data;
+
+/// <summary>
+/// Read-only data access interface for queries (CQRS read side).
+/// Add IQueryable properties for each entity you need to query.
+/// </summary>
+/// <example>
+/// <code>
+/// IQueryable&lt;Product&gt; Products { get; }
+/// IQueryable&lt;Category&gt; Categories { get; }
+/// </code>
+/// </example>
+public interface IQueryDb
+{
+}

@@ -1,0 +1,39 @@
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
+using Testcontainers.MsSql;
+
+namespace {{RootNamespace}}.{{ModuleName}}.Tests.Integration;
+
+public abstract class {{ModuleName}}IntegrationTestBase : IAsyncLifetime
+{
+    private readonly MsSqlContainer _dbContainer = new MsSqlBuilder().Build();
+
+    protected WebApplicationFactory<Program> Factory = null!;
+    protected HttpClient Client = null!;
+
+    public virtual async ValueTask InitializeAsync()
+    {
+        await _dbContainer.StartAsync();
+
+        Factory = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder =>
+            {
+                builder.ConfigureAppConfiguration((_, config) =>
+                {
+                    config.AddInMemoryCollection(new Dictionary<string, string?>
+                    {
+                        ["ConnectionStrings:Default"] = _dbContainer.GetConnectionString()
+                    });
+                });
+            });
+
+        Client = Factory.CreateClient();
+    }
+
+    public virtual async ValueTask DisposeAsync()
+    {
+        Client.Dispose();
+        await Factory.DisposeAsync();
+        await _dbContainer.DisposeAsync();
+    }
+}

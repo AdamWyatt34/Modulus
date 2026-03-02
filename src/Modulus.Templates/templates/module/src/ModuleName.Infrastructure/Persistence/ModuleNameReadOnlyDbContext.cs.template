@@ -1,0 +1,31 @@
+using Microsoft.EntityFrameworkCore;
+using {{RootNamespace}}.{{ModuleName}}.Application.Data;
+
+namespace {{RootNamespace}}.{{ModuleName}}.Infrastructure.Persistence;
+
+/// <summary>
+/// Read-only DbContext for query operations. Uses NoTracking by default.
+/// Add IQueryable properties matching those declared in <see cref="IQueryDb"/>.
+/// </summary>
+public sealed class {{ModuleName}}ReadOnlyDbContext : DbContext, IQueryDb
+{
+    public {{ModuleName}}ReadOnlyDbContext(DbContextOptions<{{ModuleName}}ReadOnlyDbContext> options)
+        : base(options)
+    {
+    }
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        base.OnConfiguring(optionsBuilder);
+        optionsBuilder.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
+    }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+        modelBuilder.HasDefaultSchema("{{ModuleNameLower}}");
+
+        // Apply the same entity configurations as the write DbContext
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof({{ModuleName}}ReadOnlyDbContext).Assembly);
+    }
+}

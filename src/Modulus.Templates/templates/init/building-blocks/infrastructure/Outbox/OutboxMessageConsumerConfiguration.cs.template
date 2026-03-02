@@ -1,0 +1,13 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace {{RootNamespace}}.BuildingBlocks.Infrastructure.Outbox;
+
+public class OutboxMessageConsumerConfiguration : IEntityTypeConfiguration<OutboxMessageConsumer>
+{
+    public void Configure(EntityTypeBuilder<OutboxMessageConsumer> builder)
+    {
+        builder.HasKey(e => new { e.OutboxMessageId, e.Name });
+        builder.Property(e => e.Name).IsRequired().HasMaxLength(500);
+    }
+}

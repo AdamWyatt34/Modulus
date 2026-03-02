@@ -1,0 +1,74 @@
+using Microsoft.EntityFrameworkCore;
+using Modulus.Mediator.Abstractions;
+using Modulus.Messaging.Abstractions;
+using {{RootNamespace}}.BuildingBlocks.Application;
+using {{RootNamespace}}.BuildingBlocks.Domain.Entities;
+using {{RootNamespace}}.BuildingBlocks.Infrastructure.Inbox;
+using {{RootNamespace}}.BuildingBlocks.Infrastructure.Outbox;
+
+namespace {{RootNamespace}}.BuildingBlocks.Infrastructure.Persistence;
+
+public abstract class BaseDbContext : DbContext, IUnitOfWork
+{
+    private readonly IMediator _mediator;
+
+    protected BaseDbContext(DbContextOptions options, IMediator mediator) : base(options)
+    {
+        _mediator = mediator;
+    }
+
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+    public DbSet<OutboxMessageConsumer> OutboxMessageConsumers => Set<OutboxMessageConsumer>();
+    public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
+    public DbSet<InboxMessageConsumer> InboxMessageConsumers => Set<InboxMessageConsumer>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+        modelBuilder.ApplyConfiguration(new OutboxConfiguration());
+        modelBuilder.ApplyConfiguration(new OutboxMessageConsumerConfiguration());
+        modelBuilder.ApplyConfiguration(new InboxConfiguration());
+        modelBuilder.ApplyConfiguration(new InboxMessageConsumerConfiguration());
+    }
+
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        var domainEvents = ExtractDomainEvents();
+
+        int result = await base.SaveChangesAsync(cancellationToken);
+
+        await DispatchDomainEvents(domainEvents, cancellationToken);
+
+        return result;
+    }
+
+    private List<IDomainEvent> ExtractDomainEvents()
+    {
+        var aggregates = ChangeTracker
+            .Entries<IHasDomainEvents>()
+            .Where(e => e.Entity.DomainEvents.Count > 0)
+            .Select(e => e.Entity)
+            .ToList();
+
+        var domainEvents = aggregates
+            .SelectMany(a => a.DomainEvents)
+            .ToList();
+
+        foreach (var aggregate in aggregates)
+        {
+            aggregate.ClearDomainEvents();
+        }
+
+        return domainEvents;
+    }
+
+    private async Task DispatchDomainEvents(
+        List<IDomainEvent> domainEvents,
+        CancellationToken cancellationToken)
+    {
+        foreach (var domainEvent in domainEvents)
+        {
+            await _mediator.Publish(domainEvent, cancellationToken);
+        }
+    }
+}

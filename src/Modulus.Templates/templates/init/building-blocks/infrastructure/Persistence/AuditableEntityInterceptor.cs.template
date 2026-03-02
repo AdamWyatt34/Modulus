@@ -1,0 +1,51 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using {{RootNamespace}}.BuildingBlocks.Domain.Entities;
+
+namespace {{RootNamespace}}.BuildingBlocks.Infrastructure.Persistence;
+
+public sealed class AuditableEntityInterceptor : SaveChangesInterceptor
+{
+    public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+        DbContextEventData eventData,
+        InterceptionResult<int> result,
+        CancellationToken cancellationToken = default)
+    {
+        if (eventData.Context is not null)
+        {
+            UpdateAuditableEntities(eventData.Context);
+        }
+
+        return base.SavingChangesAsync(eventData, result, cancellationToken);
+    }
+
+    public override InterceptionResult<int> SavingChanges(
+        DbContextEventData eventData,
+        InterceptionResult<int> result)
+    {
+        if (eventData.Context is not null)
+        {
+            UpdateAuditableEntities(eventData.Context);
+        }
+
+        return base.SavingChanges(eventData, result);
+    }
+
+    private static void UpdateAuditableEntities(DbContext context)
+    {
+        var utcNow = DateTime.UtcNow;
+
+        foreach (var entry in context.ChangeTracker.Entries<IAuditable>())
+        {
+            if (entry.State == EntityState.Added)
+            {
+                entry.Entity.CreatedAtUtc = utcNow;
+            }
+
+            if (entry.State is EntityState.Added or EntityState.Modified)
+            {
+                entry.Entity.UpdatedAtUtc = utcNow;
+            }
+        }
+    }
+}

@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="templates\**" />
+    <None Remove="templates\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="templates\**\*" />
+    <EmbeddedResource Update="templates\**\*.cs.template" WithCulture="false" />
+  </ItemGroup>
+
+</Project>

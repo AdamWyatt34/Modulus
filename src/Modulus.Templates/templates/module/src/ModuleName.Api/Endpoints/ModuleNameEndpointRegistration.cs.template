@@ -1,0 +1,28 @@
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Routing;
+using {{RootNamespace}}.BuildingBlocks.Infrastructure.Endpoints;
+
+namespace {{RootNamespace}}.{{ModuleName}}.Api.Endpoints;
+
+public static class {{ModuleName}}EndpointRegistration
+{
+    public static IEndpointRouteBuilder Map{{ModuleName}}Endpoints(this IEndpointRouteBuilder app)
+    {
+        var group = app.MapGroup("/api/{{ModuleNameLower}}")
+            .WithTags("{{ModuleName}}");
+
+        var endpoints = typeof({{ModuleName}}EndpointRegistration).Assembly
+            .GetTypes()
+            .Where(t => t is { IsAbstract: false, IsInterface: false }
+                        && typeof(IEndpoint).IsAssignableFrom(t))
+            .Select(Activator.CreateInstance)
+            .Cast<IEndpoint>();
+
+        foreach (var endpoint in endpoints)
+        {
+            endpoint.MapEndpoint(group);
+        }
+
+        return app;
+    }
+}

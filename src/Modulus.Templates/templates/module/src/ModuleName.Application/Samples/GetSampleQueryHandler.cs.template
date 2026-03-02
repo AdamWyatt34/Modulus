@@ -1,0 +1,11 @@
+using Modulus.Mediator.Abstractions;
+
+namespace {{RootNamespace}}.{{ModuleName}}.Application.Samples;
+
+public sealed class GetSampleQueryHandler : IQueryHandler<GetSampleQuery, string>
+{
+    public Task<Result<string>> Handle(GetSampleQuery query, CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(Result<string>.Success("{{ModuleName}} module is running"));
+    }
+}

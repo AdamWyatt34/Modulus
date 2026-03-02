@@ -1,0 +1,23 @@
+namespace {{RootNamespace}}.WebApi.Extensions;
+
+/// <summary>
+/// Adds per-module configuration file support (e.g. modules.catalog.json).
+/// </summary>
+public static class ConfigurationExtensions
+{
+    public static IConfigurationBuilder AddModuleConfiguration(
+        this IConfigurationBuilder builder,
+        params string[] moduleNames)
+    {
+        var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
+
+        foreach (var module in moduleNames)
+        {
+            var name = module.ToLowerInvariant();
+            builder.AddJsonFile($"modules.{name}.json", optional: true, reloadOnChange: true);
+            builder.AddJsonFile($"modules.{name}.{env}.json", optional: true, reloadOnChange: true);
+        }
+
+        return builder;
+    }
+}

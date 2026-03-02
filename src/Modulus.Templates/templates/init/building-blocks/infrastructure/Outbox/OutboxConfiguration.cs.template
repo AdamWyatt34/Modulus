@@ -1,0 +1,18 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Modulus.Messaging.Abstractions;
+
+namespace {{RootNamespace}}.BuildingBlocks.Infrastructure.Outbox;
+
+public class OutboxConfiguration : IEntityTypeConfiguration<OutboxMessage>
+{
+    public void Configure(EntityTypeBuilder<OutboxMessage> builder)
+    {
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.EventType).IsRequired().HasMaxLength(500);
+        builder.Property(e => e.Payload).IsRequired();
+        builder.Property(e => e.CreatedAt).IsRequired();
+        builder.Property(e => e.ProcessedAt);
+        builder.HasIndex(e => e.ProcessedAt);
+    }
+}

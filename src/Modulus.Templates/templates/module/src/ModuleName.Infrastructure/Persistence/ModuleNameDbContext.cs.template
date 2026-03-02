@@ -1,0 +1,19 @@
+using Microsoft.EntityFrameworkCore;
+using Modulus.Mediator.Abstractions;
+using {{RootNamespace}}.BuildingBlocks.Infrastructure.Persistence;
+
+namespace {{RootNamespace}}.{{ModuleName}}.Infrastructure.Persistence;
+
+public sealed class {{ModuleName}}DbContext(
+    DbContextOptions<{{ModuleName}}DbContext> options,
+    IMediator mediator) : BaseDbContext(options, mediator)
+{
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+        modelBuilder.HasDefaultSchema("{{ModuleNameLower}}");
+
+        // Apply entity configurations from this assembly
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof({{ModuleName}}DbContext).Assembly);
+    }
+}

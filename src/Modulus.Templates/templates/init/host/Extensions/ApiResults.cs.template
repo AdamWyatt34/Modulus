@@ -1,0 +1,58 @@
+using Microsoft.AspNetCore.Http;
+using Modulus.Mediator.Abstractions;
+
+namespace {{RootNamespace}}.WebApi.Extensions;
+
+/// <summary>
+/// Factory methods for mapping <see cref="Result"/> failures to ProblemDetails HTTP responses.
+/// Designed for use with <c>result.Match(Results.Ok, ApiResults.Problem)</c>.
+/// </summary>
+public static class ApiResults
+{
+    private const string Rfc7231Base = "https://tools.ietf.org/html/rfc7231#section-6.";
+
+    public static IResult Problem(Result result)
+    {
+        if (result.IsSuccess)
+            throw new InvalidOperationException("Cannot create a problem response from a successful result.");
+
+        var primaryError = result.Errors[0];
+
+        return primaryError.Type switch
+        {
+            ErrorType.Validation => Results.ValidationProblem(
+                result.Errors
+                    .GroupBy(e => e.Code)
+                    .ToDictionary(g => g.Key, g => g.Select(e => e.Description).ToArray()),
+                title: "Validation Error",
+                type: $"{Rfc7231Base}5.1"),
+            ErrorType.NotFound => Results.Problem(
+                title: "Not Found",
+                detail: primaryError.Description,
+                statusCode: StatusCodes.Status404NotFound,
+                type: $"{Rfc7231Base}5.4"),
+            ErrorType.Conflict => Results.Problem(
+                title: "Conflict",
+                detail: primaryError.Description,
+                statusCode: StatusCodes.Status409Conflict,
+                type: $"{Rfc7231Base}5.9"),
+            ErrorType.Unauthorized => Results.Problem(
+                title: "Unauthorized",
+                detail: primaryError.Description,
+                statusCode: StatusCodes.Status401Unauthorized,
+                type: $"{Rfc7231Base}5.1"),
+            ErrorType.Forbidden => Results.Problem(
+                title: "Forbidden",
+                detail: primaryError.Description,
+                statusCode: StatusCodes.Status403Forbidden,
+                type: $"{Rfc7231Base}5.3"),
+            _ => Results.Problem(
+                title: "Internal Server Error",
+                detail: primaryError.Description,
+                statusCode: StatusCodes.Status500InternalServerError,
+                type: $"{Rfc7231Base}6.1"),
+        };
+    }
+
+    public static IResult Problem<TValue>(Result<TValue> result) => Problem((Result)result);
+}

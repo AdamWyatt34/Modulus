@@ -1,0 +1,149 @@
+using System.Reflection;
+using NetArchTest.Rules;
+using Shouldly;
+using {{RootNamespace}}.{{ModuleName}}.Api.Endpoints;
+using {{RootNamespace}}.{{ModuleName}}.Infrastructure.Persistence;
+
+namespace {{RootNamespace}}.{{ModuleName}}.Tests.Architecture;
+
+public class LayerDependencyTests
+{
+    private static readonly Assembly DomainAssembly = {{ModuleName}}.Domain.AssemblyReference.Assembly;
+    private static readonly Assembly ApplicationAssembly = {{ModuleName}}.Application.AssemblyReference.Assembly;
+    private static readonly Assembly InfrastructureAssembly = typeof({{ModuleName}}DbContext).Assembly;
+    private static readonly Assembly ApiAssembly = typeof({{ModuleName}}Endpoints).Assembly;
+
+    private static readonly string RootNamespace = "{{RootNamespace}}";
+    private static readonly string ModuleName = "{{ModuleName}}";
+
+    // ── Domain layer isolation ──────────────────────────────────────────
+
+    [Fact]
+    public void Domain_should_not_depend_on_Application()
+    {
+        Types.InAssembly(DomainAssembly)
+            .ShouldNot()
+            .HaveDependencyOn($"{RootNamespace}.{ModuleName}.Application")
+            .GetResult()
+            .IsSuccessful
+            .ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Domain_should_not_depend_on_Infrastructure()
+    {
+        Types.InAssembly(DomainAssembly)
+            .ShouldNot()
+            .HaveDependencyOn($"{RootNamespace}.{ModuleName}.Infrastructure")
+            .GetResult()
+            .IsSuccessful
+            .ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Domain_should_not_depend_on_Api()
+    {
+        Types.InAssembly(DomainAssembly)
+            .ShouldNot()
+            .HaveDependencyOn($"{RootNamespace}.{ModuleName}.Api")
+            .GetResult()
+            .IsSuccessful
+            .ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Domain_should_not_depend_on_other_modules()
+    {
+        AssertNoCrossModuleDependencies(DomainAssembly);
+    }
+
+    // ── Application layer isolation ─────────────────────────────────────
+
+    [Fact]
+    public void Application_should_not_depend_on_Infrastructure()
+    {
+        Types.InAssembly(ApplicationAssembly)
+            .ShouldNot()
+            .HaveDependencyOn($"{RootNamespace}.{ModuleName}.Infrastructure")
+            .GetResult()
+            .IsSuccessful
+            .ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Application_should_not_depend_on_Api()
+    {
+        Types.InAssembly(ApplicationAssembly)
+            .ShouldNot()
+            .HaveDependencyOn($"{RootNamespace}.{ModuleName}.Api")
+            .GetResult()
+            .IsSuccessful
+            .ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Application_should_not_depend_on_other_modules()
+    {
+        AssertNoCrossModuleDependencies(ApplicationAssembly);
+    }
+
+    // ── Infrastructure layer isolation ──────────────────────────────────
+
+    [Fact]
+    public void Infrastructure_should_not_depend_on_Api()
+    {
+        // Exclude the module registration class — it acts as the composition root
+        // and is the only Infrastructure type allowed to reference Api.
+        Types.InAssembly(InfrastructureAssembly)
+            .That()
+            .DoNotHaveNameEndingWith("Module")
+            .ShouldNot()
+            .HaveDependencyOn($"{RootNamespace}.{ModuleName}.Api")
+            .GetResult()
+            .IsSuccessful
+            .ShouldBeTrue();
+    }
+
+    // ── Cross-module isolation ──────────────────────────────────────────
+
+    [Fact]
+    public void No_module_should_reference_other_module_internals()
+    {
+        AssertNoCrossModuleDependencies(DomainAssembly);
+        AssertNoCrossModuleDependencies(ApplicationAssembly);
+        AssertNoCrossModuleDependencies(InfrastructureAssembly);
+        AssertNoCrossModuleDependencies(ApiAssembly);
+    }
+
+    // ── Helpers ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Verifies that types in the given assembly do not depend on another module's
+    /// Domain, Application, or Infrastructure layers. Only cross-module Integration
+    /// references are permitted.
+    /// </summary>
+    private static void AssertNoCrossModuleDependencies(Assembly assembly)
+    {
+        var referencedAssemblies = assembly.GetReferencedAssemblies();
+
+        foreach (var referenced in referencedAssemblies)
+        {
+            if (referenced.Name is null) continue;
+            if (!referenced.Name.StartsWith(RootNamespace, StringComparison.Ordinal)) continue;
+
+            // Allow references within our own module
+            if (referenced.Name.StartsWith($"{RootNamespace}.{ModuleName}.", StringComparison.Ordinal)) continue;
+
+            // Allow BuildingBlocks
+            if (referenced.Name.StartsWith($"{RootNamespace}.BuildingBlocks.", StringComparison.Ordinal)) continue;
+
+            // Allow Integration assemblies from other modules
+            if (referenced.Name.EndsWith(".Integration", StringComparison.Ordinal)) continue;
+
+            // Any other reference to a sibling module's internal layer is forbidden
+            Assert.Fail(
+                $"Assembly '{assembly.GetName().Name}' has a forbidden reference to '{referenced.Name}'. " +
+                "Only cross-module Integration references are allowed.");
+        }
+    }
+}

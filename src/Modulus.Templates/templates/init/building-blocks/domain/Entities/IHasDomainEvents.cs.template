@@ -1,0 +1,10 @@
+using Modulus.Mediator.Abstractions;
+
+namespace {{RootNamespace}}.BuildingBlocks.Domain.Entities;
+
+public interface IHasDomainEvents
+{
+    IReadOnlyCollection<IDomainEvent> DomainEvents { get; }
+
+    void ClearDomainEvents();
+}

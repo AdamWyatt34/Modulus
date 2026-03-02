@@ -1,0 +1,36 @@
+using {{RootNamespace}}.BuildingBlocks.Application.DependencyInjection;
+using {{RootNamespace}}.WebApi.Middleware;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddHealthChecks();
+
+builder.Services.AddApplicationServices();
+builder.Services.AddModules(builder.Configuration);
+
+// Per-module configuration: uncomment to load modules.{name}.json files
+// builder.Configuration.AddModuleConfiguration("Catalog", "Ordering");
+
+var app = builder.Build();
+
+app.UseExceptionHandler();
+app.UseStatusCodePages();
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+app.MapHealthChecks("/healthz");
+app.MapHealthChecks("/readyz");
+
+app.MapModuleEndpoints();
+
+app.Run();
+
+public partial class Program;

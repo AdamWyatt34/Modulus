@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>modulus</ToolCommandName>
+    <PackageId>Modulus.Cli</PackageId>
+    <Description>CLI tool for scaffolding .NET modular monolith solutions with built-in CQRS mediator, messaging, and Aspire support.</Description>
+    <PackageTags>dotnet-tool;modular-monolith;scaffolding;cqrs;aspire</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Modulus.Templates\Modulus.Templates.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>

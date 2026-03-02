@@ -1,0 +1,22 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+*.DotSettings.user
+
+## IDE
+.vs/
+.idea/
+*.swp
+
+## Test results
+TestResults/
+
+## OS files
+Thumbs.db
+.DS_Store
+
+## Local settings
+appsettings.Development.json
+appsettings.Local.json

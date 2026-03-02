@@ -1,0 +1,33 @@
+using Microsoft.EntityFrameworkCore;
+using {{RootNamespace}}.BuildingBlocks.Application.Persistence;
+using {{RootNamespace}}.BuildingBlocks.Domain.Entities;
+
+namespace {{RootNamespace}}.BuildingBlocks.Infrastructure.Persistence;
+
+public class EfRepository<T, TId>(DbContext context) : IRepository<T, TId>
+    where T : AggregateRoot<TId>
+    where TId : notnull
+{
+    protected DbContext Context => context;
+
+    protected DbSet<T> DbSet => context.Set<T>();
+
+    public virtual async Task<T?> GetByIdAsync(TId id, CancellationToken cancellationToken = default)
+    {
+        return await DbSet.FindAsync([id], cancellationToken);
+    }
+
+    public virtual async Task<IReadOnlyList<T>> ListAllAsync(CancellationToken cancellationToken = default)
+    {
+        return await DbSet.ToListAsync(cancellationToken);
+    }
+
+    public virtual async Task AddAsync(T entity, CancellationToken cancellationToken = default)
+    {
+        await DbSet.AddAsync(entity, cancellationToken);
+    }
+
+    public virtual void Update(T entity) => DbSet.Update(entity);
+
+    public virtual void Remove(T entity) => DbSet.Remove(entity);
+}

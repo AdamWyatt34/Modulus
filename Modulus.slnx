@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Modulus.Cli/Modulus.Cli.csproj" />
+    <Project Path="src/Modulus.Mediator.Abstractions/Modulus.Mediator.Abstractions.csproj" />
+    <Project Path="src/Modulus.Mediator/Modulus.Mediator.csproj" />
+    <Project Path="src/Modulus.Messaging.Abstractions/Modulus.Messaging.Abstractions.csproj" />
+    <Project Path="src/Modulus.Messaging/Modulus.Messaging.csproj" />
+    <Project Path="src/Modulus.Templates/Modulus.Templates.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Modulus.Cli.Tests/Modulus.Cli.Tests.csproj" />
+    <Project Path="tests/Modulus.Mediator.Tests/Modulus.Mediator.Tests.csproj" />
+    <Project Path="tests/Modulus.Messaging.Tests/Modulus.Messaging.Tests.csproj" />
+  </Folder>
+</Solution>

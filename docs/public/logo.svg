@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <rect x="8" y="8" width="48" height="48" rx="8" fill="#7c3aed"/>
+  <rect x="72" y="8" width="48" height="48" rx="8" fill="#a78bfa"/>
+  <rect x="8" y="72" width="48" height="48" rx="8" fill="#a78bfa"/>
+  <rect x="72" y="72" width="48" height="48" rx="8" fill="#7c3aed"/>
+  <text x="64" y="78" text-anchor="middle" font-family="system-ui, sans-serif" font-size="48" font-weight="700" fill="white">M</text>
+</svg>

@@ -1,0 +1,32 @@
+using System.Reflection;
+using FluentValidation;
+using Microsoft.Extensions.DependencyInjection;
+using Modulus.Mediator;
+using Modulus.Mediator.Behaviors;
+using {{RootNamespace}}.BuildingBlocks.Application.Behaviors;
+
+namespace {{RootNamespace}}.BuildingBlocks.Application.DependencyInjection;
+
+public static class ApplicationServiceExtensions
+{
+    public static IServiceCollection AddApplicationServices(
+        this IServiceCollection services,
+        params Assembly[] assemblies)
+    {
+        services.AddModulusMediator(assemblies);
+
+        services.AddPipelineBehavior(typeof(UnhandledExceptionBehavior<,>));
+        services.AddPipelineBehavior(typeof(LoggingBehavior<,>));
+        services.AddPipelineBehavior(typeof(MetricsBehavior<,>));
+        services.AddPipelineBehavior(typeof(ValidationBehavior<,>));
+        services.AddPipelineBehavior(typeof(UnitOfWorkBehavior<,>));
+
+        services.Scan(scan => scan
+            .FromAssemblies(assemblies)
+            .AddClasses(classes => classes.AssignableTo(typeof(IValidator<>)))
+            .AsImplementedInterfaces()
+            .WithScopedLifetime());
+
+        return services;
+    }
+}

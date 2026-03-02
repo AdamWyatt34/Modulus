@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\{{ModuleName}}.Domain\{{ModuleName}}.Domain.csproj" />
+    <ProjectReference Include="..\..\src\{{ModuleName}}.Application\{{ModuleName}}.Application.csproj" />
+    <ProjectReference Include="..\..\src\{{ModuleName}}.Infrastructure\{{ModuleName}}.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\{{ModuleName}}.Api\{{ModuleName}}.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\{{SolutionName}}.WebApi\{{SolutionName}}.WebApi.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Shouldly" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
+    <PackageReference Include="Testcontainers.MsSql" />
+  </ItemGroup>
+
+</Project>

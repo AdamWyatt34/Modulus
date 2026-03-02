@@ -1,0 +1,11 @@
+namespace {{RootNamespace}}.BuildingBlocks.Infrastructure.Outbox;
+
+/// <summary>
+/// Tracks which handlers have already processed a given outbox message,
+/// enabling idempotent domain event handling.
+/// </summary>
+public sealed class OutboxMessageConsumer
+{
+    public Guid OutboxMessageId { get; set; }
+    public string Name { get; set; } = string.Empty;
+}

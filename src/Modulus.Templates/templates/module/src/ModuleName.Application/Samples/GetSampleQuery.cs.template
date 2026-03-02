@@ -1,0 +1,5 @@
+using Modulus.Mediator.Abstractions;
+
+namespace {{RootNamespace}}.{{ModuleName}}.Application.Samples;
+
+public sealed record GetSampleQuery : IQuery<string>;

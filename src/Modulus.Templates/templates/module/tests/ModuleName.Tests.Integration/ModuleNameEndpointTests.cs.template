@@ -1,0 +1,15 @@
+using System.Net;
+using Shouldly;
+
+namespace {{RootNamespace}}.{{ModuleName}}.Tests.Integration;
+
+public class {{ModuleName}}EndpointTests : {{ModuleName}}IntegrationTestBase
+{
+    [Fact]
+    public async Task Get_module_endpoint_returns_200()
+    {
+        var response = await Client.GetAsync("/api/{{ModuleNameLower}}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+}

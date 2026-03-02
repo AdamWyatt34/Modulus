@@ -1,0 +1,18 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Modulus.Messaging.Abstractions;
+
+namespace {{RootNamespace}}.BuildingBlocks.Infrastructure.Inbox;
+
+public class InboxConfiguration : IEntityTypeConfiguration<InboxMessage>
+{
+    public void Configure(EntityTypeBuilder<InboxMessage> builder)
+    {
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Type).IsRequired().HasMaxLength(500);
+        builder.Property(e => e.Content).IsRequired();
+        builder.Property(e => e.OccurredOnUtc).IsRequired();
+        builder.Property(e => e.ProcessedOnUtc);
+        builder.HasIndex(e => e.ProcessedOnUtc);
+    }
+}

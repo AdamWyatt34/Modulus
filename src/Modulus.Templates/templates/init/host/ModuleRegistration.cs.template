@@ -1,0 +1,24 @@
+namespace {{RootNamespace}}.WebApi;
+
+public static class ModuleRegistration
+{
+    public static IServiceCollection AddModules(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        // Register modules here:
+        // services.AddCatalogModule(configuration);
+        // services.AddOrderingModule(configuration);
+
+        return services;
+    }
+
+    public static WebApplication MapModuleEndpoints(this WebApplication app)
+    {
+        // Map module endpoints here:
+        // app.MapCatalogEndpoints();
+        // app.MapOrderingEndpoints();
+
+        return app;
+    }
+}
