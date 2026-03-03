@@ -19,4 +19,10 @@ public sealed class FileSystem : IFileSystem
         Directory.Exists(path) ? Directory.GetFiles(path, searchPattern, searchOption) : [];
 
     public string GetCurrentDirectory() => Directory.GetCurrentDirectory();
+
+    public string GetFullPath(string path) => Path.GetFullPath(path);
+
+    public string? GetDirectoryName(string path) => Path.GetDirectoryName(path);
+
+    public string GetFileName(string path) => Path.GetFileName(path);
 }

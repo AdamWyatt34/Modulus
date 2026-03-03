@@ -55,7 +55,7 @@ public sealed class InitHandler(
             }
 
             var fullPath = Path.Combine(solutionRoot, output.RelativePath);
-            var dir = Path.GetDirectoryName(fullPath)!;
+            var dir = fileSystem.GetDirectoryName(fullPath)!;
             fileSystem.CreateDirectory(dir);
             fileSystem.WriteAllText(fullPath, content);
             fileCount++;

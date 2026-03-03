@@ -10,4 +10,7 @@ public interface IFileSystem
     IReadOnlyList<string> GetDirectories(string path);
     IReadOnlyList<string> GetFiles(string path, string searchPattern, SearchOption searchOption);
     string GetCurrentDirectory();
+    string GetFullPath(string path);
+    string? GetDirectoryName(string path);
+    string GetFileName(string path);
 }

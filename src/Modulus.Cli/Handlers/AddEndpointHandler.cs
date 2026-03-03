@@ -61,7 +61,7 @@ public sealed class AddEndpointHandler(
             return Task.FromResult(1);
         }
 
-        var solutionRoot = Path.GetDirectoryName(Path.GetFullPath(slnxPath))!;
+        var solutionRoot = fileSystem.GetDirectoryName(fileSystem.GetFullPath(slnxPath))!;
         var solutionName = SolutionFinder.GetSolutionName(slnxPath);
 
         if (!solutionFinder.IsModulusSolution(solutionRoot, solutionName))

@@ -28,7 +28,7 @@ public sealed class AddModuleHandler(
             return 1;
         }
 
-        var solutionRoot = Path.GetDirectoryName(Path.GetFullPath(slnxPath))!;
+        var solutionRoot = fileSystem.GetDirectoryName(fileSystem.GetFullPath(slnxPath))!;
         var solutionName = SolutionFinder.GetSolutionName(slnxPath);
 
         if (!solutionFinder.IsModulusSolution(solutionRoot, solutionName))
@@ -89,7 +89,7 @@ public sealed class AddModuleHandler(
         {
             var remappedPath = Path.Combine(moduleRoot, output.RelativePath);
             var fullPath = Path.Combine(solutionRoot, remappedPath);
-            var dir = Path.GetDirectoryName(fullPath)!;
+            var dir = fileSystem.GetDirectoryName(fullPath)!;
             fileSystem.CreateDirectory(dir);
             fileSystem.WriteAllText(fullPath, output.Content);
             fileCount++;
@@ -125,12 +125,11 @@ public sealed class AddModuleHandler(
         string moduleName,
         List<string> csprojPaths)
     {
-        var fullSlnxPath = Path.GetFullPath(slnxPath);
+        var fullSlnxPath = fileSystem.GetFullPath(slnxPath);
 
         foreach (var csproj in csprojPaths)
         {
-            var relativePath = Path.GetRelativePath(solutionRoot, csproj);
-            var isTestProject = relativePath.Contains("tests", StringComparison.OrdinalIgnoreCase);
+            var isTestProject = csproj.Contains("tests", StringComparison.OrdinalIgnoreCase);
 
             var solutionFolder = isTestProject
                 ? $"/tests/Modules/{moduleName}/"
@@ -143,7 +142,7 @@ public sealed class AddModuleHandler(
 
             if (result != 0)
             {
-                console.WriteError($"Warning: Failed to add '{Path.GetFileName(csproj)}' to solution.");
+                console.WriteError($"Warning: Failed to add '{fileSystem.GetFileName(csproj)}' to solution.");
             }
         }
     }

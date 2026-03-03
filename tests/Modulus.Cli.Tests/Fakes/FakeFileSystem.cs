@@ -4,6 +4,8 @@ namespace Modulus.Cli.Tests.Fakes;
 
 public sealed class FakeFileSystem : IFileSystem
 {
+    private const char Sep = '\\';
+
     private readonly Dictionary<string, string> _files = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _directories = new(StringComparer.OrdinalIgnoreCase);
     private string _currentDirectory = @"C:\work";
@@ -14,45 +16,29 @@ public sealed class FakeFileSystem : IFileSystem
     {
         var normalized = Normalize(path);
         _files[normalized] = content;
-        // Also register all parent directories
-        var dir = Path.GetDirectoryName(normalized);
-        while (!string.IsNullOrEmpty(dir))
-        {
-            _directories.Add(dir);
-            dir = Path.GetDirectoryName(dir);
-        }
+        RegisterParentDirectories(normalized);
     }
 
     public void SeedDirectory(string path)
     {
         var normalized = Normalize(path);
         _directories.Add(normalized);
-        var dir = Path.GetDirectoryName(normalized);
-        while (!string.IsNullOrEmpty(dir))
-        {
-            _directories.Add(dir);
-            dir = Path.GetDirectoryName(dir);
-        }
+        RegisterParentDirectories(normalized);
     }
 
     public void CreateDirectory(string path)
     {
         var normalized = Normalize(path);
         _directories.Add(normalized);
-        var dir = Path.GetDirectoryName(normalized);
-        while (!string.IsNullOrEmpty(dir))
-        {
-            _directories.Add(dir);
-            dir = Path.GetDirectoryName(dir);
-        }
+        RegisterParentDirectories(normalized);
     }
 
     public void WriteAllText(string path, string content)
     {
         var normalized = Normalize(path);
         _files[normalized] = content;
-        var dir = Path.GetDirectoryName(normalized);
-        if (!string.IsNullOrEmpty(dir))
+        var dir = GetParentDirectory(normalized);
+        if (dir is not null)
             CreateDirectory(dir);
     }
 
@@ -73,17 +59,15 @@ public sealed class FakeFileSystem : IFileSystem
     public IReadOnlyList<string> GetDirectories(string path)
     {
         var normalized = Normalize(path);
-        var normalizedWithSep = normalized.EndsWith(Path.DirectorySeparatorChar)
-            ? normalized
-            : normalized + Path.DirectorySeparatorChar;
+        var prefix = normalized + Sep;
 
         return _directories
             .Where(d =>
             {
-                if (!d.StartsWith(normalizedWithSep, StringComparison.OrdinalIgnoreCase))
+                if (!d.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
                     return false;
-                var remainder = d[normalizedWithSep.Length..];
-                return remainder.Length > 0 && !remainder.Contains(Path.DirectorySeparatorChar);
+                var remainder = d[prefix.Length..];
+                return remainder.Length > 0 && !remainder.Contains(Sep);
             })
             .ToList();
     }
@@ -91,22 +75,20 @@ public sealed class FakeFileSystem : IFileSystem
     public IReadOnlyList<string> GetFiles(string path, string searchPattern, SearchOption searchOption)
     {
         var normalized = Normalize(path);
-        var normalizedWithSep = normalized.EndsWith(Path.DirectorySeparatorChar)
-            ? normalized
-            : normalized + Path.DirectorySeparatorChar;
+        var prefix = normalized + Sep;
 
         var extension = searchPattern.StartsWith('*') ? searchPattern[1..] : "";
 
         return _files.Keys
             .Where(f =>
             {
-                if (!f.StartsWith(normalizedWithSep, StringComparison.OrdinalIgnoreCase))
+                if (!f.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
                     return false;
 
                 if (searchOption == SearchOption.TopDirectoryOnly)
                 {
-                    var remainder = f[normalizedWithSep.Length..];
-                    if (remainder.Contains(Path.DirectorySeparatorChar))
+                    var remainder = f[prefix.Length..];
+                    if (remainder.Contains(Sep))
                         return false;
                 }
 
@@ -118,7 +100,52 @@ public sealed class FakeFileSystem : IFileSystem
             .ToList();
     }
 
+    public string GetFullPath(string path) => Normalize(path);
+
+    public string? GetDirectoryName(string path)
+    {
+        var normalized = Normalize(path);
+        return GetParentDirectory(normalized);
+    }
+
+    public string GetFileName(string path)
+    {
+        var normalized = Normalize(path);
+        var lastSep = normalized.LastIndexOf(Sep);
+        return lastSep >= 0 ? normalized[(lastSep + 1)..] : normalized;
+    }
+
     public IReadOnlyDictionary<string, string> AllFiles => _files;
 
-    private static string Normalize(string path) => Path.GetFullPath(path);
+    private void RegisterParentDirectories(string normalizedPath)
+    {
+        var dir = GetParentDirectory(normalizedPath);
+        while (dir is not null)
+        {
+            _directories.Add(dir);
+            dir = GetParentDirectory(dir);
+        }
+    }
+
+    /// <summary>
+    /// Platform-agnostic normalization: always use backslash as separator.
+    /// Avoids Path.GetFullPath which treats backslashes as literal chars on Linux.
+    /// </summary>
+    private static string Normalize(string path)
+    {
+        return path.Replace('/', Sep).TrimEnd(Sep);
+    }
+
+    /// <summary>
+    /// Platform-agnostic parent directory: always split on backslash.
+    /// Avoids Path.GetDirectoryName which doesn't recognize backslash on Linux.
+    /// </summary>
+    private static string? GetParentDirectory(string normalizedPath)
+    {
+        var lastSep = normalizedPath.LastIndexOf(Sep);
+        if (lastSep <= 0)
+            return null;
+        // Keep "C:" for paths like "C:\work" → "C:"
+        return normalizedPath[..lastSep];
+    }
 }

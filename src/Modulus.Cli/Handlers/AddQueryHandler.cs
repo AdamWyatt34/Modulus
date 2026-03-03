@@ -40,7 +40,7 @@ public sealed class AddQueryHandler(
             return Task.FromResult(1);
         }
 
-        var solutionRoot = Path.GetDirectoryName(Path.GetFullPath(slnxPath))!;
+        var solutionRoot = fileSystem.GetDirectoryName(fileSystem.GetFullPath(slnxPath))!;
         var solutionName = SolutionFinder.GetSolutionName(slnxPath);
 
         if (!solutionFinder.IsModulusSolution(solutionRoot, solutionName))
@@ -79,7 +79,7 @@ public sealed class AddQueryHandler(
         {
             var remappedPath = Path.Combine(moduleRoot, output.RelativePath);
             var fullPath = Path.Combine(solutionRoot, remappedPath);
-            var dir = Path.GetDirectoryName(fullPath)!;
+            var dir = fileSystem.GetDirectoryName(fullPath)!;
             fileSystem.CreateDirectory(dir);
             fileSystem.WriteAllText(fullPath, output.Content);
             fileCount++;

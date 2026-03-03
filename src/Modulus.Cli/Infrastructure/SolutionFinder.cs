@@ -4,7 +4,7 @@ public sealed class SolutionFinder(IFileSystem fileSystem)
 {
     public string? FindSolutionFile(string startDirectory)
     {
-        var current = startDirectory;
+        string? current = startDirectory;
         while (current is not null)
         {
             var slnxFiles = fileSystem.GetFiles(current, "*.slnx", SearchOption.TopDirectoryOnly);
@@ -19,7 +19,7 @@ public sealed class SolutionFinder(IFileSystem fileSystem)
                     return slnFiles[0];
             }
 
-            current = Path.GetDirectoryName(current);
+            current = fileSystem.GetDirectoryName(current);
         }
 
         return null;
@@ -57,8 +57,14 @@ public sealed class SolutionFinder(IFileSystem fileSystem)
         return null;
     }
 
-    public static string GetSolutionName(string solutionPath) =>
-        Path.GetFileNameWithoutExtension(solutionPath);
+    public static string GetSolutionName(string solutionPath)
+    {
+        // Handle both forward and backslash separators for cross-platform compatibility
+        var lastSep = Math.Max(solutionPath.LastIndexOf('/'), solutionPath.LastIndexOf('\\'));
+        var fileName = lastSep >= 0 ? solutionPath[(lastSep + 1)..] : solutionPath;
+        var dotIndex = fileName.LastIndexOf('.');
+        return dotIndex >= 0 ? fileName[..dotIndex] : fileName;
+    }
 
     public bool IsModulusSolution(string solutionRoot, string solutionName) =>
         fileSystem.FileExists(

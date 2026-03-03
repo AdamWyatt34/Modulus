@@ -16,7 +16,7 @@ public sealed class ListModulesHandler(
             return 1;
         }
 
-        var solutionRoot = Path.GetDirectoryName(Path.GetFullPath(slnxPath))!;
+        var solutionRoot = fileSystem.GetDirectoryName(fileSystem.GetFullPath(slnxPath))!;
         var modulesDir = Path.Combine(solutionRoot, "src", "Modules");
 
         if (!fileSystem.DirectoryExists(modulesDir))
@@ -35,7 +35,7 @@ public sealed class ListModulesHandler(
         console.WriteLine("Modules:");
         foreach (var moduleDir in modules)
         {
-            var moduleName = Path.GetFileName(moduleDir);
+            var moduleName = fileSystem.GetFileName(moduleDir);
             var csprojCount = fileSystem.GetFiles(moduleDir, "*.csproj", SearchOption.AllDirectories).Count;
             console.WriteLine($"  {moduleName} ({csprojCount} projects)");
         }
