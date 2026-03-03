@@ -33,7 +33,7 @@ public sealed class AddCommandHandler(
             return Task.FromResult(1);
         }
 
-        var slnxPath = solutionPath ?? solutionFinder.FindSolutionFile(fileSystem.GetCurrentDirectory());
+        var slnxPath = solutionFinder.ResolveSolutionPath(solutionPath, fileSystem.GetCurrentDirectory());
         if (slnxPath is null)
         {
             console.WriteError("Could not find a solution file. Use --solution to specify the path, or run from within a Modulus solution directory.");

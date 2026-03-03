@@ -20,7 +20,16 @@ public sealed class ProcessRunner : IProcessRunner
         using var process = Process.Start(psi)
             ?? throw new InvalidOperationException($"Failed to start process: {command}");
 
+        // Drain stdout/stderr to prevent pipe buffer deadlocks
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+
         await process.WaitForExitAsync();
+
+        // Ensure streams are fully consumed
+        await stdoutTask;
+        await stderrTask;
+
         return process.ExitCode;
     }
 }
