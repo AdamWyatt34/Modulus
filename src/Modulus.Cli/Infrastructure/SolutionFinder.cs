@@ -31,9 +31,17 @@ public sealed class SolutionFinder(IFileSystem fileSystem)
     /// </summary>
     public string? ResolveSolutionPath(string? solutionPath, string currentDirectory)
     {
-        if (solutionPath is not null && fileSystem.DirectoryExists(solutionPath))
+        if (solutionPath is null)
+            return FindSolutionFile(currentDirectory);
+
+        // If it's already a solution file path, use it directly
+        if (solutionPath.EndsWith(".slnx", StringComparison.OrdinalIgnoreCase) ||
+            solutionPath.EndsWith(".sln", StringComparison.OrdinalIgnoreCase))
+            return solutionPath;
+
+        // Otherwise treat it as a directory and search within (including subdirectories)
+        if (fileSystem.DirectoryExists(solutionPath))
         {
-            // User explicitly passed a directory — search within it only, never walk up
             var slnxFiles = fileSystem.GetFiles(solutionPath, "*.slnx", SearchOption.AllDirectories);
             if (slnxFiles.Count == 1)
                 return slnxFiles[0];
@@ -44,11 +52,9 @@ public sealed class SolutionFinder(IFileSystem fileSystem)
                 if (slnFiles.Count == 1)
                     return slnFiles[0];
             }
-
-            return null;
         }
 
-        return solutionPath ?? FindSolutionFile(currentDirectory);
+        return null;
     }
 
     public static string GetSolutionName(string solutionPath) =>
