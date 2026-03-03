@@ -17,7 +17,7 @@ public class SolutionFinderTests
         var result = finder.FindSolutionFile(@"C:\work");
 
         result.ShouldNotBeNull();
-        Path.GetFileName(result).ShouldBe("EShop.slnx");
+        fs.GetFileName(result).ShouldBe("EShop.slnx");
     }
 
     [Fact]
@@ -31,7 +31,7 @@ public class SolutionFinderTests
         var result = finder.FindSolutionFile(@"C:\work\src\SomeProject");
 
         result.ShouldNotBeNull();
-        Path.GetFileName(result).ShouldBe("EShop.slnx");
+        fs.GetFileName(result).ShouldBe("EShop.slnx");
     }
 
     [Fact]
