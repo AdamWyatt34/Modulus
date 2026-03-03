@@ -5,13 +5,13 @@ The Modulus CLI is a .NET global tool that scaffolds production-ready modular mo
 ## Installation
 
 ```bash
-dotnet tool install --global Modulus.Cli
+dotnet tool install --global ModulusKit.Cli
 ```
 
 To update an existing installation:
 
 ```bash
-dotnet tool update --global Modulus.Cli
+dotnet tool update --global ModulusKit.Cli
 ```
 
 ## Commands

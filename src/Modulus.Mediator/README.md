@@ -5,7 +5,7 @@ Lightweight CQRS mediator for .NET with pipeline behaviors, validation, logging,
 ## Installation
 
 ```bash
-dotnet add package Modulus.Mediator
+dotnet add package ModulusKit.Mediator
 ```
 
 ## Setup

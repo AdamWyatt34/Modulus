@@ -4,7 +4,7 @@
     <OutputType>Exe</OutputType>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>modulus</ToolCommandName>
-    <PackageId>Modulus.Cli</PackageId>
+    <PackageId>ModulusKit.Cli</PackageId>
     <Description>CLI tool for scaffolding .NET modular monolith solutions with built-in CQRS mediator, messaging, and Aspire support.</Description>
     <PackageTags>dotnet-tool;modular-monolith;scaffolding;cqrs;aspire</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>

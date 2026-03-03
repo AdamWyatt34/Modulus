@@ -18,14 +18,14 @@ If you scaffolded your solution with the Modulus CLI, the mediator packages are 
 
 ```bash
 # Implementation package (Infrastructure / host projects)
-dotnet add package Modulus.Mediator
+dotnet add package ModulusKit.Mediator
 
 # Abstractions only (Domain / Application layers)
-dotnet add package Modulus.Mediator.Abstractions
+dotnet add package ModulusKit.Mediator.Abstractions
 ```
 
 ::: tip Abstractions package
-Reference `Modulus.Mediator.Abstractions` in your Domain and Application layers to keep them free of third-party dependencies. The implementation package (`Modulus.Mediator`) should only be referenced in Infrastructure and host projects.
+Reference `ModulusKit.Mediator.Abstractions` in your Domain and Application layers to keep them free of third-party dependencies. The implementation package (`ModulusKit.Mediator`) should only be referenced in Infrastructure and host projects.
 :::
 
 ## Quick Setup

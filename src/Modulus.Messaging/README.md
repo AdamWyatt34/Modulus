@@ -5,7 +5,7 @@ Messaging library for .NET modular monoliths with MassTransit integration, suppo
 ## Installation
 
 ```bash
-dotnet add package Modulus.Messaging
+dotnet add package ModulusKit.Messaging
 ```
 
 ## Setup

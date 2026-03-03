@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <PackageId>Modulus.Messaging</PackageId>
+    <PackageId>ModulusKit.Messaging</PackageId>
     <Description>Messaging library for .NET modular monoliths with MassTransit integration, supporting RabbitMQ, Azure Service Bus, and in-memory transports with transactional outbox.</Description>
     <PackageTags>messaging;masstransit;rabbitmq;azure-service-bus;outbox</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>

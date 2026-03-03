@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <PackageId>Modulus.Mediator</PackageId>
+    <PackageId>ModulusKit.Mediator</PackageId>
     <Description>Lightweight CQRS mediator for .NET with pipeline behaviors, validation, logging, and a built-in Result pattern.</Description>
     <PackageTags>mediator;cqrs;pipeline;validation;result-pattern</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>

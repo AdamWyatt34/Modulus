@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <PackageId>Modulus.Mediator.Abstractions</PackageId>
+    <PackageId>ModulusKit.Mediator.Abstractions</PackageId>
     <Description>Abstractions for the Modulus mediator: IMediator, ICommand, IQuery, Result types, and pipeline behavior interfaces.</Description>
     <PackageTags>mediator;cqrs;abstractions;result-pattern</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>

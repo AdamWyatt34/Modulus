@@ -30,7 +30,7 @@ Docker is only needed for integration tests. You can scaffold solutions, build, 
 Install the Modulus CLI as a .NET global tool:
 
 ```bash
-dotnet tool install --global Modulus.Cli
+dotnet tool install --global ModulusKit.Cli
 ```
 
 ## Verify Installation
@@ -56,7 +56,7 @@ Add the appropriate path to your shell profile if it is not already present.
 To update to the latest version:
 
 ```bash
-dotnet tool update --global Modulus.Cli
+dotnet tool update --global ModulusKit.Cli
 ```
 
 ## Uninstall
@@ -64,7 +64,7 @@ dotnet tool update --global Modulus.Cli
 To remove Modulus:
 
 ```bash
-dotnet tool uninstall --global Modulus.Cli
+dotnet tool uninstall --global ModulusKit.Cli
 ```
 
 ## NuGet Packages
@@ -73,14 +73,14 @@ Modulus ships as a CLI tool plus a set of companion library packages. The CLI au
 
 | Package | Description |
 | --- | --- |
-| [`Modulus.Cli`](https://www.nuget.org/packages/Modulus.Cli) | CLI tool for scaffolding modular monolith solutions |
-| [`Modulus.Mediator`](https://www.nuget.org/packages/Modulus.Mediator) | CQRS mediator with pipeline behaviors and Result pattern |
-| [`Modulus.Mediator.Abstractions`](https://www.nuget.org/packages/Modulus.Mediator.Abstractions) | Mediator interfaces, Result types, and pipeline contracts |
-| [`Modulus.Messaging`](https://www.nuget.org/packages/Modulus.Messaging) | MassTransit messaging with multi-transport and outbox support |
-| [`Modulus.Messaging.Abstractions`](https://www.nuget.org/packages/Modulus.Messaging.Abstractions) | Messaging interfaces and integration event contracts |
+| [`ModulusKit.Cli`](https://www.nuget.org/packages/ModulusKit.Cli) | CLI tool for scaffolding modular monolith solutions |
+| [`ModulusKit.Mediator`](https://www.nuget.org/packages/ModulusKit.Mediator) | CQRS mediator with pipeline behaviors and Result pattern |
+| [`ModulusKit.Mediator.Abstractions`](https://www.nuget.org/packages/ModulusKit.Mediator.Abstractions) | Mediator interfaces, Result types, and pipeline contracts |
+| [`ModulusKit.Messaging`](https://www.nuget.org/packages/ModulusKit.Messaging) | MassTransit messaging with multi-transport and outbox support |
+| [`ModulusKit.Messaging.Abstractions`](https://www.nuget.org/packages/ModulusKit.Messaging.Abstractions) | Messaging interfaces and integration event contracts |
 
 ::: tip Abstractions packages
-The `Abstractions` packages contain only interfaces and contracts with zero third-party dependencies. Reference them in your Domain and Application layers to keep those layers clean. The implementation packages (`Modulus.Mediator` and `Modulus.Messaging`) are referenced only in Infrastructure and host projects.
+The `Abstractions` packages contain only interfaces and contracts with zero third-party dependencies. Reference them in your Domain and Application layers to keep those layers clean. The implementation packages (`ModulusKit.Mediator` and `ModulusKit.Messaging`) are referenced only in Infrastructure and host projects.
 :::
 
 ## What's Next

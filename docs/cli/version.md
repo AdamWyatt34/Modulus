@@ -22,10 +22,10 @@ Modulus CLI v1.0.0
 ## See Also
 
 - [CLI Overview](./) -- Full list of available commands
-- [NuGet Package](https://www.nuget.org/packages/Modulus.Cli) -- Check for the latest published version
+- [NuGet Package](https://www.nuget.org/packages/ModulusKit.Cli) -- Check for the latest published version
 
 To update to the latest version:
 
 ```bash
-dotnet tool update --global Modulus.Cli
+dotnet tool update --global ModulusKit.Cli
 ```

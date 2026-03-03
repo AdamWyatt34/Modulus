@@ -5,7 +5,7 @@ Abstractions for the Modulus mediator — interfaces, Result types, and pipeline
 ## Installation
 
 ```bash
-dotnet add package Modulus.Mediator.Abstractions
+dotnet add package ModulusKit.Mediator.Abstractions
 ```
 
 ## Key Types

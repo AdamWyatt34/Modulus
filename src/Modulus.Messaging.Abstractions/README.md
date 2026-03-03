@@ -5,7 +5,7 @@ Abstractions for the Modulus messaging system — `IMessageBus`, `IIntegrationEv
 ## Installation
 
 ```bash
-dotnet add package Modulus.Messaging.Abstractions
+dotnet add package ModulusKit.Messaging.Abstractions
 ```
 
 ## Key Types

@@ -52,7 +52,7 @@ features:
 ## Quick Install
 
 ```bash
-dotnet tool install --global Modulus.Cli
+dotnet tool install --global ModulusKit.Cli
 ```
 
 ## Quick Start

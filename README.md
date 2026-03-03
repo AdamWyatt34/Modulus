@@ -1,6 +1,6 @@
 # Modulus
 
-[![NuGet](https://img.shields.io/nuget/v/Modulus.Cli.svg)](https://www.nuget.org/packages/Modulus.Cli)
+[![NuGet](https://img.shields.io/nuget/v/ModulusKit.Cli.svg)](https://www.nuget.org/packages/ModulusKit.Cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Docs](https://img.shields.io/badge/docs-adamwyatt34.github.io%2FModulus-blue)](https://adamwyatt34.github.io/Modulus/)
 
@@ -25,7 +25,7 @@ Modulus provides:
 ### Install the CLI
 
 ```bash
-dotnet tool install --global Modulus.Cli
+dotnet tool install --global ModulusKit.Cli
 ```
 
 ### Create a new solution
@@ -329,11 +329,11 @@ No handler or business logic changes are needed — the mediator and messaging a
 
 | Package | Description |
 |---------|-------------|
-| [`Modulus.Cli`](https://www.nuget.org/packages/Modulus.Cli) | CLI tool for scaffolding modular monolith solutions |
-| [`Modulus.Mediator`](https://www.nuget.org/packages/Modulus.Mediator) | CQRS mediator with pipeline behaviors and Result pattern |
-| [`Modulus.Mediator.Abstractions`](https://www.nuget.org/packages/Modulus.Mediator.Abstractions) | Mediator interfaces, Result types, and pipeline contracts |
-| [`Modulus.Messaging`](https://www.nuget.org/packages/Modulus.Messaging) | MassTransit messaging with multi-transport and outbox support |
-| [`Modulus.Messaging.Abstractions`](https://www.nuget.org/packages/Modulus.Messaging.Abstractions) | Messaging interfaces and integration event contracts |
+| [`ModulusKit.Cli`](https://www.nuget.org/packages/ModulusKit.Cli) | CLI tool for scaffolding modular monolith solutions |
+| [`ModulusKit.Mediator`](https://www.nuget.org/packages/ModulusKit.Mediator) | CQRS mediator with pipeline behaviors and Result pattern |
+| [`ModulusKit.Mediator.Abstractions`](https://www.nuget.org/packages/ModulusKit.Mediator.Abstractions) | Mediator interfaces, Result types, and pipeline contracts |
+| [`ModulusKit.Messaging`](https://www.nuget.org/packages/ModulusKit.Messaging) | MassTransit messaging with multi-transport and outbox support |
+| [`ModulusKit.Messaging.Abstractions`](https://www.nuget.org/packages/ModulusKit.Messaging.Abstractions) | Messaging interfaces and integration event contracts |
 
 ## Contributing
 

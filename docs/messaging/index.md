@@ -17,7 +17,7 @@ Modulus provides a messaging abstraction over [MassTransit](https://masstransit.
 If you scaffolded your solution with the Modulus CLI, the messaging package is already referenced. To add it manually:
 
 ```bash
-dotnet add package Modulus.Messaging
+dotnet add package ModulusKit.Messaging
 ```
 
 ## Quick Setup
