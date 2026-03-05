@@ -54,17 +54,17 @@ public class SolutionFinderTests
     }
 
     [Fact]
-    public void IsModulusSolution_returns_true_when_registration_file_exists()
+    public void IsModulusSolution_returns_true_when_program_file_exists()
     {
         var fs = new FakeFileSystem();
-        fs.SeedFile(@"C:\work\src\EShop.WebApi\ModuleRegistration.cs", "// content");
+        fs.SeedFile(@"C:\work\src\EShop.WebApi\Program.cs", "// content");
         var finder = new SolutionFinder(fs);
 
         finder.IsModulusSolution(@"C:\work", "EShop").ShouldBeTrue();
     }
 
     [Fact]
-    public void IsModulusSolution_returns_false_when_registration_file_missing()
+    public void IsModulusSolution_returns_false_when_program_file_missing()
     {
         var fs = new FakeFileSystem();
         fs.SeedDirectory(@"C:\work\src\EShop.WebApi");

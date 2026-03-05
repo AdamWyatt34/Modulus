@@ -114,8 +114,6 @@ internal static class ResourceManifest
             = "init/src/{{SolutionName}}.WebApi/Program.cs.template",
         ["Modulus.Templates.templates.init.host.appsettings.json.template"]
             = "init/src/{{SolutionName}}.WebApi/appsettings.json.template",
-        ["Modulus.Templates.templates.init.host.ModuleRegistration.cs.template"]
-            = "init/src/{{SolutionName}}.WebApi/ModuleRegistration.cs.template",
         ["Modulus.Templates.templates.init.host.Middleware.GlobalExceptionHandler.cs.template"]
             = "init/src/{{SolutionName}}.WebApi/Middleware/GlobalExceptionHandler.cs.template",
         ["Modulus.Templates.templates.init.host.Extensions.ResultExtensions.cs.template"]

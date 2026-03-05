@@ -46,12 +46,12 @@ public sealed class SolutionFinder(IFileSystem fileSystem)
             if (slnxFiles.Count == 1)
                 return slnxFiles[0];
 
-            if (slnxFiles.Count == 0)
-            {
-                var slnFiles = fileSystem.GetFiles(solutionPath, "*.sln", SearchOption.AllDirectories);
-                if (slnFiles.Count == 1)
-                    return slnFiles[0];
-            }
+            if (slnxFiles.Count > 1)
+                return null; // Multiple solution files found — caller should prompt user to specify --solution
+
+            var slnFiles = fileSystem.GetFiles(solutionPath, "*.sln", SearchOption.AllDirectories);
+            if (slnFiles.Count == 1)
+                return slnFiles[0];
         }
 
         return null;
@@ -68,5 +68,5 @@ public sealed class SolutionFinder(IFileSystem fileSystem)
 
     public bool IsModulusSolution(string solutionRoot, string solutionName) =>
         fileSystem.FileExists(
-            Path.Combine(solutionRoot, "src", $"{solutionName}.WebApi", "ModuleRegistration.cs"));
+            Path.Combine(solutionRoot, "src", $"{solutionName}.WebApi", "Program.cs"));
 }

@@ -34,11 +34,13 @@ export default withMermaid(
           items: [
             { text: 'Mediator', link: '/mediator/' },
             { text: 'Messaging', link: '/messaging/' },
+            { text: 'Source Generators', link: '/generators/' },
+            { text: 'Analyzers', link: '/analyzers/' },
           ]
         },
         { text: 'Recipes', link: '/recipes/' },
         {
-          text: 'v1.0.0',
+          text: 'v1.1.0',
           items: [
             { text: 'Changelog', link: 'https://github.com/adamwyatt34/Modulus/blob/main/CHANGELOG.md' },
             { text: 'NuGet', link: 'https://www.nuget.org/packages/Modulus.Cli' },
@@ -77,6 +79,27 @@ export default withMermaid(
               { text: 'Pipeline Behaviors', link: '/mediator/pipeline-behaviors' },
               { text: 'Domain Events', link: '/mediator/domain-events' },
               { text: 'Streaming Queries', link: '/mediator/streaming' },
+            ]
+          }
+        ],
+        '/generators/': [
+          {
+            text: 'Source Generators',
+            items: [
+              { text: 'Overview', link: '/generators/' },
+              { text: 'Strongly Typed IDs', link: '/generators/strongly-typed-ids' },
+              { text: 'Handler Registration', link: '/generators/handler-registration' },
+              { text: 'Module Auto-Discovery', link: '/generators/module-discovery' },
+            ]
+          }
+        ],
+        '/analyzers/': [
+          {
+            text: 'Analyzers',
+            items: [
+              { text: 'Overview', link: '/analyzers/' },
+              { text: 'Rule Reference', link: '/analyzers/rules' },
+              { text: 'Configuration', link: '/analyzers/configuration' },
             ]
           }
         ],

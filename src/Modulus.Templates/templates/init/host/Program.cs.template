@@ -10,7 +10,7 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddHealthChecks();
 
 builder.Services.AddApplicationServices();
-builder.Services.AddModules(builder.Configuration);
+builder.Services.AddAllModules(builder.Configuration);
 
 // Per-module configuration: uncomment to load modules.{name}.json files
 // builder.Configuration.AddModuleConfiguration("Catalog", "Ordering");
@@ -29,7 +29,7 @@ if (app.Environment.IsDevelopment())
 app.MapHealthChecks("/healthz");
 app.MapHealthChecks("/readyz");
 
-app.MapModuleEndpoints();
+app.MapAllModuleEndpoints();
 
 app.Run();
 

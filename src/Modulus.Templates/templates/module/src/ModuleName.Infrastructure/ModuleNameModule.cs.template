@@ -1,9 +1,7 @@
-using FluentValidation;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Modulus.Mediator;
 using {{RootNamespace}}.BuildingBlocks.Application;
 using {{RootNamespace}}.BuildingBlocks.Infrastructure.Registration;
 using {{RootNamespace}}.{{ModuleName}}.Api.Endpoints;
@@ -14,7 +12,7 @@ namespace {{RootNamespace}}.{{ModuleName}}.Infrastructure;
 
 public sealed class {{ModuleName}}Module : IModuleRegistration
 {
-    public IServiceCollection ConfigureServices(IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection ConfigureServices(IServiceCollection services, IConfiguration configuration)
     {
         services.AddDbContext<{{ModuleName}}DbContext>(options =>
             options.UseSqlServer(configuration.GetConnectionString("Default")));
@@ -26,32 +24,12 @@ public sealed class {{ModuleName}}Module : IModuleRegistration
 
         services.AddScoped<IQueryDb>(sp => sp.GetRequiredService<{{ModuleName}}ReadOnlyDbContext>());
 
-        services.AddModulusMediator(
-            typeof({{ModuleName}}Module).Assembly,
-            {{ModuleName}}.Application.AssemblyReference.Assembly);
-
-        services.Scan(scan => scan
-            .FromAssemblies({{ModuleName}}.Application.AssemblyReference.Assembly)
-            .AddClasses(classes => classes.AssignableTo(typeof(IValidator<>)))
-            .AsImplementedInterfaces()
-            .WithScopedLifetime());
-
         return services;
     }
 
-    public IEndpointRouteBuilder ConfigureEndpoints(IEndpointRouteBuilder endpoints)
+    public static IEndpointRouteBuilder ConfigureEndpoints(IEndpointRouteBuilder endpoints)
     {
         endpoints.Map{{ModuleName}}Endpoints();
         return endpoints;
-    }
-}
-
-public static class {{ModuleName}}ModuleExtensions
-{
-    public static IServiceCollection Add{{ModuleName}}Module(
-        this IServiceCollection services,
-        IConfiguration configuration)
-    {
-        return new {{ModuleName}}Module().ConfigureServices(services, configuration);
     }
 }

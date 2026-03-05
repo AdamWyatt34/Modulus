@@ -77,7 +77,7 @@ tests/
 When you add a module, the CLI also:
 
 1. **Updates the solution file** (`EShop.slnx`) -- All five source projects and three test projects are added to the solution with proper folder grouping.
-2. **Updates `ModuleRegistration.cs`** -- The module's installer is registered in the WebApi composition root so it is discovered at startup.
+2. **Auto-discovered at startup** -- The module auto-discovery source generator scans referenced assemblies for `IModuleRegistration` implementations. No manual composition root file needs to be updated.
 
 ## Examples
 

@@ -33,7 +33,7 @@ public sealed class AddModuleHandler(
 
         if (!solutionFinder.IsModulusSolution(solutionRoot, solutionName))
         {
-            console.WriteError($"The solution at '{solutionRoot}' does not appear to be a Modulus solution (ModuleRegistration.cs not found in {solutionName}.WebApi).");
+            console.WriteError($"The solution at '{solutionRoot}' does not appear to be a Modulus solution (Program.cs not found in {solutionName}.WebApi).");
             return 1;
         }
 
@@ -104,8 +104,6 @@ public sealed class AddModuleHandler(
 
         await AddProjectsToSolution(slnxPath, solutionRoot, moduleName, csprojPaths);
 
-        UpdateModuleRegistration(solutionRoot, solutionName, moduleName, noEndpoints);
-
         var restoreResult = await processRunner.RunAsync("dotnet", "restore", solutionRoot);
         if (restoreResult != 0)
         {
@@ -144,81 +142,6 @@ public sealed class AddModuleHandler(
             {
                 console.WriteError($"Warning: Failed to add '{fileSystem.GetFileName(csproj)}' to solution.");
             }
-        }
-    }
-
-    private void UpdateModuleRegistration(
-        string solutionRoot,
-        string solutionName,
-        string moduleName,
-        bool noEndpoints)
-    {
-        var registrationPath = Path.Combine(solutionRoot, "src", $"{solutionName}.WebApi", "ModuleRegistration.cs");
-
-        if (!fileSystem.FileExists(registrationPath))
-        {
-            console.WriteError("Warning: Could not find ModuleRegistration.cs. Please register the module manually.");
-            PrintManualRegistration(moduleName, solutionName, noEndpoints);
-            return;
-        }
-
-        var content = fileSystem.ReadAllText(registrationPath);
-
-        var usings = $"using {solutionName}.{moduleName}.Infrastructure;\n";
-        if (!noEndpoints)
-        {
-            usings += $"using {solutionName}.{moduleName}.Api.Endpoints;\n";
-        }
-
-        var namespaceIndex = content.IndexOf("namespace ", StringComparison.Ordinal);
-        if (namespaceIndex >= 0)
-        {
-            content = content.Insert(namespaceIndex, usings);
-        }
-        else
-        {
-            console.WriteError("Warning: Could not find namespace declaration in ModuleRegistration.cs. Please add usings manually.");
-        }
-
-        var returnServicesIndex = content.IndexOf("return services;", StringComparison.Ordinal);
-        if (returnServicesIndex >= 0)
-        {
-            var addModuleLine = $"        services.Add{moduleName}Module(configuration);\n\n        ";
-            content = content.Insert(returnServicesIndex, addModuleLine);
-        }
-        else
-        {
-            console.WriteError("Warning: Could not find 'return services;' in ModuleRegistration.cs.");
-            PrintManualRegistration(moduleName, solutionName, noEndpoints);
-            return;
-        }
-
-        if (!noEndpoints)
-        {
-            var returnAppIndex = content.IndexOf("return app;", StringComparison.Ordinal);
-            if (returnAppIndex >= 0)
-            {
-                var mapEndpointsLine = $"        app.Map{moduleName}Endpoints();\n\n        ";
-                content = content.Insert(returnAppIndex, mapEndpointsLine);
-            }
-            else
-            {
-                console.WriteError("Warning: Could not find 'return app;' in ModuleRegistration.cs.");
-            }
-        }
-
-        fileSystem.WriteAllText(registrationPath, content);
-    }
-
-    private void PrintManualRegistration(string moduleName, string solutionName, bool noEndpoints)
-    {
-        console.WriteLine($"  Add to ModuleRegistration.cs:");
-        console.WriteLine($"    using {solutionName}.{moduleName}.Infrastructure;");
-        console.WriteLine($"    services.Add{moduleName}Module(configuration);");
-        if (!noEndpoints)
-        {
-            console.WriteLine($"    using {solutionName}.{moduleName}.Api.Endpoints;");
-            console.WriteLine($"    app.Map{moduleName}Endpoints();");
         }
     }
 
@@ -315,7 +238,7 @@ public sealed class AddModuleHandler(
     internal static string RemoveApiProjectReference(string csprojContent, string moduleName)
     {
         var lines = csprojContent.Split('\n').ToList();
-        lines.RemoveAll(l => l.Contains($"{moduleName}.Api"));
+        lines.RemoveAll(l => l.Contains("ProjectReference") && l.Contains($"{moduleName}.Api"));
         return string.Join('\n', lines);
     }
 }

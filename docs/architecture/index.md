@@ -71,6 +71,8 @@ graph TB
     subgraph Libraries["Modulus Libraries"]
         MED[Modulus.Mediator - CQRS + Pipeline]
         MSG[Modulus.Messaging - MassTransit + Outbox]
+        GEN[Modulus.Generators - Source Generators]
+        ANZ[Modulus.Analyzers - Compile-time Analysis]
     end
     API --> CA & OA
     CA --> CAP --> CD
@@ -81,6 +83,8 @@ graph TB
     CD & OD --> BB_D
     CAP & OAP --> BB_A
     CI & OI --> BB_I
+    GEN -.-> CAP & OAP
+    ANZ -.-> CAP & OAP
 ```
 
 ### Key Structural Decisions
@@ -88,7 +92,7 @@ graph TB
 - **Single host** -- `EShop.WebApi` is the only runnable project. It discovers and registers all modules at startup through the `IModuleRegistration` interface.
 - **Five layers per module** -- Domain, Application, Infrastructure, Api, and Integration. Each layer has strict dependency rules enforced by architecture tests.
 - **Building blocks** -- Shared base classes (`Entity<TId>`, `AggregateRoot<TId>`, `ValueObject`, `BaseDbContext`, etc.) live in a `BuildingBlocks` folder and are referenced by all modules.
-- **Modulus libraries** -- `Modulus.Mediator` provides in-process CQRS dispatch. `Modulus.Messaging` provides integration event publishing and consumption via MassTransit.
+- **Modulus libraries** -- `Modulus.Mediator` provides in-process CQRS dispatch. `Modulus.Messaging` provides integration event publishing and consumption via MassTransit. `Modulus.Generators` provides compile-time source generators for handler registration, module discovery, and strongly typed IDs. `Modulus.Analyzers` enforces architectural conventions directly in the IDE.
 
 ## How Modules Stay Isolated
 
@@ -154,6 +158,21 @@ sequenceDiagram
     Bus->>Orders: Deliver CatalogItemCreated
     Orders->>Orders: Handle event, update local state
 ```
+
+### 5. Roslyn Analyzers
+
+In addition to architecture tests that run in CI, Modulus includes Roslyn analyzers that provide **real-time feedback directly in your IDE** as you type. The `MOD001` analyzer specifically enforces module boundaries -- if a developer references a type from another module's Domain, Application, Infrastructure, or Api project, the IDE immediately shows an error.
+
+This creates two complementary layers of protection:
+
+| Layer | When | Tool | Scope |
+|---|---|---|---|
+| **Analyzers** | Real-time in IDE | Roslyn (MOD001--MOD005) | Individual file analysis |
+| **Architecture Tests** | CI / `dotnet test` | NetArchTest | Full assembly analysis |
+
+Analyzers catch violations the moment code is written. Architecture tests provide a broader CI safety net for rules that are difficult to express as single-file analyzers. Together, they make it nearly impossible for boundary violations to reach production.
+
+See [Analyzers](/analyzers/) for the full rule reference and configuration guide.
 
 ::: info In-memory transport in monolith mode
 When running as a monolith, the message bus uses an in-memory transport. Events are still published through the outbox for consistency, but delivery happens within the same process. When you extract a module, you switch the transport to RabbitMQ or Azure Service Bus -- no business logic changes.

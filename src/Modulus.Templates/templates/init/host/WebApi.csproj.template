@@ -10,4 +10,8 @@
     <ProjectReference Include="..\BuildingBlocks.Integration\BuildingBlocks.Integration.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="ModulusKit.Generators" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
 </Project>

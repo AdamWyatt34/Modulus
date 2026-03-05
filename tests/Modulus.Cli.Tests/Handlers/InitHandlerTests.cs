@@ -39,7 +39,6 @@ public class InitHandlerTests
         // WebApi / Host
         _fs.FileExists(@"C:\work\EShop\src\EShop.WebApi\EShop.WebApi.csproj").ShouldBeTrue();
         _fs.FileExists(@"C:\work\EShop\src\EShop.WebApi\Program.cs").ShouldBeTrue();
-        _fs.FileExists(@"C:\work\EShop\src\EShop.WebApi\ModuleRegistration.cs").ShouldBeTrue();
         _fs.FileExists(@"C:\work\EShop\src\EShop.WebApi\appsettings.json").ShouldBeTrue();
 
         // Tests

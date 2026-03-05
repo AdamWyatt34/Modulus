@@ -101,6 +101,38 @@ public class TimingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, T
 }
 ```
 
+## Source Generators & Analyzers
+
+Referencing this package transitively includes the `ModulusKit.Generators` and `ModulusKit.Analyzers` packages as analyzer references. This means your project automatically gets:
+
+- **Source generators** for strongly typed IDs, handler registration, and module auto-discovery
+- **Roslyn analyzers** (MOD001--MOD005) for compile-time architecture enforcement
+
+### Strongly Typed IDs
+
+Use the `[StronglyTypedId]` attribute to generate type-safe entity identifiers with full EF Core, JSON, and model binding support:
+
+```csharp
+using Modulus.Mediator.Abstractions;
+
+[StronglyTypedId]
+public readonly partial record struct OrderId;
+
+[StronglyTypedId(typeof(int))]
+public readonly partial record struct SequenceNumber;
+```
+
+Supported backing types: `Guid` (default), `int`, `long`.
+
+### Module Ordering
+
+Use the `[ModuleOrder]` attribute to control module initialization order in the auto-discovery generator:
+
+```csharp
+[ModuleOrder(1)]
+public class CatalogModule : IModuleRegistration { /* ... */ }
+```
+
 ## Learn More
 
 See the [Modulus repository](https://github.com/adamwyatt34/Modulus) for full documentation.

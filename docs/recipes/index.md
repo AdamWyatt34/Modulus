@@ -12,6 +12,8 @@ Recipes are self-contained guides that show how to add specific capabilities to 
 | [Sagas](./sagas) | Coordinate multi-step workflows across modules using MassTransit state machines |
 | [API Versioning](./api-versioning) | Evolve your API endpoints without breaking existing clients |
 | [Health Checks](./health-checks) | Monitor module health in production with built-in and custom health check endpoints |
+| [Custom Source Generators](./custom-generators) | Create an incremental source generator for your domain-specific boilerplate |
+| [Custom Roslyn Analyzers](./custom-analyzers) | Write a Roslyn analyzer to enforce your team's coding conventions |
 
 ::: tip Recipes are additive
 Each recipe builds on top of the standard Modulus scaffolding. You can apply any combination of recipes -- they do not conflict with each other or modify the core module structure.

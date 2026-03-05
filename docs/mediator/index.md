@@ -37,8 +37,11 @@ using Modulus.Mediator;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Register IMediator and auto-discover all handlers via Scrutor
-builder.Services.AddModulusMediator(typeof(Program).Assembly);
+// Register IMediator
+builder.Services.AddModulusMediator();
+
+// Handlers are auto-registered by the source generator in each module's ConfigureServices.
+// Each module calls: services.AddModulusHandlers();
 
 // Register pipeline behaviors (order matters -- first registered = outermost)
 builder.Services.AddPipelineBehavior(typeof(UnhandledExceptionBehavior<,>));
@@ -47,14 +50,9 @@ builder.Services.AddPipelineBehavior(typeof(ValidationBehavior<,>));
 builder.Services.AddPipelineBehavior(typeof(MetricsBehavior<,>));
 ```
 
-You can pass multiple assemblies to scan for handlers across all your modules:
-
-```csharp
-builder.Services.AddModulusMediator(
-    typeof(CatalogModule).Assembly,
-    typeof(OrdersModule).Assembly,
-    typeof(IdentityModule).Assembly);
-```
+::: tip Source-generated handler registration
+Handler registration is automatic -- the `ModulusKit.Generators` package produces an `AddModulusHandlers()` extension method at compile time that explicitly registers all handlers and validators. No Scrutor, no reflection, no assembly scanning. See [Handler Registration](/generators/handler-registration) for details.
+:::
 
 ## IMediator Interface
 
@@ -117,3 +115,4 @@ Dive into the specific concepts:
 - **[Pipeline Behaviors](./pipeline-behaviors)** -- Validation, logging, exception handling, and custom behaviors
 - **[Domain Events](./domain-events)** -- Publish and handle in-process domain events
 - **[Streaming Queries](./streaming)** -- Stream large result sets with `IAsyncEnumerable<T>`
+- **[Strongly Typed IDs](/generators/strongly-typed-ids)** -- Generate type-safe entity IDs with EF Core, JSON, and model binding support

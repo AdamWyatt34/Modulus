@@ -93,7 +93,7 @@ tests/Modules/Catalog/
 | **Integration** | Integration event contracts shared between modules | BuildingBlocks.Integration only |
 :::
 
-The Orders module follows the same structure. Both modules are automatically wired into the host project through `IModuleRegistration`.
+The Orders module follows the same structure. Both modules are automatically discovered at startup by the source generator -- no manual composition root file to maintain.
 
 ## Step 3 -- Add an Entity
 
@@ -108,6 +108,10 @@ This generates:
 - **`Product.cs`** in the Domain layer -- an `AggregateRoot` with the specified properties and a static `Create` factory method.
 - **`ProductConfiguration.cs`** in the Infrastructure layer -- an EF Core entity type configuration.
 - The entity is registered in the module's `DbContext`.
+
+::: tip Strongly Typed IDs
+For type-safe entity identifiers, use the `[StronglyTypedId]` attribute. The source generator automatically creates EF Core value converters, JSON converters, and type converters -- no manual boilerplate. See [Strongly Typed IDs](/generators/strongly-typed-ids) for details.
+:::
 
 ::: tip Aggregate roots vs. plain entities
 Use the `--aggregate` flag for entities that serve as aggregate roots. Aggregate roots can raise domain events and are the entry point for all state changes within the aggregate boundary. Omit the flag for child entities within an aggregate.
@@ -258,7 +262,7 @@ You should receive a `201 Created` response with the new product's ID.
 In this walkthrough you:
 
 1. Initialized a full modular monolith solution with Aspire and RabbitMQ support.
-2. Added two feature modules with clean architecture layers.
+2. Added two feature modules with clean architecture layers (auto-discovered by the source generator).
 3. Scaffolded a domain entity as an aggregate root.
 4. Generated CQRS command and query pairs with handlers.
 5. Wired an HTTP endpoint to the command through the mediator.
