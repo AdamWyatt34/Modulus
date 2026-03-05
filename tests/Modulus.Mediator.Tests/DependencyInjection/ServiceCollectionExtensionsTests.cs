@@ -12,7 +12,7 @@ public class ServiceCollectionExtensionsTests
     {
         var services = new ServiceCollection();
 
-        services.AddModulusMediator(typeof(ServiceCollectionExtensionsTests).Assembly);
+        services.AddModulusMediator();
 
         var descriptor = services.First(d => d.ServiceType == typeof(IMediator));
         descriptor.Lifetime.ShouldBe(ServiceLifetime.Scoped);
@@ -22,7 +22,7 @@ public class ServiceCollectionExtensionsTests
     public void AddModulusMediator_resolves_working_mediator()
     {
         var services = new ServiceCollection();
-        services.AddModulusMediator(typeof(ServiceCollectionExtensionsTests).Assembly);
+        services.AddModulusMediator();
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
 

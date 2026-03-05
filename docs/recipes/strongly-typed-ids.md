@@ -11,33 +11,35 @@ var order = await _orderRepository.GetByIdAsync(productId, ct);
 
 ## Solution
 
-Use the `StronglyTypedId<T>` base class from BuildingBlocks to create type-safe ID wrappers. Each entity gets its own ID type, and the compiler enforces correct usage at every call site.
+Use the `[StronglyTypedId]` attribute from `Modulus.Mediator.Abstractions` to generate type-safe ID wrappers at compile time. Each entity gets its own ID type, and the compiler enforces correct usage at every call site.
 
 ### Step 1: Define the Strongly Typed ID
 
-In the Domain layer of your module:
+In the Domain layer of your module, define a `readonly partial record struct` with the `[StronglyTypedId]` attribute:
 
 ```csharp
+using Modulus.Mediator.Abstractions;
+
 namespace EShop.Modules.Catalog.Domain.Products;
 
-public sealed class ProductId : StronglyTypedId<Guid>
-{
-    public ProductId(Guid value) : base(value) { }
-
-    public static ProductId New() => new(Guid.NewGuid());
-}
+[StronglyTypedId]
+public readonly partial record struct ProductId;
 ```
 
 ```csharp
 namespace EShop.Modules.Orders.Domain.Orders;
 
-public sealed class OrderId : StronglyTypedId<Guid>
-{
-    public OrderId(Guid value) : base(value) { }
-
-    public static OrderId New() => new(Guid.NewGuid());
-}
+[StronglyTypedId]
+public readonly partial record struct OrderId;
 ```
+
+The source generator automatically produces:
+- `Value` property and constructor
+- `New()` static factory method (Guid-backed only)
+- `Empty` static property
+- `ProductIdValueConverter` for EF Core
+- `ProductIdJsonConverter` for System.Text.Json
+- `ProductIdTypeConverter` for minimal API model binding
 
 Now the compiler catches mistakes:
 
@@ -45,6 +47,20 @@ Now the compiler catches mistakes:
 // Compiler error: cannot convert from ProductId to OrderId
 var order = await _orderRepository.GetByIdAsync(productId, ct);
 ```
+
+::: tip Non-Guid backing types
+For integer-based IDs, pass the backing type to the attribute:
+
+```csharp
+[StronglyTypedId(typeof(int))]
+public readonly partial record struct SequenceNumber;
+
+[StronglyTypedId(typeof(long))]
+public readonly partial record struct EventOffset;
+```
+
+Supported backing types: `Guid` (default), `int`, `long`.
+:::
 
 ### Step 2: Use with Entities
 
@@ -73,36 +89,9 @@ public class Product : AggregateRoot<ProductId>
 }
 ```
 
-### Step 3: Use with the CLI
+### Step 3: Configure EF Core
 
-The Modulus CLI supports strongly typed IDs when adding entities:
-
-```bash
-modulus add-entity Product --module Catalog --id-type ProductId
-```
-
-This generates the entity with the correct `AggregateRoot<ProductId>` base class and creates the `ProductId` class in the Domain layer.
-
-### Step 4: Configure EF Core Value Converter
-
-EF Core needs to know how to convert between the strongly typed ID and the underlying database type. Create a value converter and apply it in the entity configuration:
-
-```csharp
-using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
-
-namespace EShop.Modules.Catalog.Infrastructure.Data.Configurations;
-
-public class ProductIdConverter : ValueConverter<ProductId, Guid>
-{
-    public ProductIdConverter()
-        : base(
-            id => id.Value,       // to database
-            value => new ProductId(value))  // from database
-    { }
-}
-```
-
-Apply the converter in the entity type configuration:
+Use the auto-generated value converter in your entity type configuration:
 
 ```csharp
 public class ProductConfiguration : IEntityTypeConfiguration<Product>
@@ -112,7 +101,7 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.HasKey(p => p.Id);
 
         builder.Property(p => p.Id)
-            .HasConversion<ProductIdConverter>();
+            .HasConversion<ProductIdValueConverter>();
 
         builder.Property(p => p.Name)
             .HasMaxLength(200)
@@ -124,88 +113,24 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
 }
 ```
 
-::: tip Generic converter
-If you have many strongly typed IDs, create a generic converter to reduce boilerplate:
+No manual converter class needed -- `ProductIdValueConverter` is source-generated.
 
-```csharp
-public class StronglyTypedIdConverter<TId> : ValueConverter<TId, Guid>
-    where TId : StronglyTypedId<Guid>
-{
-    public StronglyTypedIdConverter()
-        : base(
-            id => id.Value,
-            value => (TId)Activator.CreateInstance(typeof(TId), value)!)
-    { }
-}
-```
+### Step 4: Use in Endpoints
 
-Then use it as:
-
-```csharp
-builder.Property(p => p.Id)
-    .HasConversion<StronglyTypedIdConverter<ProductId>>();
-```
-:::
-
-### Step 5: Configure JSON Serialization
-
-For minimal API endpoints to correctly serialize and deserialize strongly typed IDs in request/response bodies and route parameters, configure a JSON converter:
-
-```csharp
-using System.Text.Json;
-using System.Text.Json.Serialization;
-
-public class StronglyTypedIdJsonConverter<TId> : JsonConverter<TId>
-    where TId : StronglyTypedId<Guid>
-{
-    public override TId Read(
-        ref Utf8JsonReader reader,
-        Type typeToConvert,
-        JsonSerializerOptions options)
-    {
-        var value = reader.GetGuid();
-        return (TId)Activator.CreateInstance(typeof(TId), value)!;
-    }
-
-    public override void Write(
-        Utf8JsonWriter writer,
-        TId value,
-        JsonSerializerOptions options)
-    {
-        writer.WriteStringValue(value.Value);
-    }
-}
-```
-
-Register the converter in `Program.cs`:
-
-```csharp
-builder.Services.ConfigureHttpJsonOptions(options =>
-{
-    options.SerializerOptions.Converters.Add(
-        new StronglyTypedIdJsonConverter<ProductId>());
-    options.SerializerOptions.Converters.Add(
-        new StronglyTypedIdJsonConverter<OrderId>());
-});
-```
-
-### Step 6: Use in Endpoints
-
-With the JSON converter registered, endpoints work seamlessly with strongly typed IDs:
+The auto-generated `TypeConverter` enables automatic route parameter binding in minimal APIs:
 
 ```csharp
 public class GetProductEndpoint : IEndpoint
 {
     public void MapEndpoint(IEndpointRouteBuilder app)
     {
-        app.MapGet("/catalog/{id:guid}", async (
-            Guid id,
+        app.MapGet("/catalog/{id}", async (
+            ProductId id,
             IMediator mediator,
             CancellationToken ct) =>
         {
-            var productId = new ProductId(id);
             var result = await mediator.Query(
-                new GetProductByIdQuery(productId), ct);
+                new GetProductByIdQuery(id), ct);
 
             return result.Match(
                 onSuccess: product => Results.Ok(product),
@@ -215,7 +140,9 @@ public class GetProductEndpoint : IEndpoint
 }
 ```
 
-### Step 7: Use in Commands and Queries
+The `TypeConverter` handles parsing the route parameter string directly into a `ProductId` -- no manual `Guid` parsing required.
+
+### Step 5: Use in Commands and Queries
 
 ```csharp
 public sealed record GetProductByIdQuery(ProductId ProductId)
@@ -228,19 +155,19 @@ public sealed record CreateProductCommand(
 
 ## Discussion
 
-Strongly typed IDs add a small amount of boilerplate (the ID class, the EF converter, the JSON converter) but provide significant safety benefits:
+With the source generator, strongly typed IDs require **zero boilerplate** -- just one attribute on a `readonly partial record struct`. The generator produces all the infrastructure code:
 
 - **Compile-time safety** -- The compiler rejects incorrect ID usage before the code runs.
 - **Self-documenting code** -- Method signatures clearly communicate which entity they operate on: `GetByIdAsync(ProductId id)` is unambiguous.
 - **Refactoring confidence** -- Changing an ID type propagates through the entire codebase via compiler errors, ensuring nothing is missed.
-
-The `StronglyTypedId<T>` base class from BuildingBlocks extends `ValueObject`, which means two IDs with the same underlying value are considered equal. This aligns with the value object semantics expected for identifiers.
+- **Full integration** -- EF Core persistence, JSON serialization, and API model binding all work automatically.
 
 ::: info Strongly typed IDs are optional
-Modulus does not require strongly typed IDs. If your team prefers plain `Guid` identifiers, the entire framework works with `Entity<Guid>` and `AggregateRoot<Guid>`. Adopt strongly typed IDs when the type safety benefits outweigh the additional boilerplate for your project.
+Modulus does not require strongly typed IDs. If your team prefers plain `Guid` identifiers, the entire framework works with `Entity<Guid>` and `AggregateRoot<Guid>`. Adopt strongly typed IDs when the type safety benefits matter for your project.
 :::
 
 ## See Also
 
-- [Building Blocks](/architecture/building-blocks) -- `StronglyTypedId<T>`, `Entity<TId>`, and `ValueObject` base classes
+- [Source Generators: Strongly Typed IDs](/generators/strongly-typed-ids) -- Full generator reference with all options and diagnostics
+- [Building Blocks](/architecture/building-blocks) -- `Entity<TId>` and `AggregateRoot<TId>` base classes
 - [CLI: add-entity](/cli/add-entity) -- The `--id-type` flag for scaffolding entities with strongly typed IDs

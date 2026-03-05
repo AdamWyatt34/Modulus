@@ -310,8 +310,56 @@ public void Domain_Events_Should_Be_Sealed()
 - **Treat failures as blockers.** An architecture test failure is not a warning -- it represents a real violation that will erode your modularity over time.
 - **Document intent in test names.** Use descriptive method names like `Domain_Should_Not_Depend_On_Infrastructure` rather than generic names. The test name is the documentation.
 
+## Analyzers: Real-Time Architecture Enforcement
+
+In addition to NetArchTest-based architecture tests that run in CI, Modulus includes **Roslyn analyzers** (MOD001--MOD005) that provide instant feedback directly in your IDE. While architecture tests analyze entire assemblies during `dotnet test`, analyzers flag violations as you type in your editor.
+
+### Two Layers of Protection
+
+| Layer | When it runs | Tool | Feedback speed |
+|---|---|---|---|
+| **Roslyn Analyzers** | Real-time in IDE, `dotnet build` | MOD001--MOD005 | Instant (red squiggles) |
+| **Architecture Tests** | `dotnet test`, CI pipeline | NetArchTest | On test execution |
+
+### Enforcing Analyzers in CI
+
+To treat analyzer warnings as errors in CI, add `-warnaserror` to your build:
+
+```bash
+dotnet build -warnaserror
+```
+
+Or configure specific rules in `.editorconfig`:
+
+```ini
+[*.cs]
+dotnet_diagnostic.MOD001.severity = error
+dotnet_diagnostic.MOD002.severity = error
+```
+
+### Testing Source-Generated Code
+
+Source-generated handler registrations can be verified with integration tests that resolve handlers from the service provider:
+
+```csharp
+[Fact]
+public void AllHandlers_Should_Be_Registered()
+{
+    var provider = services.BuildServiceProvider();
+
+    var handler = provider.GetService<ICommandHandler<CreateProduct, Guid>>();
+
+    handler.ShouldNotBeNull();
+}
+```
+
+This confirms the source generator correctly discovered and registered the handler at compile time.
+
+See [Analyzers](/analyzers/) for the full rule reference and configuration guide.
+
 ## See Also
 
 - [Module Anatomy](/architecture/module-anatomy) -- The layer structure that architecture tests enforce
 - [Unit Testing](./unit-testing) -- Testing handlers and domain logic
 - [Integration Testing](./integration-testing) -- End-to-end testing with WebApplicationFactory
+- [Analyzers](/analyzers/) -- Full rule reference and IDE configuration

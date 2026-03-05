@@ -5,9 +5,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Modulus.Mediator" />
+    <PackageReference Include="ModulusKit.Mediator" />
     <PackageReference Include="FluentValidation" />
-    <PackageReference Include="Scrutor" />
+    <PackageReference Include="ModulusKit.Analyzers" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <PackageReference Include="ModulusKit.Generators" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>

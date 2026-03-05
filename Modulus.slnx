@@ -6,10 +6,14 @@
     <Project Path="src/Modulus.Messaging.Abstractions/Modulus.Messaging.Abstractions.csproj" />
     <Project Path="src/Modulus.Messaging/Modulus.Messaging.csproj" />
     <Project Path="src/Modulus.Templates/Modulus.Templates.csproj" />
+    <Project Path="src/Modulus.Generators/Modulus.Generators.csproj" />
+    <Project Path="src/Modulus.Analyzers/Modulus.Analyzers.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Modulus.Cli.Tests/Modulus.Cli.Tests.csproj" />
     <Project Path="tests/Modulus.Mediator.Tests/Modulus.Mediator.Tests.csproj" />
     <Project Path="tests/Modulus.Messaging.Tests/Modulus.Messaging.Tests.csproj" />
+    <Project Path="tests/Modulus.Generators.Tests/Modulus.Generators.Tests.csproj" />
+    <Project Path="tests/Modulus.Analyzers.Tests/Modulus.Analyzers.Tests.csproj" />
   </Folder>
 </Solution>

@@ -99,6 +99,6 @@ This convention makes it easy to find the test for any given class. The test cla
 
 Dive into the specific testing guides:
 
-- **[Architecture Tests](./architecture-tests)** -- Enforce layer dependency rules with NetArchTest
+- **[Architecture Tests](./architecture-tests)** -- Enforce layer dependency rules with NetArchTest and Roslyn analyzers
 - **[Unit Testing](./unit-testing)** -- Test handlers, validators, and domain logic in isolation
 - **[Integration Testing](./integration-testing)** -- Test endpoints end-to-end with WebApplicationFactory

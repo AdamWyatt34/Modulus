@@ -6,7 +6,7 @@ namespace {{RootNamespace}}.BuildingBlocks.Infrastructure.Registration;
 
 public interface IModuleRegistration
 {
-    IServiceCollection ConfigureServices(IServiceCollection services, IConfiguration configuration);
+    static abstract IServiceCollection ConfigureServices(IServiceCollection services, IConfiguration configuration);
 
-    IEndpointRouteBuilder ConfigureEndpoints(IEndpointRouteBuilder endpoints);
+    static abstract IEndpointRouteBuilder ConfigureEndpoints(IEndpointRouteBuilder endpoints);
 }

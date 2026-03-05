@@ -6,14 +6,15 @@
 
   <ItemGroup>
     <!-- Modulus Framework -->
-    <PackageVersion Include="Modulus.Mediator" Version="1.0.0" />
-    <PackageVersion Include="Modulus.Mediator.Abstractions" Version="1.0.0" />
-    <PackageVersion Include="Modulus.Messaging" Version="1.0.0" />
-    <PackageVersion Include="Modulus.Messaging.Abstractions" Version="1.0.0" />
+    <PackageVersion Include="ModulusKit.Mediator" Version="1.0.0" />
+    <PackageVersion Include="ModulusKit.Mediator.Abstractions" Version="1.0.0" />
+    <PackageVersion Include="ModulusKit.Messaging" Version="1.0.0" />
+    <PackageVersion Include="ModulusKit.Messaging.Abstractions" Version="1.0.0" />
 
     <!-- Application -->
     <PackageVersion Include="FluentValidation" Version="12.1.1" />
-    <PackageVersion Include="Scrutor" Version="7.0.0" />
+    <PackageVersion Include="ModulusKit.Analyzers" Version="1.0.0" />
+    <PackageVersion Include="ModulusKit.Generators" Version="1.0.0" />
 
     <!-- Infrastructure -->
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.3" />

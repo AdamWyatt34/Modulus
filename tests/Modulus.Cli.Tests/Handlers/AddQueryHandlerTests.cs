@@ -21,7 +21,7 @@ public class AddQueryHandlerTests
     {
         _fs.SetCurrentDirectory(@"C:\work\EShop");
         _fs.SeedFile(@"C:\work\EShop\EShop.slnx", "<Solution></Solution>");
-        _fs.SeedFile(@"C:\work\EShop\src\EShop.WebApi\ModuleRegistration.cs", "namespace EShop.WebApi;");
+        _fs.SeedFile(@"C:\work\EShop\src\EShop.WebApi\Program.cs", "// program");
         _fs.SeedDirectory(@"C:\work\EShop\src\Modules\Catalog");
         _fs.SeedDirectory(@"C:\work\EShop\src\Modules\Catalog\src\Catalog.Application");
         _fs.SeedDirectory(@"C:\work\EShop\src\Modules\Catalog\tests\Catalog.Tests.Unit");

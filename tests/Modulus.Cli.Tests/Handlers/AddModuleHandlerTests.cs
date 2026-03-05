@@ -22,27 +22,12 @@ public class AddModuleHandlerTests
     {
         _fs.SetCurrentDirectory(@"C:\work\EShop");
         _fs.SeedFile(@"C:\work\EShop\EShop.slnx", "<Solution></Solution>");
-        _fs.SeedFile(@"C:\work\EShop\src\EShop.WebApi\ModuleRegistration.cs", """
-            namespace EShop.WebApi;
-
-            public static class ModuleRegistration
-            {
-                public static IServiceCollection AddModules(
-                    this IServiceCollection services,
-                    IConfiguration configuration)
-                {
-                    // Register modules here:
-
-                    return services;
-                }
-
-                public static WebApplication MapModuleEndpoints(this WebApplication app)
-                {
-                    // Map module endpoints here:
-
-                    return app;
-                }
-            }
+        _fs.SeedFile(@"C:\work\EShop\src\EShop.WebApi\Program.cs", """
+            var builder = WebApplication.CreateBuilder(args);
+            builder.Services.AddAllModules(builder.Configuration);
+            var app = builder.Build();
+            app.MapAllModuleEndpoints();
+            app.Run();
             """);
     }
 
@@ -81,21 +66,6 @@ public class AddModuleHandlerTests
         // Integration test files
         _fs.FileExists(@"C:\work\EShop\src\Modules\Catalog\tests\Catalog.Tests.Integration\CatalogIntegrationTestBase.cs").ShouldBeTrue();
         _fs.FileExists(@"C:\work\EShop\src\Modules\Catalog\tests\Catalog.Tests.Integration\CatalogEndpointTests.cs").ShouldBeTrue();
-    }
-
-    [Fact]
-    public async Task AddModule_updates_composition_root()
-    {
-        SeedModulusSolution();
-        var handler = CreateHandler();
-
-        await handler.ExecuteAsync("Catalog", @"C:\work\EShop\EShop.slnx", noEndpoints: false);
-
-        var registration = _fs.ReadAllText(@"C:\work\EShop\src\EShop.WebApi\ModuleRegistration.cs");
-        registration.ShouldContain("services.AddCatalogModule(configuration);");
-        registration.ShouldContain("app.MapCatalogEndpoints();");
-        registration.ShouldContain("using EShop.Catalog.Infrastructure;");
-        registration.ShouldContain("using EShop.Catalog.Api.Endpoints;");
     }
 
     [Fact]
@@ -149,12 +119,6 @@ public class AddModuleHandlerTests
         // No Api project
         _fs.AllFiles.Keys.ShouldNotContain(k =>
             k.Contains("Catalog.Api", StringComparison.OrdinalIgnoreCase));
-
-        // Registration should have AddModule but not MapEndpoints
-        var registration = _fs.ReadAllText(@"C:\work\EShop\src\EShop.WebApi\ModuleRegistration.cs");
-        registration.ShouldContain("services.AddCatalogModule(configuration);");
-        registration.ShouldNotContain("MapCatalogEndpoints");
-        registration.ShouldNotContain("using EShop.Catalog.Api.Endpoints;");
     }
 
     [Fact]
