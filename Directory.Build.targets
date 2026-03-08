@@ -1,0 +1,22 @@
+<Project>
+
+  <!--
+    Roslyn analyzers/generators target netstandard2.0. IDE coverage tools
+    (Rider dotCover) pass -p:TargetFramework=net10.0 as an unoverridable
+    global MSBuild property, causing NETSDK1005 because the assets file
+    was restored for netstandard2.0.
+
+    Fix: when a Roslyn component is forced to build for the wrong TFM,
+    replace the entire Build with a no-op that emits a warning.
+  -->
+  <PropertyGroup Condition="'$(IsRoslynComponent)' == 'true' and '$(TargetFramework)' != 'netstandard2.0' and '$(TargetFramework)' != ''">
+    <_SkipRoslynBuild>true</_SkipRoslynBuild>
+  </PropertyGroup>
+
+  <Target Name="Build"
+          Condition="'$(_SkipRoslynBuild)' == 'true'"
+          Returns="@(TargetPathWithTargetPlatformMoniker)">
+    <Warning Text="Skipping build of Roslyn component $(MSBuildProjectName): forced TargetFramework=$(TargetFramework) but project requires netstandard2.0." />
+  </Target>
+
+</Project>
