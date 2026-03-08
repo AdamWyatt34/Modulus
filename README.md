@@ -181,9 +181,10 @@ Request → UnhandledExceptionBehavior → LoggingBehavior → ValidationBehavio
 
 | Behavior | Purpose |
 |----------|---------|
-| `UnhandledExceptionBehavior` | Catches exceptions and converts to failure Results |
+| `UnhandledExceptionBehavior` | Catches exceptions and returns a generic failure Result (details logged, not exposed to callers) |
 | `LoggingBehavior` | Logs request timing and success/failure |
 | `ValidationBehavior` | Runs FluentValidation validators, short-circuits on errors |
+| `MetricsBehavior` | Records handler duration via `System.Diagnostics.Metrics` |
 
 Register the pipeline:
 
@@ -252,11 +253,11 @@ Modulus provides a messaging abstraction over MassTransit for cross-module commu
 public record OrderShipped(Guid OrderId, DateTime ShippedAt)
     : IntegrationEvent;
 
-// Publish directly
-await messageBus.Publish(new OrderShipped(orderId, DateTime.UtcNow));
-
-// Or store in the outbox for reliable delivery
+// Store in the outbox for reliable, transactional delivery (recommended)
 await outboxStore.Save(new OrderShipped(orderId, DateTime.UtcNow));
+
+// Or publish directly (not transactional — use only when outbox is not needed)
+await messageBus.Publish(new OrderShipped(orderId, DateTime.UtcNow));
 ```
 
 ### Handling Events
@@ -281,6 +282,8 @@ services.AddModulusMessaging(options =>
     options.Transport = Transport.RabbitMq;        // or InMemory, AzureServiceBus
     options.ConnectionString = "amqp://localhost";
     options.Assemblies.Add(typeof(Program).Assembly);
+    options.OutboxBatchSize = 100;                 // 1–1000, default 100
+    options.OutboxPollInterval = TimeSpan.FromSeconds(5); // min 1s, default 5s
 });
 ```
 

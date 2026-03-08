@@ -57,8 +57,8 @@ builder.Services.AddModulusMessaging(options =>
 | `Transport` | `Transport` | -- | The message broker transport to use. One of `InMemory`, `RabbitMq`, or `AzureServiceBus`. |
 | `ConnectionString` | `string` | -- | Connection string for the selected transport. Not required for `InMemory`. |
 | `Assemblies` | `List<Assembly>` | Empty | Assemblies to scan for `IIntegrationEventHandler<T>` implementations. |
-| `OutboxPollInterval` | `TimeSpan` | `5 seconds` | How often the `OutboxProcessor` polls for pending outbox messages. |
-| `OutboxBatchSize` | `int` | `100` | Maximum number of outbox messages to process per polling cycle. |
+| `OutboxPollInterval` | `TimeSpan` | `5 seconds` | How often the `OutboxProcessor` polls for pending outbox messages. Minimum: 1 second. |
+| `OutboxBatchSize` | `int` | `100` | Maximum number of outbox messages to process per polling cycle. Valid range: 1–1000. |
 
 ::: info Handler auto-discovery
 `AddModulusMessaging` scans the provided assemblies for all `IIntegrationEventHandler<TEvent>` implementations. Each handler is wrapped with `IdempotentConsumerAdapter<TEvent>` and registered as a MassTransit consumer automatically. No manual consumer registration is needed.

@@ -137,8 +137,8 @@ builder.Services.AddModulusMessaging(options =>
 
 | Option | Default | Description |
 |---|---|---|
-| `OutboxPollInterval` | `5 seconds` | How frequently the processor checks for pending messages. Lower values reduce latency; higher values reduce database load. |
-| `OutboxBatchSize` | `100` | Maximum messages processed per cycle. Tune based on your throughput requirements. |
+| `OutboxPollInterval` | `5 seconds` | How frequently the processor checks for pending messages. Minimum: 1 second. Lower values reduce latency; higher values reduce database load. |
+| `OutboxBatchSize` | `100` | Maximum messages processed per cycle. Valid range: 1–1000. Tune based on your throughput requirements. |
 
 ## Usage Example
 

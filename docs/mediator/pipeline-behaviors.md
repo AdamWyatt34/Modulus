@@ -90,7 +90,7 @@ services.AddPipelineBehavior(typeof(UnhandledExceptionBehavior<,>));
 **What it does:**
 - Wraps the call to `next()` in a try/catch
 - On exception, logs the error via `ILogger`
-- Returns `Result.Failure(Error.Failure("UnhandledException", exception.Message))`
+- Returns `Result.Failure(Error.Failure("UnhandledException", "An unexpected error occurred."))` -- the original exception message is logged but never exposed to callers
 
 **When it short-circuits:** Never intentionally -- it only catches exceptions from inner layers.
 
