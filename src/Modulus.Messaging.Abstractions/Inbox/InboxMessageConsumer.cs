@@ -6,6 +6,6 @@ namespace Modulus.Messaging.Abstractions;
 /// </summary>
 public sealed class InboxMessageConsumer
 {
-    public Guid InboxMessageId { get; set; }
-    public string Name { get; set; } = string.Empty;
+    public required Guid InboxMessageId { get; init; }
+    public required string Name { get; init; }
 }

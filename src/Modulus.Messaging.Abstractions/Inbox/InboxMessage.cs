@@ -5,9 +5,9 @@ namespace Modulus.Messaging.Abstractions;
 /// </summary>
 public sealed class InboxMessage
 {
-    public Guid Id { get; set; }
-    public string Type { get; set; } = string.Empty;
-    public string Content { get; set; } = string.Empty;
-    public DateTime OccurredOnUtc { get; set; }
+    public required Guid Id { get; init; }
+    public required string Type { get; init; }
+    public required string Content { get; init; }
+    public required DateTime OccurredOnUtc { get; init; }
     public DateTime? ProcessedOnUtc { get; set; }
 }

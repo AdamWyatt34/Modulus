@@ -5,7 +5,8 @@ public sealed class SolutionFinder(IFileSystem fileSystem)
     public string? FindSolutionFile(string startDirectory)
     {
         string? current = startDirectory;
-        while (current is not null)
+        var depth = 0;
+        while (current is not null && depth++ < 20)
         {
             var slnxFiles = fileSystem.GetFiles(current, "*.slnx", SearchOption.TopDirectoryOnly);
             if (slnxFiles.Count == 1)
@@ -33,6 +34,8 @@ public sealed class SolutionFinder(IFileSystem fileSystem)
     {
         if (solutionPath is null)
             return FindSolutionFile(currentDirectory);
+
+        solutionPath = fileSystem.GetFullPath(solutionPath);
 
         // If it's already a solution file path, use it directly
         if (solutionPath.EndsWith(".slnx", StringComparison.OrdinalIgnoreCase) ||

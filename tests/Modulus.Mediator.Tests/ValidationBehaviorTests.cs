@@ -96,13 +96,14 @@ public class ValidationBehaviorTests
         using var scope = provider.CreateScope();
         var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
 
-        // Empty name triggers both validators: NotEmpty from first, and MaxLength passes (empty < 5)
-        // "LongNameExceeds" triggers MaxLength from second validator
-        var result = await mediator.Send(new TestCommand("LongNameExceeds"));
+        // Empty string triggers both validators:
+        //   TestCommandNameValidator  → NotEmpty fires (error code "Name")
+        //   TestCommandNameLengthValidator → MinimumLength(10) fires (error code "Name")
+        var result = await mediator.Send(new TestCommand(""));
 
         result.IsFailure.ShouldBeTrue();
         result.ShouldBeOfType<ValidationResult>();
-        result.Errors.Count.ShouldBeGreaterThanOrEqualTo(1);
+        result.Errors.Count.ShouldBe(2);
         result.Errors.ShouldAllBe(e => e.Type == ErrorType.Validation);
     }
 

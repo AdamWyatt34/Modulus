@@ -28,7 +28,8 @@ public sealed class AddModuleHandler(
             return 1;
         }
 
-        var solutionRoot = fileSystem.GetDirectoryName(fileSystem.GetFullPath(slnxPath))!;
+        var solutionRoot = fileSystem.GetDirectoryName(fileSystem.GetFullPath(slnxPath))
+            ?? throw new InvalidOperationException($"Could not determine directory for path: {slnxPath}");
         var solutionName = SolutionFinder.GetSolutionName(slnxPath);
 
         if (!solutionFinder.IsModulusSolution(solutionRoot, solutionName))
@@ -89,7 +90,8 @@ public sealed class AddModuleHandler(
         {
             var remappedPath = Path.Combine(moduleRoot, output.RelativePath);
             var fullPath = Path.Combine(solutionRoot, remappedPath);
-            var dir = fileSystem.GetDirectoryName(fullPath)!;
+            var dir = fileSystem.GetDirectoryName(fullPath)
+                ?? throw new InvalidOperationException($"Could not determine directory for path: {fullPath}");
             fileSystem.CreateDirectory(dir);
             fileSystem.WriteAllText(fullPath, output.Content);
             fileCount++;
@@ -147,7 +149,7 @@ public sealed class AddModuleHandler(
 
     internal static string StripApiReferencesFromArchTests(string content)
     {
-        var lines = content.Split('\n').ToList();
+        var lines = content.Split('\n').Select(l => l.TrimEnd('\r')).ToList();
 
         lines.RemoveAll(l => l.TrimStart().StartsWith("using") && l.Contains(".Api.Endpoints"));
         lines.RemoveAll(l => l.Contains("ApiAssembly"));
@@ -161,7 +163,7 @@ public sealed class AddModuleHandler(
 
     internal static string StripApiReferencesFromModuleClass(string content)
     {
-        var lines = content.Split('\n').ToList();
+        var lines = content.Split('\n').Select(l => l.TrimEnd('\r')).ToList();
 
         lines.RemoveAll(l => l.TrimStart().StartsWith("using") && l.Contains(".Api.Endpoints"));
 
@@ -237,7 +239,7 @@ public sealed class AddModuleHandler(
 
     internal static string RemoveApiProjectReference(string csprojContent, string moduleName)
     {
-        var lines = csprojContent.Split('\n').ToList();
+        var lines = csprojContent.Split('\n').Select(l => l.TrimEnd('\r')).ToList();
         lines.RemoveAll(l => l.Contains("ProjectReference") && l.Contains($"{moduleName}.Api"));
         return string.Join('\n', lines);
     }

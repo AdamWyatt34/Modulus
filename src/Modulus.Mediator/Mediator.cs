@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
 using Microsoft.Extensions.DependencyInjection;
@@ -5,21 +6,30 @@ using Modulus.Mediator.Abstractions;
 
 namespace Modulus.Mediator;
 
-internal sealed class Mediator : IMediator
+internal sealed class Mediator(IServiceProvider serviceProvider) : IMediator
 {
-    private readonly IServiceProvider _serviceProvider;
+    private static readonly MethodInfo SendCommandInternalMethod =
+        typeof(Mediator).GetMethod(nameof(SendCommandInternal), BindingFlags.NonPublic | BindingFlags.Instance)!;
 
-    public Mediator(IServiceProvider serviceProvider)
-    {
-        _serviceProvider = serviceProvider;
-    }
+    private static readonly MethodInfo SendCommandWithResultInternalMethod =
+        typeof(Mediator).GetMethod(nameof(SendCommandWithResultInternal), BindingFlags.NonPublic | BindingFlags.Instance)!;
+
+    private static readonly MethodInfo QueryInternalMethod =
+        typeof(Mediator).GetMethod(nameof(QueryInternal), BindingFlags.NonPublic | BindingFlags.Instance)!;
+
+    private static readonly MethodInfo StreamInternalMethod =
+        typeof(Mediator).GetMethod(nameof(StreamInternal), BindingFlags.NonPublic | BindingFlags.Instance)!;
+
+    private static readonly ConcurrentDictionary<Type, MethodInfo> SendCommandCache = new();
+    private static readonly ConcurrentDictionary<Type, MethodInfo> SendCommandWithResultCache = new();
+    private static readonly ConcurrentDictionary<Type, MethodInfo> QueryCache = new();
+    private static readonly ConcurrentDictionary<Type, MethodInfo> StreamCache = new();
 
     public Task<Result> Send(ICommand command, CancellationToken cancellationToken = default)
     {
         var commandType = command.GetType();
-        var method = typeof(Mediator)
-            .GetMethod(nameof(SendCommandInternal), BindingFlags.NonPublic | BindingFlags.Instance)!
-            .MakeGenericMethod(commandType);
+        var method = SendCommandCache.GetOrAdd(commandType,
+            t => SendCommandInternalMethod.MakeGenericMethod(t));
 
         try
         {
@@ -37,9 +47,8 @@ internal sealed class Mediator : IMediator
         CancellationToken cancellationToken = default)
     {
         var commandType = command.GetType();
-        var method = typeof(Mediator)
-            .GetMethod(nameof(SendCommandWithResultInternal), BindingFlags.NonPublic | BindingFlags.Instance)!
-            .MakeGenericMethod(commandType, typeof(TResult));
+        var method = SendCommandWithResultCache.GetOrAdd(commandType,
+            t => SendCommandWithResultInternalMethod.MakeGenericMethod(t, typeof(TResult)));
 
         try
         {
@@ -57,9 +66,8 @@ internal sealed class Mediator : IMediator
         CancellationToken cancellationToken = default)
     {
         var queryType = query.GetType();
-        var method = typeof(Mediator)
-            .GetMethod(nameof(QueryInternal), BindingFlags.NonPublic | BindingFlags.Instance)!
-            .MakeGenericMethod(queryType, typeof(TResult));
+        var method = QueryCache.GetOrAdd(queryType,
+            t => QueryInternalMethod.MakeGenericMethod(t, typeof(TResult)));
 
         try
         {
@@ -80,9 +88,8 @@ internal sealed class Mediator : IMediator
         CancellationToken cancellationToken = default)
     {
         var queryType = query.GetType();
-        var method = typeof(Mediator)
-            .GetMethod(nameof(StreamInternal), BindingFlags.NonPublic | BindingFlags.Instance)!
-            .MakeGenericMethod(queryType, typeof(TResult));
+        var method = StreamCache.GetOrAdd(queryType,
+            t => StreamInternalMethod.MakeGenericMethod(t, typeof(TResult)));
 
         try
         {
@@ -98,7 +105,7 @@ internal sealed class Mediator : IMediator
     public async Task Publish<TEvent>(TEvent domainEvent, CancellationToken cancellationToken = default)
         where TEvent : IDomainEvent
     {
-        var handlers = _serviceProvider.GetServices<IDomainEventHandler<TEvent>>();
+        var handlers = serviceProvider.GetServices<IDomainEventHandler<TEvent>>();
         var exceptions = new List<Exception>();
 
         foreach (var handler in handlers)
@@ -124,7 +131,7 @@ internal sealed class Mediator : IMediator
     private async Task<Result> SendCommandInternal<TCommand>(TCommand command, CancellationToken cancellationToken)
         where TCommand : ICommand
     {
-        var handler = _serviceProvider.GetService<ICommandHandler<TCommand>>()
+        var handler = serviceProvider.GetService<ICommandHandler<TCommand>>()
             ?? throw new InvalidOperationException(
                 $"No handler registered for {typeof(TCommand).Name}. " +
                 $"Ensure a class implementing ICommandHandler<{typeof(TCommand).Name}> is registered.");
@@ -138,7 +145,7 @@ internal sealed class Mediator : IMediator
         TCommand command, CancellationToken cancellationToken)
         where TCommand : ICommand<TResult>
     {
-        var handler = _serviceProvider.GetService<ICommandHandler<TCommand, TResult>>()
+        var handler = serviceProvider.GetService<ICommandHandler<TCommand, TResult>>()
             ?? throw new InvalidOperationException(
                 $"No handler registered for {typeof(TCommand).Name}. " +
                 $"Ensure a class implementing ICommandHandler<{typeof(TCommand).Name}, {typeof(TResult).Name}> is registered.");
@@ -152,7 +159,7 @@ internal sealed class Mediator : IMediator
         TQuery query, CancellationToken cancellationToken)
         where TQuery : IQuery<TResult>
     {
-        var handler = _serviceProvider.GetService<IQueryHandler<TQuery, TResult>>()
+        var handler = serviceProvider.GetService<IQueryHandler<TQuery, TResult>>()
             ?? throw new InvalidOperationException(
                 $"No handler registered for {typeof(TQuery).Name}. " +
                 $"Ensure a class implementing IQueryHandler<{typeof(TQuery).Name}, {typeof(TResult).Name}> is registered.");
@@ -166,7 +173,7 @@ internal sealed class Mediator : IMediator
         TQuery query, CancellationToken cancellationToken)
         where TQuery : IStreamQuery<TResult>
     {
-        var handler = _serviceProvider.GetService<IStreamQueryHandler<TQuery, TResult>>()
+        var handler = serviceProvider.GetService<IStreamQueryHandler<TQuery, TResult>>()
             ?? throw new InvalidOperationException(
                 $"No handler registered for {typeof(TQuery).Name}. " +
                 $"Ensure a class implementing IStreamQueryHandler<{typeof(TQuery).Name}, {typeof(TResult).Name}> is registered.");
@@ -180,10 +187,10 @@ internal sealed class Mediator : IMediator
         CancellationToken cancellationToken)
         where TRequest : notnull
     {
-        var behaviors = _serviceProvider
+        var behaviors = serviceProvider
             .GetServices<IPipelineBehavior<TRequest, TResponse>>()
-            .Reverse()
             .ToList();
+        behaviors.Reverse();
 
         var next = handlerDelegate;
         foreach (var behavior in behaviors)

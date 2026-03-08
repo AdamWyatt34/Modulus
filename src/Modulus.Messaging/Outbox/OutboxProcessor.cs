@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json;
 using MassTransit;
 using Microsoft.Extensions.DependencyInjection;
@@ -7,23 +8,34 @@ using Modulus.Messaging.Abstractions;
 
 namespace Modulus.Messaging.Outbox;
 
-internal sealed class OutboxProcessor : BackgroundService
+internal sealed class OutboxProcessor(
+    IServiceScopeFactory scopeFactory,
+    IBus bus,
+    ILogger<OutboxProcessor> logger,
+    MessagingOptions options) : BackgroundService
 {
-    private readonly IServiceScopeFactory _scopeFactory;
-    private readonly IBus _bus;
-    private readonly ILogger<OutboxProcessor> _logger;
-    private readonly MessagingOptions _options;
+    private readonly Dictionary<string, Type> _allowedTypes = BuildAllowlist(options.Assemblies);
 
-    public OutboxProcessor(
-        IServiceScopeFactory scopeFactory,
-        IBus bus,
-        ILogger<OutboxProcessor> logger,
-        MessagingOptions options)
+    private static Dictionary<string, Type> BuildAllowlist(IEnumerable<Assembly> assemblies)
     {
-        _scopeFactory = scopeFactory;
-        _bus = bus;
-        _logger = logger;
-        _options = options;
+        var integrationEventType = typeof(IIntegrationEvent);
+        var map = new Dictionary<string, Type>(StringComparer.Ordinal);
+
+        foreach (var assembly in assemblies)
+        {
+            foreach (var type in assembly.GetTypes())
+            {
+                if (type is { IsAbstract: false, IsInterface: false }
+                    && integrationEventType.IsAssignableFrom(type))
+                {
+                    var assemblyQualifiedName = type.AssemblyQualifiedName;
+                    if (assemblyQualifiedName is not null)
+                        map.TryAdd(assemblyQualifiedName, type);
+                }
+            }
+        }
+
+        return map;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -32,7 +44,7 @@ internal sealed class OutboxProcessor : BackgroundService
         {
             try
             {
-                await ProcessPendingMessages(stoppingToken);
+                await ProcessPendingMessages(stoppingToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -40,19 +52,19 @@ internal sealed class OutboxProcessor : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error processing outbox messages");
+                logger.LogError(ex, "Error processing outbox messages");
             }
 
-            await Task.Delay(_options.OutboxPollInterval, stoppingToken);
+            await Task.Delay(options.OutboxPollInterval, stoppingToken).ConfigureAwait(false);
         }
     }
 
     private async Task ProcessPendingMessages(CancellationToken cancellationToken)
     {
-        using var scope = _scopeFactory.CreateScope();
+        using var scope = scopeFactory.CreateScope();
         var outboxStore = scope.ServiceProvider.GetRequiredService<IOutboxStore>();
 
-        var pending = await outboxStore.GetPending(_options.OutboxBatchSize, cancellationToken);
+        var pending = await outboxStore.GetPending(options.OutboxBatchSize, cancellationToken).ConfigureAwait(false);
 
         if (pending.Count == 0)
             return;
@@ -63,31 +75,30 @@ internal sealed class OutboxProcessor : BackgroundService
         {
             try
             {
-                var eventType = Type.GetType(message.EventType);
-                if (eventType is null)
+                if (!_allowedTypes.TryGetValue(message.EventType, out var eventType))
                 {
-                    _logger.LogWarning(
-                        "Could not resolve type {EventType} for outbox message {MessageId}",
-                        message.EventType,
-                        message.Id);
+                    logger.LogWarning(
+                        "Outbox message {MessageId} has unknown or disallowed event type {EventType}. Skipping.",
+                        message.Id,
+                        message.EventType);
                     continue;
                 }
 
                 var @event = JsonSerializer.Deserialize(message.Payload, eventType);
                 if (@event is null)
                 {
-                    _logger.LogWarning(
+                    logger.LogWarning(
                         "Failed to deserialize outbox message {MessageId}",
                         message.Id);
                     continue;
                 }
 
-                await _bus.Publish(@event, eventType, cancellationToken);
+                await bus.Publish(@event, eventType, cancellationToken).ConfigureAwait(false);
                 processedIds.Add(message.Id);
             }
             catch (Exception ex)
             {
-                _logger.LogError(
+                logger.LogError(
                     ex,
                     "Failed to publish outbox message {MessageId}",
                     message.Id);
@@ -95,6 +106,6 @@ internal sealed class OutboxProcessor : BackgroundService
         }
 
         if (processedIds.Count > 0)
-            await outboxStore.MarkAsProcessed(processedIds, cancellationToken);
+            await outboxStore.MarkAsProcessed(processedIds, cancellationToken).ConfigureAwait(false);
     }
 }

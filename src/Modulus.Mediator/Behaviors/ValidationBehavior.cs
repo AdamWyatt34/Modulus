@@ -4,29 +4,22 @@ using Modulus.Mediator.Internals;
 
 namespace Modulus.Mediator.Behaviors;
 
-public sealed class ValidationBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
+public sealed class ValidationBehavior<TRequest, TResponse>(
+    IEnumerable<IValidator<TRequest>> validators) : IPipelineBehavior<TRequest, TResponse>
     where TRequest : notnull
     where TResponse : Result
 {
-    private readonly IEnumerable<IValidator<TRequest>> _validators;
-
-    public ValidationBehavior(IEnumerable<IValidator<TRequest>> validators)
-    {
-        _validators = validators;
-    }
-
     public async Task<TResponse> Handle(
         TRequest request,
         RequestHandlerDelegate<TResponse> next,
         CancellationToken cancellationToken)
     {
-        if (!_validators.Any())
-        {
+        var validatorList = validators.ToList();
+        if (validatorList.Count == 0)
             return await next();
-        }
 
         var validationResults = await Task.WhenAll(
-            _validators.Select(v => v.ValidateAsync(
+            validatorList.Select(v => v.ValidateAsync(
                 new ValidationContext<TRequest>(request),
                 cancellationToken)));
 

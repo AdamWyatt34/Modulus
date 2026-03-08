@@ -40,7 +40,8 @@ public sealed class AddCommandHandler(
             return Task.FromResult(1);
         }
 
-        var solutionRoot = fileSystem.GetDirectoryName(fileSystem.GetFullPath(slnxPath))!;
+        var solutionRoot = fileSystem.GetDirectoryName(fileSystem.GetFullPath(slnxPath))
+            ?? throw new InvalidOperationException($"Could not determine directory for path: {slnxPath}");
         var solutionName = SolutionFinder.GetSolutionName(slnxPath);
 
         if (!solutionFinder.IsModulusSolution(solutionRoot, solutionName))
@@ -79,7 +80,8 @@ public sealed class AddCommandHandler(
         {
             var remappedPath = Path.Combine(moduleRoot, output.RelativePath);
             var fullPath = Path.Combine(solutionRoot, remappedPath);
-            var dir = fileSystem.GetDirectoryName(fullPath)!;
+            var dir = fileSystem.GetDirectoryName(fullPath)
+                ?? throw new InvalidOperationException($"Could not determine directory for path: {fullPath}");
             fileSystem.CreateDirectory(dir);
             fileSystem.WriteAllText(fullPath, output.Content);
             fileCount++;

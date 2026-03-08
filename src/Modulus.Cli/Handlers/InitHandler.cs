@@ -55,7 +55,8 @@ public sealed class InitHandler(
             }
 
             var fullPath = Path.Combine(solutionRoot, output.RelativePath);
-            var dir = fileSystem.GetDirectoryName(fullPath)!;
+            var dir = fileSystem.GetDirectoryName(fullPath)
+                ?? throw new InvalidOperationException($"Could not determine directory for path: {fullPath}");
             fileSystem.CreateDirectory(dir);
             fileSystem.WriteAllText(fullPath, content);
             fileCount++;

@@ -27,7 +27,7 @@ public class UnhandledExceptionBehaviorTests
 
         result.IsFailure.ShouldBeTrue();
         result.Errors[0].Code.ShouldBe("UnhandledException");
-        result.Errors[0].Description.ShouldContain("Handler exploded");
+        result.Errors[0].Description.ShouldBe("An unexpected error occurred.");
     }
 
     [Fact]

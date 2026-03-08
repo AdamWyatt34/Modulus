@@ -42,6 +42,24 @@ public sealed class AddEndpointHandler(
             return Task.FromResult(1);
         }
 
+        if (!System.Text.RegularExpressions.Regex.IsMatch(route, @"^[a-zA-Z0-9/{}_:?=\-\.]+$"))
+        {
+            console.WriteError($"Route '{route}' contains invalid characters.");
+            return Task.FromResult(1);
+        }
+
+        if (commandName is not null && !CSharpIdentifierValidator.IsValid(commandName))
+        {
+            console.WriteError($"'{commandName}' is not a valid C# identifier.");
+            return Task.FromResult(1);
+        }
+
+        if (queryName is not null && !CSharpIdentifierValidator.IsValid(queryName))
+        {
+            console.WriteError($"'{queryName}' is not a valid C# identifier.");
+            return Task.FromResult(1);
+        }
+
         if (commandName is not null && queryName is not null)
         {
             console.WriteError("Options --command and --query are mutually exclusive. Specify only one.");
@@ -61,7 +79,8 @@ public sealed class AddEndpointHandler(
             return Task.FromResult(1);
         }
 
-        var solutionRoot = fileSystem.GetDirectoryName(fileSystem.GetFullPath(slnxPath))!;
+        var solutionRoot = fileSystem.GetDirectoryName(fileSystem.GetFullPath(slnxPath))
+            ?? throw new InvalidOperationException($"Could not determine directory for path: {slnxPath}");
         var solutionName = SolutionFinder.GetSolutionName(slnxPath);
 
         if (!solutionFinder.IsModulusSolution(solutionRoot, solutionName))

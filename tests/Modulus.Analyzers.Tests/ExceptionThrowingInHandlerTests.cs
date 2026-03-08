@@ -216,6 +216,43 @@ public class ExceptionThrowingInHandlerTests
     }
 
     [Fact]
+    public async Task Handler_NoThrow_NoDiagnostic()
+    {
+        var source = HandlerPreamble + """
+
+            public class MyHandler : ICommandHandler<MyCommand>
+            {
+                public Task<Result> Handle(MyCommand command, CancellationToken cancellationToken = default)
+                    => Task.FromResult(Result.Success());
+            }
+            """;
+
+        var diagnostics = await AnalyzerTestHelper.GetDiagnosticsAsync(_analyzer, source);
+
+        diagnostics.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Handler_ThrowInLambda_NoDiagnostic()
+    {
+        var source = HandlerPreamble + """
+
+            public class MyHandler : ICommandHandler<MyCommand>
+            {
+                public Task<Result> Handle(MyCommand command, CancellationToken cancellationToken = default)
+                {
+                    Func<Task> inner = async () => throw new NotFoundException("not found in lambda");
+                    return Task.FromResult(Result.Success());
+                }
+            }
+            """;
+
+        var diagnostics = await AnalyzerTestHelper.GetDiagnosticsAsync(_analyzer, source);
+
+        diagnostics.ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task CodeFix_ReplacesThrowWithReturnError()
     {
         var source = HandlerPreamble + """

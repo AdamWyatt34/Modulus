@@ -3,7 +3,7 @@ using Modulus.Messaging.Abstractions;
 
 namespace Modulus.Messaging.Outbox;
 
-public class OutboxDbContext : DbContext
+public sealed class OutboxDbContext : DbContext
 {
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 

@@ -20,3 +20,10 @@ Thumbs.db
 ## Local settings
 appsettings.Development.json
 appsettings.Local.json
+
+## Secrets and certificates
+*.pfx
+*.key
+*.pem
+*.env
+.env.*

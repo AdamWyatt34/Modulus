@@ -60,7 +60,7 @@ public sealed class ExceptionThrowingInHandlerCodeFixProvider : CodeFixProvider
         }
         else if (creationExpr is ImplicitObjectCreationExpressionSyntax implicitCreation)
         {
-            var typeInfo = context.Document.GetSemanticModelAsync(context.CancellationToken).Result;
+            var typeInfo = await context.Document.GetSemanticModelAsync(context.CancellationToken).ConfigureAwait(false);
             var typeSymbol = typeInfo?.GetTypeInfo(creationExpr).Type;
             exceptionName = typeSymbol?.Name ?? "Exception";
             firstArgExpr = implicitCreation.ArgumentList?.Arguments.FirstOrDefault()?.Expression;

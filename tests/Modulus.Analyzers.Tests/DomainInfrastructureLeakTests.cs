@@ -166,6 +166,23 @@ public class DomainInfrastructureLeakTests
     }
 
     [Fact]
+    public async Task DomainClass_WithNoInfraAttributes_NoDiagnostic()
+    {
+        const string source = """
+            public class Order
+            {
+                public int Id { get; private set; }
+                public string Name { get; private set; }
+            }
+            """;
+
+        var diagnostics = await AnalyzerTestHelper.GetDiagnosticsAsync(
+            _analyzer, source, "Acme.Orders.Domain");
+
+        diagnostics.ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task NewtonsoftUsing_InDomainAssembly_ReportsDiagnostic()
     {
         const string source = """

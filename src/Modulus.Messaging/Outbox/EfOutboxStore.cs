@@ -4,15 +4,8 @@ using Modulus.Messaging.Abstractions;
 
 namespace Modulus.Messaging.Outbox;
 
-internal sealed class EfOutboxStore : IOutboxStore
+internal sealed class EfOutboxStore(OutboxDbContext dbContext) : IOutboxStore
 {
-    private readonly OutboxDbContext _dbContext;
-
-    public EfOutboxStore(OutboxDbContext dbContext)
-    {
-        _dbContext = dbContext;
-    }
-
     public async Task Save(IIntegrationEvent @event, CancellationToken cancellationToken = default)
     {
         var message = new OutboxMessage
@@ -23,19 +16,20 @@ internal sealed class EfOutboxStore : IOutboxStore
             CreatedAt = @event.OccurredOn
         };
 
-        _dbContext.OutboxMessages.Add(message);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        dbContext.OutboxMessages.Add(message);
+        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<OutboxMessage>> GetPending(
         int batchSize,
         CancellationToken cancellationToken = default)
     {
-        return await _dbContext.OutboxMessages
+        return await dbContext.OutboxMessages
+            .AsNoTracking()
             .Where(m => m.ProcessedAt == null)
             .OrderBy(m => m.CreatedAt)
             .Take(batchSize)
-            .ToListAsync(cancellationToken);
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task MarkAsProcessed(
@@ -43,16 +37,10 @@ internal sealed class EfOutboxStore : IOutboxStore
         CancellationToken cancellationToken = default)
     {
         var idList = ids.ToList();
-        var messages = await _dbContext.OutboxMessages
+        await dbContext.OutboxMessages
             .Where(m => idList.Contains(m.Id))
-            .ToListAsync(cancellationToken);
-
-        var now = DateTime.UtcNow;
-        foreach (var message in messages)
-        {
-            message.ProcessedAt = now;
-        }
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
+            .ExecuteUpdateAsync(
+                s => s.SetProperty(m => m.ProcessedAt, DateTime.UtcNow),
+                cancellationToken).ConfigureAwait(false);
     }
 }

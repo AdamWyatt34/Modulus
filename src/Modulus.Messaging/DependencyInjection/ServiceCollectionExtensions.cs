@@ -23,6 +23,14 @@ public static class ServiceCollectionExtensions
         var options = new MessagingOptions();
         configure(options);
 
+        if (options.OutboxBatchSize is <= 0 or > 1000)
+            throw new ArgumentOutOfRangeException(nameof(options), options.OutboxBatchSize,
+                "OutboxBatchSize must be between 1 and 1000.");
+
+        if (options.OutboxPollInterval < TimeSpan.FromSeconds(1))
+            throw new ArgumentOutOfRangeException(nameof(options), options.OutboxPollInterval,
+                "OutboxPollInterval must be at least 1 second.");
+
         services.AddSingleton(options);
 
         var handlerRegistrations = DiscoverHandlers(options.Assemblies);
