@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.EntityFrameworkCore;
 using Modulus.Mediator.Abstractions;
 using {{RootNamespace}}.BuildingBlocks.Infrastructure.Persistence;
@@ -8,6 +9,7 @@ namespace {{RootNamespace}}.BuildingBlocks.Infrastructure.Outbox;
 /// Decorator that ensures a domain event handler processes each event at most once.
 /// Checks the OutboxMessageConsumer table before executing the inner handler.
 /// </summary>
+[SuppressMessage("Naming", "CA1711:Identifiers should not have incorrect suffix")]
 public sealed class IdempotentDomainEventHandler<TEvent>(
     IDomainEventHandler<TEvent> innerHandler,
     BaseDbContext dbContext) : IDomainEventHandler<TEvent>

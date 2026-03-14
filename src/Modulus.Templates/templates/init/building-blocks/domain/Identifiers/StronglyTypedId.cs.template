@@ -1,5 +1,8 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace {{RootNamespace}}.BuildingBlocks.Domain.Identifiers;
 
+[SuppressMessage("Design", "CA1036:Override methods on comparable types")]
 public abstract record StronglyTypedId<T>(Guid Value)
     : IComparable<T>
     where T : StronglyTypedId<T>
