@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Modulus.Mediator.Abstractions;
 
-namespace {{RootNamespace}}.WebApi.Extensions;
+namespace {{RootNamespace}}.BuildingBlocks.Infrastructure.Endpoints;
 
 /// <summary>
 /// Factory methods for mapping <see cref="Result"/> failures to ProblemDetails HTTP responses.

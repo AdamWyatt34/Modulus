@@ -18,8 +18,6 @@ public static class ApplicationServiceExtensions
         services.AddPipelineBehavior(typeof(ValidationBehavior<,>));
         services.AddPipelineBehavior(typeof(UnitOfWorkBehavior<,>));
 
-        services.AddModulusHandlers();
-
         return services;
     }
 }

@@ -10,7 +10,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Modulus.Messaging" />
+    <PackageReference Include="ModulusKit.Messaging" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
   </ItemGroup>
 

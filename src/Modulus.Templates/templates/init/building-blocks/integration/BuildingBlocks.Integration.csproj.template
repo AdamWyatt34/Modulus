@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <PackageReference Include="Modulus.Messaging.Abstractions" />
+    <PackageReference Include="ModulusKit.Messaging.Abstractions" />
   </ItemGroup>
 
 </Project>

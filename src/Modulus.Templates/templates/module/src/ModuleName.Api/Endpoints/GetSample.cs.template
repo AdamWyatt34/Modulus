@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Modulus.Mediator.Abstractions;
 using {{RootNamespace}}.BuildingBlocks.Infrastructure.Endpoints;
-using {{RootNamespace}}.WebApi.Extensions;
 using {{RootNamespace}}.{{ModuleName}}.Application.Samples;
 
 namespace {{RootNamespace}}.{{ModuleName}}.Api.Endpoints;

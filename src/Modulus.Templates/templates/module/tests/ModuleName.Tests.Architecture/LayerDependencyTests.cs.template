@@ -1,6 +1,7 @@
 using System.Reflection;
 using NetArchTest.Rules;
 using Shouldly;
+using Xunit;
 using {{RootNamespace}}.{{ModuleName}}.Api.Endpoints;
 using {{RootNamespace}}.{{ModuleName}}.Infrastructure.Persistence;
 
@@ -11,7 +12,7 @@ public class LayerDependencyTests
     private static readonly Assembly DomainAssembly = {{ModuleName}}.Domain.AssemblyReference.Assembly;
     private static readonly Assembly ApplicationAssembly = {{ModuleName}}.Application.AssemblyReference.Assembly;
     private static readonly Assembly InfrastructureAssembly = typeof({{ModuleName}}DbContext).Assembly;
-    private static readonly Assembly ApiAssembly = typeof({{ModuleName}}Endpoints).Assembly;
+    private static readonly Assembly ApiAssembly = typeof({{ModuleName}}EndpointRegistration).Assembly;
 
     private static readonly string RootNamespace = "{{RootNamespace}}";
     private static readonly string ModuleName = "{{ModuleName}}";

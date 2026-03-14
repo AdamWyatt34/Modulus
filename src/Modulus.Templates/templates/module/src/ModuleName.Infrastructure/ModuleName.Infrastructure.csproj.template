@@ -4,7 +4,7 @@
     <ProjectReference Include="..\{{ModuleName}}.Application\{{ModuleName}}.Application.csproj" />
     <ProjectReference Include="..\{{ModuleName}}.Domain\{{ModuleName}}.Domain.csproj" />
     <ProjectReference Include="..\{{ModuleName}}.Api\{{ModuleName}}.Api.csproj" />
-    <ProjectReference Include="..\BuildingBlocks.Infrastructure\BuildingBlocks.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\..\BuildingBlocks.Infrastructure\BuildingBlocks.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>

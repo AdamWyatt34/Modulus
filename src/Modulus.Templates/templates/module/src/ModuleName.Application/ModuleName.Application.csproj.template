@@ -2,7 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\{{ModuleName}}.Domain\{{ModuleName}}.Domain.csproj" />
-    <ProjectReference Include="..\BuildingBlocks.Application\BuildingBlocks.Application.csproj" />
+    <ProjectReference Include="..\..\..\..\BuildingBlocks.Application\BuildingBlocks.Application.csproj" />
   </ItemGroup>
 
 </Project>

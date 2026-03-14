@@ -96,6 +96,8 @@ internal static class ResourceManifest
             = "init/src/BuildingBlocks.Infrastructure/Persistence/EfRepository.cs.template",
         ["Modulus.Templates.templates.init.building_blocks.infrastructure.Registration.IModuleRegistration.cs.template"]
             = "init/src/BuildingBlocks.Infrastructure/Registration/IModuleRegistration.cs.template",
+        ["Modulus.Templates.templates.init.building_blocks.infrastructure.Endpoints.ApiResults.cs.template"]
+            = "init/src/BuildingBlocks.Infrastructure/Endpoints/ApiResults.cs.template",
 
         // ──────────────────────────────────────────────────────
         // Init / Building Blocks / Integration
@@ -118,8 +120,6 @@ internal static class ResourceManifest
             = "init/src/{{SolutionName}}.WebApi/Middleware/GlobalExceptionHandler.cs.template",
         ["Modulus.Templates.templates.init.host.Extensions.ResultExtensions.cs.template"]
             = "init/src/{{SolutionName}}.WebApi/Extensions/ResultExtensions.cs.template",
-        ["Modulus.Templates.templates.init.host.Extensions.ApiResults.cs.template"]
-            = "init/src/{{SolutionName}}.WebApi/Extensions/ApiResults.cs.template",
         ["Modulus.Templates.templates.init.host.Extensions.ConfigurationExtensions.cs.template"]
             = "init/src/{{SolutionName}}.WebApi/Extensions/ConfigurationExtensions.cs.template",
 

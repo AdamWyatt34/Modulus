@@ -8,8 +8,7 @@ public static class {{ModuleName}}EndpointRegistration
 {
     public static IEndpointRouteBuilder Map{{ModuleName}}Endpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/{{ModuleNameLower}}")
-            .WithTags("{{ModuleName}}");
+        var group = app.MapGroup("/api/{{ModuleNameLower}}");
 
         var endpoints = typeof({{ModuleName}}EndpointRegistration).Assembly
             .GetTypes()

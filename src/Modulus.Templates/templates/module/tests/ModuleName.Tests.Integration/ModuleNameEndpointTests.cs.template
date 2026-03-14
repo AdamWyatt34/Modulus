@@ -1,5 +1,6 @@
 using System.Net;
 using Shouldly;
+using Xunit;
 
 namespace {{RootNamespace}}.{{ModuleName}}.Tests.Integration;
 

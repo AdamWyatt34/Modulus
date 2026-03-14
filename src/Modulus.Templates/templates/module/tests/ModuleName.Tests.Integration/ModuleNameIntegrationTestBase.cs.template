@@ -1,17 +1,18 @@
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Testcontainers.MsSql;
+using Xunit;
 
 namespace {{RootNamespace}}.{{ModuleName}}.Tests.Integration;
 
 public abstract class {{ModuleName}}IntegrationTestBase : IAsyncLifetime
 {
-    private readonly MsSqlContainer _dbContainer = new MsSqlBuilder().Build();
+    private readonly MsSqlContainer _dbContainer = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-latest").Build();
 
     protected WebApplicationFactory<Program> Factory = null!;
     protected HttpClient Client = null!;
 
-    public virtual async ValueTask InitializeAsync()
+    public virtual async Task InitializeAsync()
     {
         await _dbContainer.StartAsync();
 
@@ -30,7 +31,7 @@ public abstract class {{ModuleName}}IntegrationTestBase : IAsyncLifetime
         Client = Factory.CreateClient();
     }
 
-    public virtual async ValueTask DisposeAsync()
+    public virtual async Task DisposeAsync()
     {
         Client.Dispose();
         await Factory.DisposeAsync();
