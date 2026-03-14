@@ -12,10 +12,16 @@ namespace Modulus.Generators;
 [Generator]
 public sealed class ModuleRegistrationGenerator : IIncrementalGenerator
 {
+    private const string EndpointRouteBuilderFullName = "Microsoft.AspNetCore.Routing.IEndpointRouteBuilder";
+
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var modulesProvider = context.CompilationProvider
             .Select(static (compilation, ct) => FindModuleRegistrations(compilation, ct));
+
+        var isAspNetCoreHost = context.CompilationProvider
+            .Select(static (compilation, _) =>
+                compilation.GetTypeByMetadataName(EndpointRouteBuilderFullName) is not null);
 
         var rootNamespace = context.AnalyzerConfigOptionsProvider
             .Select(static (provider, _) =>
@@ -28,10 +34,10 @@ public sealed class ModuleRegistrationGenerator : IIncrementalGenerator
             .Select(static (c, _) => c.AssemblyName);
 
         var namespaceInfo = rootNamespace.Combine(assemblyName);
-        var combined = modulesProvider.Combine(namespaceInfo);
+        var combined = modulesProvider.Combine(namespaceInfo).Combine(isAspNetCoreHost);
 
         context.RegisterSourceOutput(combined, static (spc, data) =>
-            Execute(spc, data.Left, data.Right.Left, data.Right.Right));
+            Execute(spc, data.Left.Left, data.Left.Right.Left, data.Left.Right.Right, data.Right));
 
         var diagnosticsProvider = context.CompilationProvider
             .SelectMany(static (compilation, ct) => FindIncompleteModules(compilation, ct));
@@ -200,8 +206,12 @@ public sealed class ModuleRegistrationGenerator : IIncrementalGenerator
         SourceProductionContext context,
         EquatableArray<ModuleRegistrationModel> modules,
         string? rootNamespace,
-        string? assemblyName)
+        string? assemblyName,
+        bool isAspNetCoreHost)
     {
+        if (!isAspNetCoreHost)
+            return;
+
         var ns = rootNamespace ?? assemblyName ?? "GeneratedRegistrations";
 
         var sb = new StringBuilder();

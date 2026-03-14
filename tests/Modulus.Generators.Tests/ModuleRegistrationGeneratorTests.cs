@@ -284,4 +284,20 @@ public class ModuleRegistrationGeneratorTests
         var emitResult = outputCompilation.Emit(ms);
         emitResult.Success.ShouldBeTrue();
     }
+
+    [Fact]
+    public void Generate_NonAspNetCoreProject_SkipsEmission()
+    {
+        var hostSource = "namespace TestHost { public class Marker { } }";
+
+        var (outputCompilation, _, runResult) = GeneratorTestHelper.RunModuleRegistrationGenerator(
+            hostSource, "TestHost", aspNetCoreReferences: false);
+
+        runResult.GeneratedTrees
+            .Any(t => t.FilePath.EndsWith("GeneratedModuleRegistration.g.cs"))
+            .ShouldBeFalse();
+
+        var errors = outputCompilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
+        errors.ShouldBeEmpty();
+    }
 }

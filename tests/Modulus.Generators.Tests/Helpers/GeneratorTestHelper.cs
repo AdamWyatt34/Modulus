@@ -95,8 +95,27 @@ internal static class GeneratorTestHelper
             string hostSource,
             string? rootNamespace = null,
             params string[] moduleAssemblySources)
+        => RunModuleRegistrationGeneratorCore(hostSource, rootNamespace, true, moduleAssemblySources);
+
+    public static (Compilation OutputCompilation, ImmutableArray<Diagnostic> Diagnostics, GeneratorDriverRunResult RunResult)
+        RunModuleRegistrationGenerator(
+            string hostSource,
+            string? rootNamespace,
+            bool aspNetCoreReferences,
+            params string[] moduleAssemblySources)
+        => RunModuleRegistrationGeneratorCore(hostSource, rootNamespace, aspNetCoreReferences, moduleAssemblySources);
+
+    private static (Compilation OutputCompilation, ImmutableArray<Diagnostic> Diagnostics, GeneratorDriverRunResult RunResult)
+        RunModuleRegistrationGeneratorCore(
+            string hostSource,
+            string? rootNamespace,
+            bool aspNetCoreReferences,
+            string[] moduleAssemblySources)
     {
-        var references = new List<MetadataReference>(LazyReferences.Value);
+        var references = aspNetCoreReferences
+            ? new List<MetadataReference>(LazyReferences.Value)
+            : new List<MetadataReference>(LazyReferences.Value.Where(r =>
+                r.Display is null || !r.Display.Contains("Microsoft.AspNetCore")));
 
         for (var i = 0; i < moduleAssemblySources.Length; i++)
         {
