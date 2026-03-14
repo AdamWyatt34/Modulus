@@ -20,6 +20,7 @@ public sealed class TemplateEngine
             ["{{SolutionName}}"] = options.SolutionName,
             ["{{SolutionNameLower}}"] = options.SolutionName.ToLowerInvariant(),
             ["{{RootNamespace}}"] = options.SolutionName,
+            ["{{ModulusKitVersion}}"] = options.ModulusKitVersion,
         };
 
         var outputs = new List<TemplateOutput>();
