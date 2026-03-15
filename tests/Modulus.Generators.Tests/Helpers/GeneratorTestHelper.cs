@@ -90,6 +90,61 @@ internal static class GeneratorTestHelper
         return (outputCompilation, diagnostics, runResult);
     }
 
+    public static (Compilation OutputCompilation, ImmutableArray<Diagnostic> Diagnostics, GeneratorDriverRunResult RunResult) RunHandlerRegistrationGenerator(
+        string hostSource,
+        string? rootNamespace,
+        params string[] referencedAssemblySources)
+    {
+        var references = new List<MetadataReference>(LazyReferences.Value);
+
+        for (var i = 0; i < referencedAssemblySources.Length; i++)
+        {
+            var moduleSyntaxTree = CSharpSyntaxTree.ParseText(referencedAssemblySources[i]);
+            var moduleCompilation = CSharpCompilation.Create(
+                $"ReferencedAssembly{i}",
+                [moduleSyntaxTree],
+                LazyReferences.Value,
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+            using var ms = new MemoryStream();
+            var emitResult = moduleCompilation.Emit(ms);
+            if (!emitResult.Success)
+            {
+                var errors = string.Join(", ", emitResult.Diagnostics
+                    .Where(d => d.Severity == DiagnosticSeverity.Error)
+                    .Select(d => d.GetMessage()));
+                throw new InvalidOperationException(
+                    $"Referenced assembly {i} failed to compile: {errors}");
+            }
+
+            ms.Seek(0, SeekOrigin.Begin);
+            references.Add(MetadataReference.CreateFromStream(ms));
+        }
+
+        var hostSyntaxTree = CSharpSyntaxTree.ParseText(hostSource);
+        var hostCompilation = CSharpCompilation.Create(
+            rootNamespace ?? "TestHost",
+            [hostSyntaxTree],
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var generator = new HandlerRegistrationGenerator();
+
+        AnalyzerConfigOptionsProvider? optionsProvider = rootNamespace is not null
+            ? new TestAnalyzerConfigOptionsProvider(rootNamespace)
+            : null;
+
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(
+            generators: [generator.AsSourceGenerator()],
+            optionsProvider: optionsProvider);
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(
+            hostCompilation, out var outputCompilation, out var diagnostics);
+
+        var runResult = driver.GetRunResult();
+        return (outputCompilation, diagnostics, runResult);
+    }
+
     public static (Compilation OutputCompilation, ImmutableArray<Diagnostic> Diagnostics, GeneratorDriverRunResult RunResult)
         RunModuleRegistrationGenerator(
             string hostSource,

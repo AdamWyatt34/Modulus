@@ -327,6 +327,89 @@ public class HandlerRegistrationGeneratorTests
     }
 
     [Fact]
+    public void Generate_HandlersInReferencedAssembly_DiscoveredAndRegistered()
+    {
+        var moduleSource = SystemUsings + """
+            using Modulus.Mediator.Abstractions;
+
+            namespace MyModule.Application;
+
+            public record GetItemQuery : IQuery<string>;
+
+            public sealed class GetItemQueryHandler : IQueryHandler<GetItemQuery, string>
+            {
+                public Task<Result<string>> Handle(GetItemQuery query, CancellationToken cancellationToken = default)
+                    => Task.FromResult(Result<string>.Success("item"));
+            }
+            """;
+
+        var hostSource = """
+            namespace MyHost;
+
+            public class Marker { }
+            """;
+
+        var (outputCompilation, diagnostics, runResult) = GeneratorTestHelper.RunHandlerRegistrationGenerator(
+            hostSource, "MyHost", moduleSource);
+
+        var generatedSource = GeneratorTestHelper.GetGeneratedSource(runResult, "ModulusHandlerRegistrations.g.cs");
+
+        generatedSource.ShouldContain("// Queries");
+        // For types from referenced assemblies, string may render as 'string' keyword
+        generatedSource.ShouldContain("GetItemQueryHandler");
+        generatedSource.ShouldContain("IQueryHandler<global::MyModule.Application.GetItemQuery");
+        generatedSource.ShouldContain("namespace MyHost;");
+
+        var errors = outputCompilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
+        errors.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Generate_HandlersInBothLocalAndReferenced_MergesAll()
+    {
+        var moduleSource = SystemUsings + """
+            using Modulus.Mediator.Abstractions;
+
+            namespace ExternalModule;
+
+            public record ExternalCommand : ICommand;
+
+            public sealed class ExternalCommandHandler : ICommandHandler<ExternalCommand>
+            {
+                public Task<Result> Handle(ExternalCommand command, CancellationToken cancellationToken = default)
+                    => Task.FromResult(Result.Success());
+            }
+            """;
+
+        var hostSource = SystemUsings + """
+            using Modulus.Mediator.Abstractions;
+
+            namespace MyHost;
+
+            public record LocalQuery : IQuery<string>;
+
+            public sealed class LocalQueryHandler : IQueryHandler<LocalQuery, string>
+            {
+                public Task<Result<string>> Handle(LocalQuery query, CancellationToken cancellationToken = default)
+                    => Task.FromResult(Result<string>.Success("local"));
+            }
+            """;
+
+        var (outputCompilation, _, runResult) = GeneratorTestHelper.RunHandlerRegistrationGenerator(
+            hostSource, "MyHost", moduleSource);
+
+        var generatedSource = GeneratorTestHelper.GetGeneratedSource(runResult, "ModulusHandlerRegistrations.g.cs");
+
+        generatedSource.ShouldContain("// Commands");
+        generatedSource.ShouldContain("global::ExternalModule.ExternalCommandHandler");
+        generatedSource.ShouldContain("// Queries");
+        generatedSource.ShouldContain("global::MyHost.LocalQueryHandler");
+
+        var errors = outputCompilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
+        errors.ShouldBeEmpty();
+    }
+
+    [Fact]
     public void Generate_Registrations_ResolveFromServiceProvider()
     {
         var source = SystemUsings + """

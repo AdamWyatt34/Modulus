@@ -27,18 +27,30 @@ public sealed class HandlerRegistrationGenerator : IIncrementalGenerator
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
+        // Pipeline 1: Scan syntax trees in the current compilation (existing behavior)
         var candidateProvider = context.SyntaxProvider
             .CreateSyntaxProvider(
                 predicate: static (node, _) => IsCandidate(node),
                 transform: static (ctx, ct) => AnalyzeCandidate(ctx, ct));
 
-        // Registration pipeline — extract valid handler registrations
         var handlerProvider = candidateProvider
             .Where(static r => r.Registrations.Length > 0)
             .SelectMany(static (r, _) => r.Registrations);
 
-        var collected = handlerProvider.Collect()
+        var localHandlers = handlerProvider.Collect()
             .Select(static (arr, _) => new EquatableArray<HandlerRegistration>(arr));
+
+        // Pipeline 2: Scan referenced assemblies for handler types
+        var referencedHandlers = context.CompilationProvider
+            .Select(static (compilation, ct) => FindHandlersInReferencedAssemblies(compilation, ct));
+
+        // Merge both pipelines
+        var collected = localHandlers.Combine(referencedHandlers)
+            .Select(static (pair, _) =>
+            {
+                var merged = pair.Left.Array.AddRange(pair.Right.Array);
+                return new EquatableArray<HandlerRegistration>(merged);
+            });
 
         var rootNamespace = context.AnalyzerConfigOptionsProvider
             .Select(static (provider, _) =>
@@ -130,6 +142,64 @@ public sealed class HandlerRegistrationGenerator : IIncrementalGenerator
         return new CandidateResult(
             builder.Count > 0 ? builder.ToImmutable() : ImmutableArray<HandlerRegistration>.Empty,
             null);
+    }
+
+    private static EquatableArray<HandlerRegistration> FindHandlersInReferencedAssemblies(
+        Compilation compilation, CancellationToken ct)
+    {
+        var builder = ImmutableArray.CreateBuilder<HandlerRegistration>();
+
+        foreach (var assemblySymbol in compilation.SourceModule.ReferencedAssemblySymbols)
+        {
+            ct.ThrowIfCancellationRequested();
+            CollectHandlersFromNamespace(assemblySymbol.GlobalNamespace, builder, ct);
+        }
+
+        return new EquatableArray<HandlerRegistration>(builder.ToImmutable());
+    }
+
+    private static void CollectHandlersFromNamespace(
+        INamespaceSymbol ns,
+        ImmutableArray<HandlerRegistration>.Builder builder,
+        CancellationToken ct)
+    {
+        foreach (var type in ns.GetTypeMembers())
+        {
+            ct.ThrowIfCancellationRequested();
+
+            if (type.IsAbstract || type.IsStatic || type.IsGenericType)
+                continue;
+
+            var handlerFqn = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+            foreach (var iface in type.AllInterfaces)
+            {
+                if (TryGetHandlerCategory(iface, out var category))
+                {
+                    var ifaceFqn = iface.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                    builder.Add(new HandlerRegistration(handlerFqn, ifaceFqn, category));
+                }
+            }
+
+            var baseType = type.BaseType;
+            while (baseType is not null)
+            {
+                if (IsAbstractValidator(baseType) && baseType.TypeArguments.Length == 1)
+                {
+                    var validatedType = baseType.TypeArguments[0];
+                    var validatedFqn = validatedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                    var iValidatorFqn = $"global::FluentValidation.IValidator<{validatedFqn}>";
+                    builder.Add(new HandlerRegistration(handlerFqn, iValidatorFqn, HandlerCategory.Validator));
+                    break;
+                }
+                baseType = baseType.BaseType;
+            }
+        }
+
+        foreach (var childNs in ns.GetNamespaceMembers())
+        {
+            CollectHandlersFromNamespace(childNs, builder, ct);
+        }
     }
 
     private static bool TryGetHandlerCategory(INamedTypeSymbol iface, out HandlerCategory category)
