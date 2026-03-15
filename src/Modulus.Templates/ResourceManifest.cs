@@ -122,6 +122,8 @@ internal static class ResourceManifest
             = "init/src/{{SolutionName}}.WebApi/Extensions/ResultExtensions.cs.template",
         ["Modulus.Templates.templates.init.host.Extensions.ConfigurationExtensions.cs.template"]
             = "init/src/{{SolutionName}}.WebApi/Extensions/ConfigurationExtensions.cs.template",
+        ["Modulus.Templates.templates.init.host.Properties.launchSettings.json.template"]
+            = "init/src/{{SolutionName}}.WebApi/Properties/launchSettings.json.template",
 
         // ──────────────────────────────────────────────────────
         // Init / Tests

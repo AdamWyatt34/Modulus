@@ -12,6 +12,8 @@
 
   <ItemGroup>
     <PackageReference Include="ModulusKit.Generators" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Scalar.AspNetCore" />
   </ItemGroup>
 
 </Project>
