@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Modulus.Mediator.Abstractions;
 using Modulus.Messaging.Abstractions;
-using {{RootNamespace}}.BuildingBlocks.Application;
 using {{RootNamespace}}.BuildingBlocks.Domain.Entities;
 using {{RootNamespace}}.BuildingBlocks.Infrastructure.Inbox;
 using {{RootNamespace}}.BuildingBlocks.Infrastructure.Outbox;

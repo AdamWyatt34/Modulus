@@ -54,7 +54,7 @@ public sealed class InitHandler(
                 content = InjectMessagingConfig(content, transport);
             }
 
-            var fullPath = Path.Combine(solutionRoot, output.RelativePath);
+            var fullPath = PathGuard.EnsureContained(solutionRoot, output.RelativePath);
             var dir = fileSystem.GetDirectoryName(fullPath)
                 ?? throw new InvalidOperationException($"Could not determine directory for path: {fullPath}");
             fileSystem.CreateDirectory(dir);
@@ -64,7 +64,7 @@ public sealed class InitHandler(
 
         console.WriteLine($"Created solution '{solutionName}' with {fileCount} files.");
 
-        var restoreResult = await processRunner.RunAsync("dotnet", "restore", solutionRoot);
+        var restoreResult = await processRunner.RunAsync("dotnet", ["restore"], solutionRoot);
         if (restoreResult != 0)
         {
             console.WriteError($"Warning: dotnet restore failed with exit code {restoreResult}. You may need to run it manually.");
@@ -72,15 +72,15 @@ public sealed class InitHandler(
 
         if (!noGit)
         {
-            var gitResult = await processRunner.RunAsync("git", "init", solutionRoot);
+            var gitResult = await processRunner.RunAsync("git", ["init"], solutionRoot);
             if (gitResult != 0)
             {
                 console.WriteError("Warning: git init failed. You may need to initialize the repository manually.");
             }
             else
             {
-                await processRunner.RunAsync("git", "add .", solutionRoot);
-                await processRunner.RunAsync("git", "commit -m \"Initial commit from Modulus\"", solutionRoot);
+                await processRunner.RunAsync("git", ["add", "."], solutionRoot);
+                await processRunner.RunAsync("git", ["commit", "-m", "Initial commit from Modulus"], solutionRoot);
             }
         }
 

@@ -13,10 +13,12 @@ dotnet add package ModulusKit.Mediator
 ```csharp
 services.AddModulusMediator(typeof(Program).Assembly);
 
-// Add built-in pipeline behaviors
+// Add built-in pipeline behaviors (order matters — first registered = outermost).
 services.AddPipelineBehavior(typeof(UnhandledExceptionBehavior<,>));
 services.AddPipelineBehavior(typeof(LoggingBehavior<,>));
+services.AddPipelineBehavior(typeof(MetricsBehavior<,>));
 services.AddPipelineBehavior(typeof(ValidationBehavior<,>));
+services.AddPipelineBehavior(typeof(UnitOfWorkBehavior<,>));
 ```
 
 `AddModulusMediator` scans the provided assemblies and auto-registers all handlers (`ICommandHandler<>`, `IQueryHandler<,>`, `IStreamQueryHandler<,>`, `IDomainEventHandler<>`).
@@ -76,39 +78,50 @@ Behaviors wrap every request in a middleware-style pipeline. They execute in reg
 |----------|---------|
 | `UnhandledExceptionBehavior` | Catches unhandled exceptions and converts them to failure Results |
 | `LoggingBehavior` | Logs request start, elapsed time, and success/failure |
+| `MetricsBehavior` | Emits `modulus.mediator.handler.duration` histogram per request |
 | `ValidationBehavior` | Runs FluentValidation validators and short-circuits on errors |
+| `UnitOfWorkBehavior` | Commits an `IUnitOfWork` (resolved from DI; no-op if not registered) after a successful command. Queries bypass. |
 
 ### Custom behaviors
 
+Implement `IPipelineBehavior<TRequest, TResponse>` and register it. Behaviors execute in registration order (first registered = outermost):
+
 ```csharp
-public class UnitOfWorkBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
+public sealed class AuditBehavior<TRequest, TResponse>(IAuditWriter audit)
+    : IPipelineBehavior<TRequest, TResponse>
     where TRequest : notnull
+    where TResponse : Result
 {
-    private readonly IUnitOfWork _unitOfWork;
-
-    public UnitOfWorkBehavior(IUnitOfWork unitOfWork) => _unitOfWork = unitOfWork;
-
     public async Task<TResponse> Handle(
         TRequest request,
         RequestHandlerDelegate<TResponse> next,
         CancellationToken cancellationToken)
     {
-        var response = await next();
-
-        // Commit only on success (TResponse is always Result or Result<T>)
-        if (response is Result { IsSuccess: true })
-            await _unitOfWork.CommitAsync(cancellationToken);
-
+        var response = await next().ConfigureAwait(false);
+        if (response.IsSuccess)
+            await audit.RecordAsync(typeof(TRequest).Name, cancellationToken).ConfigureAwait(false);
         return response;
     }
 }
+
+services.AddPipelineBehavior(typeof(AuditBehavior<,>));
 ```
 
-Register custom behaviors:
+### Using `UnitOfWorkBehavior`
+
+Implement `IUnitOfWork` (typically on your `DbContext`) and register it:
 
 ```csharp
+public class AppDbContext : DbContext, IUnitOfWork
+{
+    // SaveChangesAsync on DbContext already satisfies IUnitOfWork
+}
+
+services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<AppDbContext>());
 services.AddPipelineBehavior(typeof(UnitOfWorkBehavior<,>));
 ```
+
+If no `IUnitOfWork` is registered, the behavior is a no-op — safe to include in every scaffold.
 
 ## Domain Events
 

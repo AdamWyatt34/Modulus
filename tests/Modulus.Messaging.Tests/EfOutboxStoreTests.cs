@@ -66,7 +66,7 @@ public class EfOutboxStoreTests
         await store.Save(event1);
         await store.Save(event2);
 
-        var pending = await store.GetPending(10);
+        var pending = await store.GetPending(10, int.MaxValue);
 
         pending.Count.ShouldBe(2);
         pending[0].Id.ShouldBe(event1.EventId);
@@ -89,7 +89,7 @@ public class EfOutboxStoreTests
             });
         }
 
-        var pending = await store.GetPending(2);
+        var pending = await store.GetPending(2, int.MaxValue);
         pending.Count.ShouldBe(2);
     }
 
@@ -115,7 +115,7 @@ public class EfOutboxStoreTests
         message.ProcessedAt = DateTime.UtcNow;
         await dbContext.SaveChangesAsync();
 
-        var pending = await store.GetPending(10);
+        var pending = await store.GetPending(10, int.MaxValue);
         pending.Count.ShouldBe(0);
     }
 }

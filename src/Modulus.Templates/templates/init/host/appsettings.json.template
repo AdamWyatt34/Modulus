@@ -1,6 +1,6 @@
 {
   "ConnectionStrings": {
-    "Default": "Server=localhost;Database={{SolutionNameLower}};Trusted_Connection=true;TrustServerCertificate=true;"
+    "Default": "Server=localhost;Database={{SolutionNameLower}};Trusted_Connection=true;Encrypt=false;"
   },
   "Logging": {
     "LogLevel": {
@@ -9,5 +9,5 @@
       "Microsoft.EntityFrameworkCore": "Warning"
     }
   },
-  "AllowedHosts": "*"
+  "AllowedHosts": "localhost"
 }

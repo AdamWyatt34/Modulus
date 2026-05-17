@@ -1,7 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Modulus.Mediator;
 using Modulus.Mediator.Behaviors;
-using {{RootNamespace}}.BuildingBlocks.Application.Behaviors;
 
 namespace {{RootNamespace}}.BuildingBlocks.Application.DependencyInjection;
 

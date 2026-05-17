@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Modulus.Messaging.Abstractions;
+using Modulus.Messaging.Internals;
 
 namespace Modulus.Messaging.Outbox;
 
@@ -23,7 +24,7 @@ internal sealed class OutboxProcessor(
 
         foreach (var assembly in assemblies)
         {
-            foreach (var type in assembly.GetTypes())
+            foreach (var type in assembly.GetTypesSafe())
             {
                 if (type is { IsAbstract: false, IsInterface: false }
                     && integrationEventType.IsAssignableFrom(type))
@@ -64,7 +65,10 @@ internal sealed class OutboxProcessor(
         using var scope = scopeFactory.CreateScope();
         var outboxStore = scope.ServiceProvider.GetRequiredService<IOutboxStore>();
 
-        var pending = await outboxStore.GetPending(options.OutboxBatchSize, cancellationToken).ConfigureAwait(false);
+        var maxAttempts = options.RetryPolicy.MaxAttempts;
+        var pending = await outboxStore
+            .GetPending(options.OutboxBatchSize, maxAttempts, cancellationToken)
+            .ConfigureAwait(false);
 
         if (pending.Count == 0)
             return;
@@ -98,10 +102,27 @@ internal sealed class OutboxProcessor(
             }
             catch (Exception ex)
             {
-                logger.LogError(
-                    ex,
-                    "Failed to publish outbox message {MessageId}",
-                    message.Id);
+                var nextAttempt = message.Attempts + 1;
+
+                if (nextAttempt >= maxAttempts)
+                {
+                    logger.LogCritical(
+                        ex,
+                        "Outbox message {MessageId} failed after {Attempts} attempts and is being dead-lettered",
+                        message.Id,
+                        nextAttempt);
+                }
+                else
+                {
+                    logger.LogError(
+                        ex,
+                        "Failed to publish outbox message {MessageId} (attempt {Attempt} of {Max})",
+                        message.Id,
+                        nextAttempt,
+                        maxAttempts);
+                }
+
+                await outboxStore.MarkAsFailed(message.Id, ex.Message, cancellationToken).ConfigureAwait(false);
             }
         }
 

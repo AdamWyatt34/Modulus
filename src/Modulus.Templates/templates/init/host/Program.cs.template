@@ -9,6 +9,18 @@ builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddHealthChecks();
 
+// SECURITY: AddAuthentication() below registers no scheme — the scaffold runs unauthenticated.
+// Replace with your real configuration before deploying (JWT bearer, OIDC, Keycloak, etc.):
+//
+//   builder.Services.AddAuthentication("Bearer")
+//       .AddJwtBearer("Bearer", o => { /* Authority, Audience, etc. */ });
+//
+// Once you have a scheme registered, enable per-group enforcement by switching the
+// MapGroup(...) call in each module's <ModuleName>EndpointRegistration.cs to use
+// .RequireAuthorization().
+builder.Services.AddAuthentication();
+builder.Services.AddAuthorization();
+
 builder.Services.AddApplicationServices();
 builder.Services.AddModulusHandlers();
 builder.Services.AddAllModules(builder.Configuration);
@@ -27,8 +39,14 @@ if (!app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 }
 
-app.MapOpenApi();
-app.MapScalarApiReference();
+app.UseAuthentication();
+app.UseAuthorization();
+
+if (app.Environment.IsDevelopment())
+{
+    app.MapOpenApi();
+    app.MapScalarApiReference();
+}
 
 app.MapHealthChecks("/healthz");
 app.MapHealthChecks("/readyz");

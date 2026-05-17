@@ -183,7 +183,7 @@ public class AddModuleHandlerTests
 
         await handler.ExecuteAsync("Catalog", @"C:\work\EShop\EShop.slnx", noEndpoints: false);
 
-        _proc.Invocations.ShouldContain(i => i.Command == "dotnet" && i.Arguments == "restore");
+        _proc.Invocations.ShouldContain(i => i.Command == "dotnet" && i.Arguments.Count == 1 && i.Arguments[0] == "restore");
     }
 
     [Fact]
@@ -209,5 +209,49 @@ public class AddModuleHandlerTests
 
         result.ShouldBe(1);
         _console.ErrorLines.ShouldContain(l => l.Contains("does not appear to be a Modulus solution"));
+    }
+
+    [Fact]
+    public async Task AddModule_EndpointRegistration_documents_authorization_opt_in()
+    {
+        SeedModulusSolution();
+        var handler = CreateHandler();
+
+        await handler.ExecuteAsync("Catalog", @"C:\work\EShop\EShop.slnx", noEndpoints: false);
+
+        var content = _fs.ReadAllText(@"C:\work\EShop\src\Modules\Catalog\src\Catalog.Api\Endpoints\CatalogEndpointRegistration.cs");
+
+        // The scaffold ships anonymous because Program.cs has no registered auth scheme;
+        // calling .RequireAuthorization() without one would throw at first request. The
+        // template documents the exact line to uncomment after wiring auth.
+        content.ShouldContain("// SECURITY:");
+        content.ShouldContain("RequireAuthorization()");
+        content.ShouldContain("var group = app.MapGroup(\"/api/catalog\");");
+    }
+
+    [Fact]
+    public async Task AddModule_GetSample_uses_sample_route_not_root()
+    {
+        SeedModulusSolution();
+        var handler = CreateHandler();
+
+        await handler.ExecuteAsync("Catalog", @"C:\work\EShop\EShop.slnx", noEndpoints: false);
+
+        var content = _fs.ReadAllText(@"C:\work\EShop\src\Modules\Catalog\src\Catalog.Api\Endpoints\GetSample.cs");
+        content.ShouldContain("app.MapGet(\"/sample\"");
+        content.ShouldNotContain("app.MapGet(\"/\",");
+    }
+
+    [Fact]
+    public async Task AddModule_imports_IUnitOfWork_from_library_namespace()
+    {
+        SeedModulusSolution();
+        var handler = CreateHandler();
+
+        await handler.ExecuteAsync("Catalog", @"C:\work\EShop\EShop.slnx", noEndpoints: false);
+
+        var content = _fs.ReadAllText(@"C:\work\EShop\src\Modules\Catalog\src\Catalog.Infrastructure\CatalogModule.cs");
+        content.ShouldContain("using Modulus.Mediator.Abstractions;");
+        content.ShouldNotContain("using EShop.BuildingBlocks.Application;");
     }
 }

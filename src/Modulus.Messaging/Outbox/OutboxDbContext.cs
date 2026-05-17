@@ -20,6 +20,11 @@ public sealed class OutboxDbContext : DbContext
             entity.Property(e => e.Payload).IsRequired();
             entity.Property(e => e.CreatedAt).IsRequired();
             entity.Property(e => e.ProcessedAt);
+            entity.Property(e => e.Attempts).IsRequired();
+            entity.Property(e => e.LastError);
+
+            // Polling query: WHERE ProcessedAt IS NULL ORDER BY CreatedAt.
+            entity.HasIndex(e => new { e.ProcessedAt, e.CreatedAt });
         });
     }
 }

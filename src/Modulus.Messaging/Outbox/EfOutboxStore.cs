@@ -22,11 +22,12 @@ internal sealed class EfOutboxStore(OutboxDbContext dbContext) : IOutboxStore
 
     public async Task<IReadOnlyList<OutboxMessage>> GetPending(
         int batchSize,
+        int maxAttempts,
         CancellationToken cancellationToken = default)
     {
         return await dbContext.OutboxMessages
             .AsNoTracking()
-            .Where(m => m.ProcessedAt == null)
+            .Where(m => m.ProcessedAt == null && m.Attempts < maxAttempts)
             .OrderBy(m => m.CreatedAt)
             .Take(batchSize)
             .ToListAsync(cancellationToken).ConfigureAwait(false);
@@ -42,5 +43,24 @@ internal sealed class EfOutboxStore(OutboxDbContext dbContext) : IOutboxStore
             .ExecuteUpdateAsync(
                 s => s.SetProperty(m => m.ProcessedAt, DateTime.UtcNow),
                 cancellationToken).ConfigureAwait(false);
+    }
+
+    // Single-writer assumption: the outbox processor is registered as a HostedService and
+    // processes one batch sequentially. Multi-replica deployments should consider a partitioned
+    // outbox or row-level locking instead of relying on this load-modify-save pattern.
+    public async Task MarkAsFailed(
+        Guid messageId,
+        string error,
+        CancellationToken cancellationToken = default)
+    {
+        var message = await dbContext.OutboxMessages
+            .FirstOrDefaultAsync(m => m.Id == messageId, cancellationToken).ConfigureAwait(false);
+
+        if (message is null)
+            return;
+
+        message.Attempts += 1;
+        message.LastError = error;
+        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 }

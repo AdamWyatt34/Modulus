@@ -3,7 +3,7 @@ using Modulus.Messaging.Abstractions;
 
 namespace Modulus.Messaging.Inbox;
 
-public class InboxDbContext : DbContext
+public sealed class InboxDbContext : DbContext
 {
     public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
     public DbSet<InboxMessageConsumer> InboxMessageConsumers => Set<InboxMessageConsumer>();
@@ -21,6 +21,9 @@ public class InboxDbContext : DbContext
             entity.Property(e => e.Content).IsRequired();
             entity.Property(e => e.OccurredOnUtc).IsRequired();
             entity.Property(e => e.ProcessedOnUtc);
+
+            // Polling query: WHERE ProcessedOnUtc IS NULL ORDER BY OccurredOnUtc.
+            entity.HasIndex(e => new { e.ProcessedOnUtc, e.OccurredOnUtc });
         });
 
         modelBuilder.Entity<InboxMessageConsumer>(entity =>

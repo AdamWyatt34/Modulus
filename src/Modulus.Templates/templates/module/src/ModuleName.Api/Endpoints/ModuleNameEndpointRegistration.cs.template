@@ -8,6 +8,16 @@ public static class {{ModuleName}}EndpointRegistration
 {
     public static IEndpointRouteBuilder Map{{ModuleName}}Endpoints(this IEndpointRouteBuilder app)
     {
+        // SECURITY: When you wire an authentication scheme (JWT bearer, OIDC, Keycloak, etc.)
+        // in WebApi/Program.cs, replace the line below with the commented version to require
+        // auth on every endpoint in this module. Individual endpoints can then opt out with
+        // .AllowAnonymous() in their MapEndpoint call.
+        //
+        //   var group = app.MapGroup("/api/{{ModuleNameLower}}").RequireAuthorization();
+        //
+        // The default below is anonymous because Program.cs ships with AddAuthentication()
+        // alone (no registered scheme) — calling RequireAuthorization without a scheme would
+        // throw "No authenticationScheme was specified" on the first request.
         var group = app.MapGroup("/api/{{ModuleNameLower}}");
 
         var endpoints = typeof({{ModuleName}}EndpointRegistration).Assembly

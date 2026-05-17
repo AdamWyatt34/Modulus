@@ -6,6 +6,9 @@ on:
     tags: ['v*']
   pull_request:
     branches: [main]
+  schedule:
+    # Mondays 06:00 UTC — surfaces CVEs published mid-week within a week.
+    - cron: '0 6 * * 1'
 
 jobs:
   build:
@@ -14,6 +17,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # SourceLink needs full history for commit linking
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -22,6 +27,16 @@ jobs:
 
       - name: Restore
         run: dotnet restore
+
+      - name: Check for vulnerable packages
+        shell: pwsh
+        run: |
+          $output = dotnet list package --vulnerable --include-transitive 2>&1 | Out-String
+          Write-Host $output
+          if ($output -match 'High|Critical') {
+            Write-Error "Vulnerable packages detected. Fail."
+            exit 1
+          }
 
       - name: Build
         run: dotnet build --no-restore --configuration Release

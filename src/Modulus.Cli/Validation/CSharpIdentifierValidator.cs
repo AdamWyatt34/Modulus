@@ -1,5 +1,23 @@
 namespace Modulus.Cli.Validation;
 
+/// <summary>
+/// Validates that a string is a legal C# identifier (letters, digits, underscores; no leading digit; not a keyword).
+/// </summary>
+/// <remarks>
+/// <para>
+/// SECURITY CONTRACT — this validator is also the implicit defense that makes raw
+/// <see cref="string.Replace(string, string?)"/> token substitution safe across XML (.csproj),
+/// JSON (appsettings.json), and C# template contexts. By rejecting every character that could
+/// break out of any of those formats (<c>&lt;</c>, <c>&gt;</c>, <c>&amp;</c>, <c>"</c>, <c>'</c>,
+/// <c>;</c>, <c>{</c>, <c>}</c>, <c>:</c>, <c>(</c>, <c>)</c>, <c>.</c>, whitespace, shell metacharacters)
+/// the validator prevents template injection without the engine doing context-aware encoding.
+/// </para>
+/// <para>
+/// If you relax the rule to allow new characters (e.g., dots for fully-qualified namespaces),
+/// audit every template-rendered output format and add context-appropriate encoding to
+/// <c>TemplateEngine</c>.
+/// </para>
+/// </remarks>
 public static class CSharpIdentifierValidator
 {
     public static bool IsValid(string name)

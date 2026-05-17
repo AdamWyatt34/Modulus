@@ -56,10 +56,6 @@ internal static class ResourceManifest
         // ──────────────────────────────────────────────────────
         ["Modulus.Templates.templates.init.building_blocks.application.BuildingBlocks.Application.csproj.template"]
             = "init/src/BuildingBlocks.Application/BuildingBlocks.Application.csproj.template",
-        ["Modulus.Templates.templates.init.building_blocks.application.IUnitOfWork.cs.template"]
-            = "init/src/BuildingBlocks.Application/IUnitOfWork.cs.template",
-        ["Modulus.Templates.templates.init.building_blocks.application.Behaviors.UnitOfWorkBehavior.cs.template"]
-            = "init/src/BuildingBlocks.Application/Behaviors/UnitOfWorkBehavior.cs.template",
         ["Modulus.Templates.templates.init.building_blocks.application.DependencyInjection.ApplicationServiceExtensions.cs.template"]
             = "init/src/BuildingBlocks.Application/DependencyInjection/ApplicationServiceExtensions.cs.template",
         ["Modulus.Templates.templates.init.building_blocks.application.Persistence.IRepository.cs.template"]

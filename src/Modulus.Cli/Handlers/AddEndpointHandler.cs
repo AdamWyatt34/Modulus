@@ -97,7 +97,9 @@ public sealed class AddEndpointHandler(
         }
 
         var endpointsDir = Path.Combine(moduleDir, "src", $"{moduleName}.Api", "Endpoints");
-        var endpointFilePath = Path.Combine(endpointsDir, $"{endpointName}.cs");
+        var endpointFilePath = PathGuard.EnsureContained(
+            solutionRoot,
+            Path.GetRelativePath(solutionRoot, Path.Combine(endpointsDir, $"{endpointName}.cs")));
 
         if (fileSystem.FileExists(endpointFilePath))
         {

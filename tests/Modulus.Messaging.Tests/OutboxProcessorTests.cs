@@ -66,7 +66,7 @@ public class OutboxProcessorTests
             var outboxStore = scope.ServiceProvider.GetRequiredService<IOutboxStore>();
             var bus = provider.GetRequiredService<MassTransit.IBus>();
 
-            var pending = await outboxStore.GetPending(100);
+            var pending = await outboxStore.GetPending(100, int.MaxValue);
             pending.Count.ShouldBe(1);
 
             var message = pending[0];
@@ -135,7 +135,7 @@ public class OutboxProcessorTests
             var outboxStore = scope.ServiceProvider.GetRequiredService<IOutboxStore>();
             var bus = provider.GetRequiredService<MassTransit.IBus>();
 
-            var pending = await outboxStore.GetPending(100);
+            var pending = await outboxStore.GetPending(100, int.MaxValue);
             pending.Count.ShouldBe(1);
 
             // Simulate what OutboxProcessor does — should not throw
@@ -143,7 +143,7 @@ public class OutboxProcessorTests
             eventType.ShouldBeNull(); // Unresolvable type
 
             // Message remains unprocessed (not marked as processed)
-            var stillPending = await outboxStore.GetPending(100);
+            var stillPending = await outboxStore.GetPending(100, int.MaxValue);
             stillPending.Count.ShouldBe(1);
         }
         finally

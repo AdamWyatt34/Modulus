@@ -113,7 +113,7 @@ public class InitHandlerTests
 
         await handler.ExecuteAsync("EShop", @"C:\work", includeAspire: false, "inmemory", noGit: true);
 
-        _proc.Invocations.ShouldContain(i => i.Command == "dotnet" && i.Arguments == "restore");
+        _proc.Invocations.ShouldContain(i => i.Command == "dotnet" && i.Arguments.Count == 1 && i.Arguments[0] == "restore");
     }
 
     [Fact]
@@ -123,8 +123,8 @@ public class InitHandlerTests
 
         await handler.ExecuteAsync("EShop", @"C:\work", includeAspire: false, "inmemory", noGit: false);
 
-        _proc.Invocations.ShouldContain(i => i.Command == "git" && i.Arguments == "init");
-        _proc.Invocations.ShouldContain(i => i.Command == "git" && i.Arguments == "add .");
+        _proc.Invocations.ShouldContain(i => i.Command == "git" && i.Arguments.Count == 1 && i.Arguments[0] == "init");
+        _proc.Invocations.ShouldContain(i => i.Command == "git" && i.Arguments.Count == 2 && i.Arguments[0] == "add" && i.Arguments[1] == ".");
         _proc.Invocations.ShouldContain(i => i.Command == "git" && i.Arguments.Contains("commit"));
     }
 
@@ -171,5 +171,100 @@ public class InitHandlerTests
         var appSettings = _fs.ReadAllText(@"C:\work\EShop\src\EShop.WebApi\appsettings.json");
         appSettings.ShouldContain("AzureServiceBus");
         appSettings.ShouldContain("ConnectionString");
+    }
+
+    [Fact]
+    public async Task Init_Program_cs_gates_openapi_and_scalar_on_IsDevelopment()
+    {
+        var handler = CreateHandler();
+
+        await handler.ExecuteAsync("EShop", @"C:\work", includeAspire: false, "inmemory", noGit: true);
+
+        var program = _fs.ReadAllText(@"C:\work\EShop\src\EShop.WebApi\Program.cs");
+        var devGuardIndex = program.IndexOf("if (app.Environment.IsDevelopment())", StringComparison.Ordinal);
+        var mapOpenApiIndex = program.IndexOf("app.MapOpenApi()", StringComparison.Ordinal);
+        var mapScalarIndex = program.IndexOf("app.MapScalarApiReference()", StringComparison.Ordinal);
+
+        devGuardIndex.ShouldBeGreaterThan(-1);
+        mapOpenApiIndex.ShouldBeGreaterThan(devGuardIndex);
+        mapScalarIndex.ShouldBeGreaterThan(devGuardIndex);
+    }
+
+    [Fact]
+    public async Task Init_Program_cs_wires_authentication_and_authorization()
+    {
+        var handler = CreateHandler();
+
+        await handler.ExecuteAsync("EShop", @"C:\work", includeAspire: false, "inmemory", noGit: true);
+
+        var program = _fs.ReadAllText(@"C:\work\EShop\src\EShop.WebApi\Program.cs");
+        program.ShouldContain("AddAuthentication");
+        program.ShouldContain("AddAuthorization");
+        program.ShouldContain("UseAuthentication");
+        program.ShouldContain("UseAuthorization");
+    }
+
+    [Fact]
+    public async Task Init_ApplicationServiceExtensions_registers_canonical_pipeline_order()
+    {
+        var handler = CreateHandler();
+
+        await handler.ExecuteAsync("EShop", @"C:\work", includeAspire: false, "inmemory", noGit: true);
+
+        var ext = _fs.ReadAllText(@"C:\work\EShop\src\BuildingBlocks.Application\DependencyInjection\ApplicationServiceExtensions.cs");
+        var orderedBehaviors = new[]
+        {
+            "UnhandledExceptionBehavior",
+            "LoggingBehavior",
+            "MetricsBehavior",
+            "ValidationBehavior",
+            "UnitOfWorkBehavior",
+        };
+
+        var lastIndex = -1;
+        foreach (var behavior in orderedBehaviors)
+        {
+            var idx = ext.IndexOf(behavior, StringComparison.Ordinal);
+            idx.ShouldBeGreaterThan(lastIndex, $"{behavior} should appear after the previous behavior in the registration list");
+            lastIndex = idx;
+        }
+
+        // The local template-shipped UnitOfWorkBehavior is gone; the import must come from the library.
+        ext.ShouldNotContain("BuildingBlocks.Application.Behaviors");
+        ext.ShouldContain("Modulus.Mediator.Behaviors");
+    }
+
+    [Fact]
+    public async Task Init_appsettings_uses_narrow_AllowedHosts()
+    {
+        var handler = CreateHandler();
+
+        await handler.ExecuteAsync("EShop", @"C:\work", includeAspire: false, "inmemory", noGit: true);
+
+        var appSettings = _fs.ReadAllText(@"C:\work\EShop\src\EShop.WebApi\appsettings.json");
+        appSettings.ShouldNotContain("\"AllowedHosts\": \"*\"");
+        appSettings.ShouldContain("\"AllowedHosts\": \"localhost\"");
+    }
+
+    [Fact]
+    public async Task Init_appsettings_does_not_ship_TrustServerCertificate()
+    {
+        var handler = CreateHandler();
+
+        await handler.ExecuteAsync("EShop", @"C:\work", includeAspire: false, "inmemory", noGit: true);
+
+        var appSettings = _fs.ReadAllText(@"C:\work\EShop\src\EShop.WebApi\appsettings.json");
+        appSettings.ShouldNotContain("TrustServerCertificate=true");
+    }
+
+    [Fact]
+    public async Task Init_does_not_emit_local_UnitOfWorkBehavior_template()
+    {
+        var handler = CreateHandler();
+
+        await handler.ExecuteAsync("EShop", @"C:\work", includeAspire: false, "inmemory", noGit: true);
+
+        _fs.FileExists(@"C:\work\EShop\src\BuildingBlocks.Application\IUnitOfWork.cs").ShouldBeFalse();
+        _fs.FileExists(@"C:\work\EShop\src\BuildingBlocks.Application\Behaviors\UnitOfWorkBehavior.cs").ShouldBeFalse();
     }
 }

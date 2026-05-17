@@ -79,7 +79,7 @@ public sealed class AddCommandHandler(
         foreach (var output in outputs)
         {
             var remappedPath = Path.Combine(moduleRoot, output.RelativePath);
-            var fullPath = Path.Combine(solutionRoot, remappedPath);
+            var fullPath = PathGuard.EnsureContained(solutionRoot, remappedPath);
             var dir = fileSystem.GetDirectoryName(fullPath)
                 ?? throw new InvalidOperationException($"Could not determine directory for path: {fullPath}");
             fileSystem.CreateDirectory(dir);

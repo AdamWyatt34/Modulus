@@ -15,10 +15,20 @@
     <PackageVersion Include="Microsoft.Extensions.Diagnostics.Abstractions" Version="10.0.3" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.3" />
     <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.3" />
+    <!--
+      MassTransit pinned to 7.3.1: v8 moved to a paid commercial license.
+      We accept the EOL risk in exchange for OSS-only dependencies. CVE scanning runs in CI;
+      if a critical advisory lands on v7, revisit the licensing trade.
+    -->
     <PackageVersion Include="MassTransit" Version="7.3.1" />
     <PackageVersion Include="MassTransit.Extensions.DependencyInjection" Version="7.3.1" />
     <PackageVersion Include="MassTransit.RabbitMQ" Version="7.3.1" />
     <PackageVersion Include="MassTransit.Azure.ServiceBus.Core" Version="7.3.1" />
+    <PackageVersion Include="Azure.Core" Version="1.46.2" />
+    <!-- Pinned to a patched version: MassTransit 7.x pulls Newtonsoft.Json 12.0.1 transitively,
+         which has a known high-severity advisory (GHSA-5crp-9r3c-p9vr). -->
+    <PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="8.0.0" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.3" />
     <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.3" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.3" />

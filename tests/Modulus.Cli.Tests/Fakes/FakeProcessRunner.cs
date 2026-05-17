@@ -4,15 +4,21 @@ namespace Modulus.Cli.Tests.Fakes;
 
 public sealed class FakeProcessRunner : IProcessRunner
 {
-    private readonly List<(string Command, string Arguments, string WorkingDirectory)> _invocations = [];
+    private readonly List<Invocation> _invocations = [];
 
-    public IReadOnlyList<(string Command, string Arguments, string WorkingDirectory)> Invocations => _invocations;
+    public IReadOnlyList<Invocation> Invocations => _invocations;
 
     public int ExitCodeToReturn { get; set; }
 
-    public Task<int> RunAsync(string command, string arguments, string workingDirectory)
+    public Task<int> RunAsync(
+        string command,
+        IReadOnlyList<string> arguments,
+        string workingDirectory,
+        CancellationToken cancellationToken = default)
     {
-        _invocations.Add((command, arguments, workingDirectory));
+        _invocations.Add(new Invocation(command, [.. arguments], workingDirectory));
         return Task.FromResult(ExitCodeToReturn);
     }
+
+    public sealed record Invocation(string Command, IReadOnlyList<string> Arguments, string WorkingDirectory);
 }

@@ -89,7 +89,7 @@ public sealed class AddModuleHandler(
         foreach (var output in filtered)
         {
             var remappedPath = Path.Combine(moduleRoot, output.RelativePath);
-            var fullPath = Path.Combine(solutionRoot, remappedPath);
+            var fullPath = PathGuard.EnsureContained(solutionRoot, remappedPath);
             var dir = fileSystem.GetDirectoryName(fullPath)
                 ?? throw new InvalidOperationException($"Could not determine directory for path: {fullPath}");
             fileSystem.CreateDirectory(dir);
@@ -106,7 +106,7 @@ public sealed class AddModuleHandler(
 
         await AddProjectsToSolution(slnxPath, solutionRoot, moduleName, csprojPaths);
 
-        var restoreResult = await processRunner.RunAsync("dotnet", "restore", solutionRoot);
+        var restoreResult = await processRunner.RunAsync("dotnet", ["restore"], solutionRoot);
         if (restoreResult != 0)
         {
             console.WriteError($"Warning: dotnet restore failed with exit code {restoreResult}. You may need to run it manually.");
@@ -137,7 +137,7 @@ public sealed class AddModuleHandler(
 
             var result = await processRunner.RunAsync(
                 "dotnet",
-                $"sln \"{fullSlnxPath}\" add \"{csproj}\" --solution-folder \"{solutionFolder}\"",
+                ["sln", fullSlnxPath, "add", csproj, "--solution-folder", solutionFolder],
                 solutionRoot);
 
             if (result != 0)
