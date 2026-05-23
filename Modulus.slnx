@@ -11,6 +11,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Modulus.Cli.Tests/Modulus.Cli.Tests.csproj" />
+    <Project Path="tests/Modulus.Cli.IntegrationTests/Modulus.Cli.IntegrationTests.csproj" />
     <Project Path="tests/Modulus.Mediator.Tests/Modulus.Mediator.Tests.csproj" />
     <Project Path="tests/Modulus.Messaging.Tests/Modulus.Messaging.Tests.csproj" />
     <Project Path="tests/Modulus.Generators.Tests/Modulus.Generators.Tests.csproj" />

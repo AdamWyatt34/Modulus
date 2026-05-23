@@ -30,6 +30,12 @@ builder.Services.AddAllModules(builder.Configuration);
 
 var app = builder.Build();
 
+// When you wire ModulusKit.Messaging with AddModulusOutbox / AddModulusInbox, uncomment to
+// apply pending outbox + inbox migrations at startup. Safe no-op if neither context is registered.
+//
+//   using Modulus.Messaging.DependencyInjection;
+//   await app.UseModulusMessagingMigrationsAsync();
+
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 

@@ -79,17 +79,29 @@ public sealed class HandlerRegistrationGenerator : IIncrementalGenerator
 
     private static bool IsCandidate(SyntaxNode node)
     {
-        if (node is not ClassDeclarationSyntax classDecl)
+        // Accept both `class` and `record class` declarations. Record structs are excluded —
+        // handlers must be reference types so the DI container can resolve them as scoped services.
+        if (node is not TypeDeclarationSyntax typeDecl)
             return false;
 
-        foreach (var modifier in classDecl.Modifiers)
+        switch (typeDecl)
+        {
+            case ClassDeclarationSyntax:
+                break;
+            case RecordDeclarationSyntax record when !record.ClassOrStructKeyword.IsKind(SyntaxKind.StructKeyword):
+                break;
+            default:
+                return false;
+        }
+
+        foreach (var modifier in typeDecl.Modifiers)
         {
             if (modifier.IsKind(SyntaxKind.AbstractKeyword) ||
                 modifier.IsKind(SyntaxKind.StaticKeyword))
                 return false;
         }
 
-        return classDecl.BaseList is not null && classDecl.BaseList.Types.Count > 0;
+        return typeDecl.BaseList is not null && typeDecl.BaseList.Types.Count > 0;
     }
 
     private static CandidateResult AnalyzeCandidate(
@@ -98,8 +110,8 @@ public sealed class HandlerRegistrationGenerator : IIncrementalGenerator
     {
         ct.ThrowIfCancellationRequested();
 
-        var classDecl = (ClassDeclarationSyntax)context.Node;
-        var symbol = context.SemanticModel.GetDeclaredSymbol(classDecl, ct);
+        var typeDecl = (TypeDeclarationSyntax)context.Node;
+        var symbol = context.SemanticModel.GetDeclaredSymbol(typeDecl, ct) as INamedTypeSymbol;
 
         if (symbol is null || symbol.IsAbstract || symbol.IsStatic)
             return default;
@@ -107,7 +119,7 @@ public sealed class HandlerRegistrationGenerator : IIncrementalGenerator
         // Open generic types get a diagnostic instead of registrations
         if (symbol.IsGenericType)
         {
-            var diag = GetOpenGenericDiagnostic(classDecl, symbol);
+            var diag = GetOpenGenericDiagnostic(typeDecl, symbol);
             return new CandidateResult(ImmutableArray<HandlerRegistration>.Empty, diag);
         }
 
@@ -223,7 +235,7 @@ public sealed class HandlerRegistrationGenerator : IIncrementalGenerator
     }
 
     private static Diagnostic? GetOpenGenericDiagnostic(
-        ClassDeclarationSyntax classDecl,
+        TypeDeclarationSyntax typeDecl,
         INamedTypeSymbol symbol)
     {
         foreach (var iface in symbol.AllInterfaces)
@@ -232,7 +244,7 @@ public sealed class HandlerRegistrationGenerator : IIncrementalGenerator
             {
                 return Diagnostic.Create(
                     DiagnosticDescriptors.OpenGenericHandlerSkipped,
-                    classDecl.Identifier.GetLocation(),
+                    typeDecl.Identifier.GetLocation(),
                     symbol.Name);
             }
         }
@@ -244,7 +256,7 @@ public sealed class HandlerRegistrationGenerator : IIncrementalGenerator
             {
                 return Diagnostic.Create(
                     DiagnosticDescriptors.OpenGenericHandlerSkipped,
-                    classDecl.Identifier.GetLocation(),
+                    typeDecl.Identifier.GetLocation(),
                     symbol.Name);
             }
             baseType = baseType.BaseType;
@@ -269,6 +281,7 @@ public sealed class HandlerRegistrationGenerator : IIncrementalGenerator
         sb.AppendLine();
         sb.AppendLine($"namespace {ns};");
         sb.AppendLine();
+        sb.AppendLine($"[global::System.CodeDom.Compiler.GeneratedCode(\"Modulus.Generators.HandlerRegistrationGenerator\", \"{GeneratorVersion.Value}\")]");
         sb.AppendLine("public static class ModulusHandlerRegistrations");
         sb.AppendLine("{");
         sb.AppendLine("    public static IServiceCollection AddModulusHandlers(this IServiceCollection services)");

@@ -35,6 +35,11 @@ public static class InitCommand
             Description = "Skip git init and initial commit",
         };
 
+        var modulusKitVersionOption = new Option<string?>("--modulus-kit-version")
+        {
+            Description = "Override the ModulusKit.* package version emitted into Directory.Packages.props (default: CLI's own version)",
+        };
+
         var command = new Command("init", "Scaffold a new modular monolith solution")
         {
             solutionNameArg,
@@ -42,6 +47,7 @@ public static class InitCommand
             aspireOption,
             transportOption,
             noGitOption,
+            modulusKitVersionOption,
         };
 
         command.SetAction(async parseResult =>
@@ -51,6 +57,7 @@ public static class InitCommand
             var aspire = parseResult.GetValue(aspireOption);
             var transport = parseResult.GetValue(transportOption)!;
             var noGit = parseResult.GetValue(noGitOption);
+            var modulusKitVersion = parseResult.GetValue(modulusKitVersionOption);
 
             if (transport is not ("inmemory" or "rabbitmq" or "azureservicebus"))
             {
@@ -64,7 +71,8 @@ public static class InitCommand
                 output ?? fileSystem.GetCurrentDirectory(),
                 aspire,
                 transport,
-                noGit);
+                noGit,
+                modulusKitVersion);
         });
 
         return command;

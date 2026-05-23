@@ -5,7 +5,13 @@
     <Description>Lightweight CQRS mediator for .NET with pipeline behaviors, validation, logging, and a built-in Result pattern.</Description>
     <PackageTags>mediator;cqrs;pipeline;validation;result-pattern</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <MinVerTagPrefix>mediator-v</MinVerTagPrefix>
+    <MinVerDefaultPreReleaseIdentifiers>alpha.0</MinVerDefaultPreReleaseIdentifiers>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MinVer" PrivateAssets="all" />
+  </ItemGroup>
 
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />

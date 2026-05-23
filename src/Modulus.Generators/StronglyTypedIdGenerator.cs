@@ -144,8 +144,9 @@ public sealed class StronglyTypedIdGenerator : IIncrementalGenerator
         sb.AppendLine();
 
         // ValueConverter (nested inside the partial struct to stay in the same namespace)
+        sb.AppendLine($"    [global::System.CodeDom.Compiler.GeneratedCode(\"Modulus.Generators.StronglyTypedIdGenerator\", \"{GeneratorVersion.Value}\")]");
         sb.AppendLine($"    public sealed class {typeName}ValueConverter : Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<{typeName}, {backingTypeName}>");
-        sb.AppendLine("{");
+        sb.AppendLine("    {");
         sb.AppendLine($"        public {typeName}ValueConverter()");
         sb.AppendLine($"            : base(id => id.Value, value => new {typeName}(value)) {{ }}");
         sb.AppendLine("    }");
@@ -159,6 +160,7 @@ public sealed class StronglyTypedIdGenerator : IIncrementalGenerator
             _ => ("reader.GetGuid()", "writer.WriteStringValue(value.Value)")
         };
 
+        sb.AppendLine($"    [global::System.CodeDom.Compiler.GeneratedCode(\"Modulus.Generators.StronglyTypedIdGenerator\", \"{GeneratorVersion.Value}\")]");
         sb.AppendLine($"    public sealed class {typeName}JsonConverter : System.Text.Json.Serialization.JsonConverter<{typeName}>");
         sb.AppendLine("    {");
         sb.AppendLine($"        public override {typeName} Read(ref System.Text.Json.Utf8JsonReader reader, System.Type typeToConvert, System.Text.Json.JsonSerializerOptions options)");
@@ -177,6 +179,7 @@ public sealed class StronglyTypedIdGenerator : IIncrementalGenerator
             _ => "System.Guid.Parse(s)"
         };
 
+        sb.AppendLine($"    [global::System.CodeDom.Compiler.GeneratedCode(\"Modulus.Generators.StronglyTypedIdGenerator\", \"{GeneratorVersion.Value}\")]");
         sb.AppendLine($"    public sealed class {typeName}TypeConverter : System.ComponentModel.TypeConverter");
         sb.AppendLine("    {");
         sb.AppendLine("        public override bool CanConvertFrom(System.ComponentModel.ITypeDescriptorContext? context, System.Type sourceType)");

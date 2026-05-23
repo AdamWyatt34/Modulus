@@ -166,6 +166,16 @@ public sealed class ModuleRegistrationGenerator : IIncrementalGenerator
                 return true;
         }
 
+        // Attribute-based discovery: a class decorated with [ModulusModule] is treated as a
+        // module candidate even when it does not implement IModuleRegistration. Both paths
+        // require the same ConfigureServices/ConfigureEndpoints static-method shape.
+        foreach (var attr in type.GetAttributes())
+        {
+            if (attr.AttributeClass?.Name == "ModulusModuleAttribute" &&
+                attr.AttributeClass.ContainingNamespace?.ToDisplayString() == "Modulus.Mediator.Abstractions")
+                return true;
+        }
+
         return false;
     }
 
@@ -190,12 +200,25 @@ public sealed class ModuleRegistrationGenerator : IIncrementalGenerator
     {
         foreach (var attr in type.GetAttributes())
         {
-            if (attr.AttributeClass?.Name == "ModuleOrderAttribute" &&
-                attr.AttributeClass.ContainingNamespace?.ToDisplayString() == "Modulus.Mediator.Abstractions" &&
+            if (attr.AttributeClass?.ContainingNamespace?.ToDisplayString() != "Modulus.Mediator.Abstractions")
+                continue;
+
+            // [ModuleOrder(int)] — positional argument
+            if (attr.AttributeClass.Name == "ModuleOrderAttribute" &&
                 attr.ConstructorArguments.Length == 1 &&
                 attr.ConstructorArguments[0].Value is int order)
             {
                 return order;
+            }
+
+            // [ModulusModule(Order = int)] — named argument
+            if (attr.AttributeClass.Name == "ModulusModuleAttribute")
+            {
+                foreach (var named in attr.NamedArguments)
+                {
+                    if (named.Key == "Order" && named.Value.Value is int namedOrder)
+                        return namedOrder;
+                }
             }
         }
 
@@ -225,6 +248,7 @@ public sealed class ModuleRegistrationGenerator : IIncrementalGenerator
         sb.AppendLine();
         sb.AppendLine($"namespace {ns};");
         sb.AppendLine();
+        sb.AppendLine($"[global::System.CodeDom.Compiler.GeneratedCode(\"Modulus.Generators.ModuleRegistrationGenerator\", \"{GeneratorVersion.Value}\")]");
         sb.AppendLine("public static class GeneratedModuleRegistration");
         sb.AppendLine("{");
 

@@ -16,7 +16,8 @@ public sealed class InitHandler(
         string outputDirectory,
         bool includeAspire,
         string transport,
-        bool noGit)
+        bool noGit,
+        string? modulusKitVersion = null)
     {
         if (!CSharpIdentifierValidator.IsValid(solutionName))
         {
@@ -38,11 +39,18 @@ public sealed class InitHandler(
         }
 
         var engine = new TemplateEngine();
-        var outputs = engine.GenerateInit(new InitOptions
+        var initOptions = new InitOptions
         {
             SolutionName = solutionName,
             IncludeAspire = includeAspire,
-        });
+        };
+
+        if (!string.IsNullOrWhiteSpace(modulusKitVersion))
+        {
+            initOptions = initOptions with { ModulusKitVersion = modulusKitVersion };
+        }
+
+        var outputs = engine.GenerateInit(initOptions);
 
         var fileCount = 0;
         foreach (var output in outputs)

@@ -410,6 +410,82 @@ public class HandlerRegistrationGeneratorTests
     }
 
     [Fact]
+    public void Generate_RecordClassHandler_RegistersAsScoped()
+    {
+        var source = SystemUsings + """
+            using Modulus.Mediator.Abstractions;
+
+            namespace TestApp;
+
+            public record CreateOrderCommand : ICommand;
+
+            public sealed record class CreateOrderCommandHandler : ICommandHandler<CreateOrderCommand>
+            {
+                public Task<Result> Handle(CreateOrderCommand command, CancellationToken cancellationToken = default)
+                    => Task.FromResult(Result.Success());
+            }
+            """;
+
+        var (outputCompilation, _, runResult) = GeneratorTestHelper.RunHandlerRegistrationGenerator(source, "TestApp");
+
+        var generatedSource = GeneratorTestHelper.GetGeneratedSource(runResult, "ModulusHandlerRegistrations.g.cs");
+
+        generatedSource.ShouldContain(
+            "services.AddScoped<global::Modulus.Mediator.Abstractions.ICommandHandler<global::TestApp.CreateOrderCommand>, global::TestApp.CreateOrderCommandHandler>();");
+
+        var errors = outputCompilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
+        errors.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Generate_RecordStructHandler_IsNotDiscovered()
+    {
+        // Record structs are value types — DI scoped services must be reference types, so they
+        // must not be auto-registered. The generator's predicate excludes them.
+        var source = SystemUsings + """
+            using Modulus.Mediator.Abstractions;
+
+            namespace TestApp;
+
+            public record CreateOrderCommand : ICommand;
+
+            public readonly record struct CreateOrderCommandHandler : ICommandHandler<CreateOrderCommand>
+            {
+                public Task<Result> Handle(CreateOrderCommand command, CancellationToken cancellationToken = default)
+                    => Task.FromResult(Result.Success());
+            }
+            """;
+
+        var (_, _, runResult) = GeneratorTestHelper.RunHandlerRegistrationGenerator(source, "TestApp");
+        var generatedSource = GeneratorTestHelper.GetGeneratedSource(runResult, "ModulusHandlerRegistrations.g.cs");
+
+        generatedSource.ShouldNotContain("CreateOrderCommandHandler");
+    }
+
+    [Fact]
+    public void Generated_output_includes_GeneratedCode_attribute()
+    {
+        var source = SystemUsings + """
+            using Modulus.Mediator.Abstractions;
+
+            namespace TestApp;
+
+            public record CreateOrderCommand : ICommand;
+
+            public sealed class CreateOrderCommandHandler : ICommandHandler<CreateOrderCommand>
+            {
+                public Task<Result> Handle(CreateOrderCommand command, CancellationToken cancellationToken = default)
+                    => Task.FromResult(Result.Success());
+            }
+            """;
+
+        var (_, _, runResult) = GeneratorTestHelper.RunHandlerRegistrationGenerator(source, "TestApp");
+        var generated = GeneratorTestHelper.GetGeneratedSource(runResult, "ModulusHandlerRegistrations.g.cs");
+
+        generated.ShouldContain("[global::System.CodeDom.Compiler.GeneratedCode(\"Modulus.Generators.HandlerRegistrationGenerator\"");
+    }
+
+    [Fact]
     public void Generate_Registrations_ResolveFromServiceProvider()
     {
         var source = SystemUsings + """

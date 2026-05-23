@@ -66,6 +66,7 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<IMessageBus, MassTransitMessageBus>();
         services.AddScoped<IOutboxStore, EfOutboxStore>();
+        services.AddScoped<IOutboxAdminStore, EfOutboxAdminStore>();
         services.AddHostedService<OutboxProcessor>();
 
         return services;

@@ -189,6 +189,132 @@ public class ModuleRegistrationGeneratorTests
         errors.ShouldBeEmpty();
     }
 
+    private const string ModulusModuleAttributeSource = """
+        namespace Modulus.Mediator.Abstractions
+        {
+            [System.AttributeUsage(System.AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
+            public sealed class ModulusModuleAttribute : System.Attribute
+            {
+                public int Order { get; init; } = int.MaxValue;
+            }
+        }
+        """;
+
+    [Fact]
+    public void Generate_ModulusModuleAttribute_DiscoversModule()
+    {
+        // No IModuleRegistration interface in the module — only the attribute. Verifies the
+        // alternative discovery path emits a registration when the shape is satisfied.
+        var moduleSource = SharedUsings
+            + "\nusing Modulus.Mediator.Abstractions;\n"
+            + ModulusModuleAttributeSource + "\n"
+            + """
+            namespace Loyalty.Infrastructure
+            {
+                [ModulusModule]
+                public sealed class LoyaltyModule
+                {
+                    public static IServiceCollection ConfigureServices(
+                        IServiceCollection services, IConfiguration configuration)
+                        => services;
+                    public static IEndpointRouteBuilder ConfigureEndpoints(
+                        IEndpointRouteBuilder endpoints)
+                        => endpoints;
+                }
+            }
+            """;
+
+        var hostSource = "namespace TestHost { public class Marker { } }";
+
+        var (outputCompilation, _, runResult) = GeneratorTestHelper.RunModuleRegistrationGenerator(
+            hostSource, "TestHost", moduleSource);
+
+        var generated = GeneratorTestHelper.GetGeneratedSource(runResult, "GeneratedModuleRegistration.g.cs");
+
+        generated.ShouldContain("Loyalty.Infrastructure.LoyaltyModule.ConfigureServices(services, configuration);");
+        generated.ShouldContain("Loyalty.Infrastructure.LoyaltyModule.ConfigureEndpoints(app);");
+
+        var errors = outputCompilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
+        errors.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Generate_ModulusModuleAttribute_RespectsOrderProperty()
+    {
+        var moduleSource = SharedUsings
+            + "\nusing Modulus.Mediator.Abstractions;\n"
+            + ModulusModuleAttributeSource + "\n"
+            + """
+            namespace Loyalty.Infrastructure
+            {
+                [ModulusModule(Order = 1)]
+                public sealed class LoyaltyModule
+                {
+                    public static IServiceCollection ConfigureServices(
+                        IServiceCollection services, IConfiguration configuration)
+                        => services;
+                    public static IEndpointRouteBuilder ConfigureEndpoints(
+                        IEndpointRouteBuilder endpoints)
+                        => endpoints;
+                }
+            }
+
+            namespace Reporting.Infrastructure
+            {
+                [ModulusModule]
+                public sealed class ReportingModule
+                {
+                    public static IServiceCollection ConfigureServices(
+                        IServiceCollection services, IConfiguration configuration)
+                        => services;
+                    public static IEndpointRouteBuilder ConfigureEndpoints(
+                        IEndpointRouteBuilder endpoints)
+                        => endpoints;
+                }
+            }
+            """;
+
+        var hostSource = "namespace TestHost { public class Marker { } }";
+
+        var (_, _, runResult) = GeneratorTestHelper.RunModuleRegistrationGenerator(
+            hostSource, "TestHost", moduleSource);
+
+        var generated = GeneratorTestHelper.GetGeneratedSource(runResult, "GeneratedModuleRegistration.g.cs");
+
+        var loyaltyIndex = generated.IndexOf("Loyalty.Infrastructure.LoyaltyModule.ConfigureServices");
+        var reportingIndex = generated.IndexOf("Reporting.Infrastructure.ReportingModule.ConfigureServices");
+        loyaltyIndex.ShouldBeGreaterThan(-1);
+        reportingIndex.ShouldBeGreaterThan(-1);
+        loyaltyIndex.ShouldBeLessThan(reportingIndex);
+    }
+
+    [Fact]
+    public void Generated_module_output_includes_GeneratedCode_attribute()
+    {
+        var moduleSource = BuildModuleSource("""
+            namespace Orders.Infrastructure
+            {
+                public sealed class OrdersModule : IModuleRegistration
+                {
+                    public static IServiceCollection ConfigureServices(
+                        IServiceCollection services, IConfiguration configuration)
+                        => services;
+                    public static IEndpointRouteBuilder ConfigureEndpoints(
+                        IEndpointRouteBuilder endpoints)
+                        => endpoints;
+                }
+            }
+            """);
+
+        var hostSource = "namespace TestHost { public class Marker { } }";
+
+        var (_, _, runResult) = GeneratorTestHelper.RunModuleRegistrationGenerator(
+            hostSource, "TestHost", moduleSource);
+
+        var generated = GeneratorTestHelper.GetGeneratedSource(runResult, "GeneratedModuleRegistration.g.cs");
+        generated.ShouldContain("[global::System.CodeDom.Compiler.GeneratedCode(\"Modulus.Generators.ModuleRegistrationGenerator\"");
+    }
+
     [Fact]
     public void Generate_NoModules_GeneratesEmptyMethods()
     {

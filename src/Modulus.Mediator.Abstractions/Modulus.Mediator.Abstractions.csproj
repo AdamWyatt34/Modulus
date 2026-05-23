@@ -5,7 +5,13 @@
     <Description>Abstractions for the Modulus mediator: IMediator, ICommand, IQuery, Result types, and pipeline behavior interfaces.</Description>
     <PackageTags>mediator;cqrs;abstractions;result-pattern</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <MinVerTagPrefix>mediator-abs-v</MinVerTagPrefix>
+    <MinVerDefaultPreReleaseIdentifiers>alpha.0</MinVerDefaultPreReleaseIdentifiers>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MinVer" PrivateAssets="all" />
+  </ItemGroup>
 
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />

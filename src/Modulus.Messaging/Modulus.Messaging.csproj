@@ -5,7 +5,13 @@
     <Description>Messaging library for .NET modular monoliths with MassTransit integration, supporting RabbitMQ, Azure Service Bus, and in-memory transports with transactional outbox.</Description>
     <PackageTags>messaging;masstransit;rabbitmq;azure-service-bus;outbox</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <MinVerTagPrefix>messaging-v</MinVerTagPrefix>
+    <MinVerDefaultPreReleaseIdentifiers>alpha.0</MinVerDefaultPreReleaseIdentifiers>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MinVer" PrivateAssets="all" />
+  </ItemGroup>
 
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />
@@ -25,6 +31,7 @@
     <PackageReference Include="MassTransit.RabbitMQ" />
     <PackageReference Include="MassTransit.Azure.ServiceBus.Core" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <PackageReference Include="Azure.Core" />
     <!-- Pin Newtonsoft.Json to a patched version (transitive via MassTransit 7.x). -->

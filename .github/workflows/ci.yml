@@ -3,7 +3,14 @@ name: CI
 on:
   push:
     branches: [main]
-    tags: ['v*']
+    tags:
+      - 'cli-v*'
+      - 'mediator-v*'
+      - 'mediator-abs-v*'
+      - 'messaging-v*'
+      - 'messaging-abs-v*'
+      - 'generators-v*'
+      - 'analyzers-v*'
   pull_request:
     branches: [main]
   schedule:
@@ -18,7 +25,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # SourceLink needs full history for commit linking
+          fetch-depth: 0  # MinVer + SourceLink need full history
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -41,20 +48,11 @@ jobs:
       - name: Build
         run: dotnet build --no-restore --configuration Release
 
-      - name: Test
-        run: dotnet test --no-build --configuration Release --verbosity normal
-
-      - name: Set version from tag
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+      - name: Test (unit)
+        run: dotnet test --no-build --configuration Release --verbosity normal --filter "Category!=E2E"
 
       - name: Pack
-        run: |
-          VERSION_ARG=""
-          if [ -n "$VERSION" ]; then
-            VERSION_ARG="-p:PackageVersion=$VERSION -p:Version=$VERSION"
-          fi
-          dotnet pack --no-build --configuration Release --output ./nupkgs $VERSION_ARG
+        run: dotnet pack --no-build --configuration Release --output ./nupkgs
 
       - name: Upload NuGet packages
         uses: actions/upload-artifact@v4
@@ -62,10 +60,38 @@ jobs:
           name: nupkgs
           path: ./nupkgs/*.nupkg
 
-  publish:
+  e2e:
     needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Test (E2E)
+        run: dotnet test --no-build --configuration Release --verbosity normal --filter "Category=E2E"
+
+  publish:
+    needs: [build, e2e]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/')
 
     steps:
       - name: Download NuGet packages
@@ -74,5 +100,52 @@ jobs:
           name: nupkgs
           path: ./nupkgs
 
-      - name: Publish to NuGet
-        run: dotnet nuget push ./nupkgs/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+      - name: Push tagged package only
+        shell: pwsh
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          # Map MinVer tag prefix -> PackageId. Tag form: '<prefix>v<version>'.
+          $prefixMap = @{
+            'cli-v'           = 'ModulusKit.Cli'
+            'mediator-v'      = 'ModulusKit.Mediator'
+            'mediator-abs-v'  = 'ModulusKit.Mediator.Abstractions'
+            'messaging-v'     = 'ModulusKit.Messaging'
+            'messaging-abs-v' = 'ModulusKit.Messaging.Abstractions'
+            'generators-v'    = 'ModulusKit.Generators'
+            'analyzers-v'     = 'ModulusKit.Analyzers'
+          }
+
+          $tagName = "${env:GITHUB_REF}" -replace '^refs/tags/', ''
+          Write-Host "Tag: $tagName"
+
+          $matchedPrefix = $null
+          $matchedPackage = $null
+          # Sort longest prefix first so 'mediator-abs-v' wins over 'mediator-v'
+          foreach ($prefix in ($prefixMap.Keys | Sort-Object Length -Descending)) {
+            if ($tagName.StartsWith($prefix)) {
+              $matchedPrefix = $prefix
+              $matchedPackage = $prefixMap[$prefix]
+              break
+            }
+          }
+
+          if (-not $matchedPackage) {
+            Write-Error "Tag '$tagName' does not match any known package prefix."
+            exit 1
+          }
+
+          $version = $tagName.Substring($matchedPrefix.Length)
+          $nupkg = "./nupkgs/$matchedPackage.$version.nupkg"
+          Write-Host "Publishing $nupkg"
+
+          if (-not (Test-Path $nupkg)) {
+            Write-Error "Expected package not found: $nupkg"
+            Get-ChildItem ./nupkgs | ForEach-Object { Write-Host "  $($_.Name)" }
+            exit 1
+          }
+
+          dotnet nuget push $nupkg `
+            --api-key $env:NUGET_API_KEY `
+            --source https://api.nuget.org/v3/index.json `
+            --skip-duplicate

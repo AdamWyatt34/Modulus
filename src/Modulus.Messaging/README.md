@@ -80,6 +80,21 @@ public class OrderShippedHandler : IIntegrationEventHandler<OrderShipped>
 
 Handlers are auto-discovered from the assemblies you provide in `MessagingOptions.Assemblies` and registered as scoped services.
 
+## Database setup
+
+The outbox and inbox tables live in the `OutboxDbContext` and `InboxDbContext` that ship with this package. The package itself is **provider-agnostic** — you pick the EF Core provider (SQL Server, PostgreSQL, SQLite, etc.) in your host project and generate the migrations once against your chosen provider.
+
+See [`Migrations/README.md`](https://github.com/adamwyatt34/Modulus/blob/main/src/Modulus.Messaging/Migrations/README.md) in the repository for the full workflow. The short version:
+
+```csharp
+builder.Services.AddModulusOutbox(o => o.UseSqlServer(connectionString));
+builder.Services.AddModulusInbox(o => o.UseSqlServer(connectionString));
+
+var app = builder.Build();
+await app.UseModulusMessagingMigrationsAsync(); // applies pending migrations safely
+app.Run();
+```
+
 ## Switching Transports
 
 To switch from in-memory to RabbitMQ or Azure Service Bus, change the `Transport` property and provide a connection string. No code changes are needed in your handlers or publishers — the transport is fully abstracted.

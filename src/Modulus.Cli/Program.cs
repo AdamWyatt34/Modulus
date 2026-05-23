@@ -15,6 +15,7 @@ rootCommand.Subcommands.Add(AddCommandCommand.Create(fileSystem, consoleOutput))
 rootCommand.Subcommands.Add(AddQueryCommand.Create(fileSystem, consoleOutput));
 rootCommand.Subcommands.Add(AddEndpointCommand.Create(fileSystem, consoleOutput));
 rootCommand.Subcommands.Add(ListModulesCommand.Create(fileSystem, consoleOutput));
+rootCommand.Subcommands.Add(OutboxCommand.Create(fileSystem, consoleOutput));
 rootCommand.Subcommands.Add(VersionCommand.Create(consoleOutput));
 
 return await rootCommand.Parse(args).InvokeAsync();

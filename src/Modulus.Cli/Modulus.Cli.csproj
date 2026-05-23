@@ -8,14 +8,21 @@
     <Description>CLI tool for scaffolding .NET modular monolith solutions with built-in CQRS mediator, messaging, and Aspire support.</Description>
     <PackageTags>dotnet-tool;modular-monolith;scaffolding;cqrs;aspire</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <MinVerTagPrefix>cli-v</MinVerTagPrefix>
+    <MinVerDefaultPreReleaseIdentifiers>alpha.0</MinVerDefaultPreReleaseIdentifiers>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="System.CommandLine" />
+    <PackageReference Include="MinVer" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Modulus.Templates\Modulus.Templates.csproj" />
+    <ProjectReference Include="..\Modulus.Messaging\Modulus.Messaging.csproj" />
   </ItemGroup>
 
   <ItemGroup>

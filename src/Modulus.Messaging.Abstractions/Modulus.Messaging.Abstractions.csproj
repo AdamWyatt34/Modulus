@@ -5,7 +5,13 @@
     <Description>Abstractions for the Modulus messaging system: IMessageBus, IIntegrationEvent, and outbox pattern interfaces.</Description>
     <PackageTags>messaging;integration-events;outbox;abstractions</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <MinVerTagPrefix>messaging-abs-v</MinVerTagPrefix>
+    <MinVerDefaultPreReleaseIdentifiers>alpha.0</MinVerDefaultPreReleaseIdentifiers>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MinVer" PrivateAssets="all" />
+  </ItemGroup>
 
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />
