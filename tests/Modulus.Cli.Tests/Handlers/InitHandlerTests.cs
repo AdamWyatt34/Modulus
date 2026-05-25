@@ -191,6 +191,34 @@ public class InitHandlerTests
     }
 
     [Fact]
+    public async Task Init_Program_cs_places_messaging_registration_guidance_before_Build()
+    {
+        var handler = CreateHandler();
+
+        await handler.ExecuteAsync("EShop", @"C:\work", includeAspire: false, "rabbitmq", noGit: true);
+
+        var program = _fs.ReadAllText(@"C:\work\EShop\src\EShop.WebApi\Program.cs");
+        var firstTopLevelStatementIndex = program.IndexOf("var builder = WebApplication.CreateBuilder(args);", StringComparison.Ordinal);
+        var messagingUsingIndex = program.IndexOf("using Modulus.Messaging;", StringComparison.Ordinal);
+        var migrationUsingIndex = program.IndexOf("using Modulus.Messaging.DependencyInjection;", StringComparison.Ordinal);
+        var registrationIndex = program.IndexOf("AddModulusMessaging(builder.Configuration", StringComparison.Ordinal);
+        var buildIndex = program.IndexOf("var app = builder.Build();", StringComparison.Ordinal);
+        var migrationIndex = program.IndexOf("app.UseModulusMessagingMigrationsAsync", StringComparison.Ordinal);
+
+        // Usings must be in the header (C# rejects them after top-level statements).
+        firstTopLevelStatementIndex.ShouldBeGreaterThan(-1);
+        messagingUsingIndex.ShouldBeGreaterThan(-1);
+        messagingUsingIndex.ShouldBeLessThan(firstTopLevelStatementIndex);
+        migrationUsingIndex.ShouldBeGreaterThan(-1);
+        migrationUsingIndex.ShouldBeLessThan(firstTopLevelStatementIndex);
+
+        // Service registration before Build(); only the migration call after it.
+        registrationIndex.ShouldBeGreaterThan(-1);
+        buildIndex.ShouldBeGreaterThan(registrationIndex);
+        migrationIndex.ShouldBeGreaterThan(buildIndex);
+    }
+
+    [Fact]
     public async Task Init_Program_cs_wires_authentication_and_authorization()
     {
         var handler = CreateHandler();

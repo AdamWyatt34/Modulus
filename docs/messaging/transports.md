@@ -183,7 +183,8 @@ builder.Services.AddModulusMessaging(options =>
 ```
 
 ::: info Configuration-driven transport
-You can also read the transport from `appsettings.json`:
+Pass `IConfiguration` to bind the `Messaging` section directly — no manual parsing required. This is
+the section `modulus init --transport` scaffolds into `appsettings.json`:
 
 ```json
 {
@@ -195,15 +196,18 @@ You can also read the transport from `appsettings.json`:
 ```
 
 ```csharp
-var messagingConfig = builder.Configuration.GetSection("Messaging");
-
-builder.Services.AddModulusMessaging(options =>
+builder.Services.AddModulusMessaging(builder.Configuration, options =>
 {
-    options.Transport = Enum.Parse<Transport>(messagingConfig["Transport"]!);
-    options.ConnectionString = messagingConfig["ConnectionString"];
+    // Transport and ConnectionString are bound from the "Messaging" section above.
+    // The callback supplies only what can't be bound from configuration.
     options.Assemblies.Add(typeof(Program).Assembly);
 });
 ```
+
+`OutboxBatchSize`, `OutboxPollInterval`, and the `RetryPolicy` (outbox dispatch) and `ConsumerRetry`
+(consumer endpoint) sub-sections bind the same way. The callback runs after binding, so it can also
+override any bound value or supply an Azure `TokenCredential` (`FullyQualifiedNamespace` +
+`Credential`) for managed-identity authentication.
 :::
 
 ## Transport Comparison

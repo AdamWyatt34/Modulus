@@ -10,6 +10,30 @@ dotnet add package ModulusKit.Messaging
 
 ## Setup
 
+Bind the `Messaging` section from configuration — this is the section `modulus init --transport`
+scaffolds into `appsettings.json`. The callback supplies the handler assemblies and any Azure
+credential, which cannot be bound from configuration:
+
+```json
+// appsettings.json
+{
+  "Messaging": {
+    "Transport": "InMemory"
+  }
+}
+```
+
+```csharp
+services.AddModulusMessaging(builder.Configuration, options =>
+{
+    options.Assemblies.Add(typeof(Program).Assembly);
+});
+```
+
+The callback runs after binding, so it can also override any bound value. Prefer this overload so
+transport, connection string, and outbox/retry settings live in configuration. You can also
+configure everything imperatively in code:
+
 ```csharp
 services.AddModulusMessaging(options =>
 {
@@ -19,6 +43,19 @@ services.AddModulusMessaging(options =>
 ```
 
 ### Transport Configuration
+
+Set these via the `Messaging` section in `appsettings.json`:
+
+```json
+{
+  "Messaging": {
+    "Transport": "RabbitMq",
+    "ConnectionString": "amqp://guest:guest@localhost:5672"
+  }
+}
+```
+
+Or imperatively:
 
 ```csharp
 // RabbitMQ

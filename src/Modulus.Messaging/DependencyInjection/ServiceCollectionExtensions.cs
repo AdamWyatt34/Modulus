@@ -3,6 +3,7 @@ using GreenPipes;
 using MassTransit;
 using MassTransit.ExtensionsDependencyInjectionIntegration;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Modulus.Messaging.Abstractions;
 using Modulus.Messaging.Inbox;
@@ -31,9 +32,47 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         Action<MessagingOptions> configure)
     {
+        ArgumentNullException.ThrowIfNull(configure);
+
         var options = new MessagingOptions();
         configure(options);
 
+        return AddModulusMessagingCore(services, options);
+    }
+
+    /// <summary>
+    /// Registers the Modulus messaging infrastructure, binding <see cref="MessagingOptions"/> from the
+    /// "Messaging" configuration section (<see cref="MessagingOptions.SectionName"/>) and then applying the
+    /// <paramref name="configure"/> callback.
+    /// </summary>
+    /// <remarks>
+    /// The callback runs after binding, so it can override bound values and supply members that cannot be
+    /// bound from configuration — <see cref="MessagingOptions.Assemblies"/> (consumer hosts add their handler
+    /// assembly; publish-only hosts may leave it empty) and <see cref="MessagingOptions.Credential"/>.
+    /// It is required so callers consciously make that choice.
+    /// </remarks>
+    /// <param name="services">The service collection.</param>
+    /// <param name="configuration">The application configuration to bind the "Messaging" section from.</param>
+    /// <param name="configure">A delegate to add assemblies/credential and override any bound values.</param>
+    public static IServiceCollection AddModulusMessaging(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        Action<MessagingOptions> configure)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(configure);
+
+        var options = new MessagingOptions();
+        configuration.GetSection(MessagingOptions.SectionName).Bind(options);
+        configure(options);
+
+        return AddModulusMessagingCore(services, options);
+    }
+
+    private static IServiceCollection AddModulusMessagingCore(
+        IServiceCollection services,
+        MessagingOptions options)
+    {
         if (options.OutboxBatchSize is <= 0 or > 1000)
             throw new ArgumentOutOfRangeException(nameof(options), options.OutboxBatchSize,
                 "OutboxBatchSize must be between 1 and 1000.");
@@ -42,6 +81,10 @@ public static class ServiceCollectionExtensions
             throw new ArgumentOutOfRangeException(nameof(options), options.OutboxPollInterval,
                 "OutboxPollInterval must be at least 1 second.");
 
+        ValidateRetryPolicy(options.RetryPolicy, nameof(MessagingOptions.RetryPolicy));
+        ValidateRetryPolicy(options.ConsumerRetry, nameof(MessagingOptions.ConsumerRetry));
+
+        // Empty Assemblies is allowed: publish-only hosts use IMessageBus directly and need no consumers.
         services.AddSingleton(options);
 
         var handlerRegistrations = DiscoverHandlers(options.Assemblies);
@@ -108,7 +151,7 @@ public static class ServiceCollectionExtensions
             case Transport.InMemory:
                 busConfigurator.UsingInMemory((context, cfg) =>
                 {
-                    ApplyRetryPolicy(cfg, options.RetryPolicy);
+                    ApplyRetryPolicy(cfg, options.ConsumerRetry);
                     cfg.ConfigureEndpoints(context);
                 });
                 break;
@@ -121,7 +164,7 @@ public static class ServiceCollectionExtensions
                 busConfigurator.UsingRabbitMq((context, cfg) =>
                 {
                     cfg.Host(options.ConnectionString);
-                    ApplyRetryPolicy(cfg, options.RetryPolicy);
+                    ApplyRetryPolicy(cfg, options.ConsumerRetry);
                     cfg.ConfigureEndpoints(context);
                 });
                 break;
@@ -152,7 +195,7 @@ public static class ServiceCollectionExtensions
                     {
                         cfg.Host(options.ConnectionString);
                     }
-                    ApplyRetryPolicy(cfg, options.RetryPolicy);
+                    ApplyRetryPolicy(cfg, options.ConsumerRetry);
                     cfg.ConfigureEndpoints(context);
                 });
                 break;
@@ -193,6 +236,32 @@ public static class ServiceCollectionExtensions
         }
 
         return registrations;
+    }
+
+    private static void ValidateRetryPolicy(RetryPolicyOptions retryPolicy, string optionName)
+    {
+        ArgumentNullException.ThrowIfNull(retryPolicy);
+
+        // MaxAttempts < 1 would starve the outbox (EfOutboxStore.GetPending filters Attempts < MaxAttempts).
+        if (retryPolicy.MaxAttempts < 1)
+            throw new ArgumentOutOfRangeException(optionName, retryPolicy.MaxAttempts,
+                $"{optionName}.MaxAttempts must be at least 1.");
+
+        if (retryPolicy.InitialInterval < TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(optionName, retryPolicy.InitialInterval,
+                $"{optionName}.InitialInterval must not be negative.");
+
+        if (retryPolicy.MaxInterval < TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(optionName, retryPolicy.MaxInterval,
+                $"{optionName}.MaxInterval must not be negative.");
+
+        if (retryPolicy.IntervalIncrement < TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(optionName, retryPolicy.IntervalIncrement,
+                $"{optionName}.IntervalIncrement must not be negative.");
+
+        if (retryPolicy.MaxInterval < retryPolicy.InitialInterval)
+            throw new ArgumentOutOfRangeException(optionName, retryPolicy.MaxInterval,
+                $"{optionName}.MaxInterval must be greater than or equal to {optionName}.InitialInterval.");
     }
 
     private static void ApplyRetryPolicy(IBusFactoryConfigurator cfg, RetryPolicyOptions retryPolicy)

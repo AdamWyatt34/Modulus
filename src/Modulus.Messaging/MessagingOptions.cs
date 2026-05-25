@@ -8,6 +8,9 @@ namespace Modulus.Messaging;
 /// </summary>
 public sealed class MessagingOptions
 {
+    /// <summary>The configuration section name bound by the <c>IConfiguration</c> overload; matches the section the CLI scaffolds.</summary>
+    public const string SectionName = "Messaging";
+
     /// <summary>Gets or sets the message transport provider. Defaults to <see cref="Messaging.Transport.InMemory"/>.</summary>
     public Transport Transport { get; set; } = Transport.InMemory;
 
@@ -36,14 +39,20 @@ public sealed class MessagingOptions
     /// <summary>Gets or sets the maximum number of outbox messages to process per poll cycle. Defaults to 100.</summary>
     public int OutboxBatchSize { get; set; } = 100;
 
-    /// <summary>Gets or sets the retry policy for outbox-dispatched messages and inbox consumers.</summary>
+    /// <summary>Gets or sets the retry policy for the outbox processor's publish attempts before a message is dead-lettered.</summary>
     public RetryPolicyOptions RetryPolicy { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets the retry policy applied at the MassTransit consumer endpoint when a handler throws,
+    /// independent of <see cref="RetryPolicy"/>. (With the in-memory transport the two layers can compound.)
+    /// </summary>
+    public RetryPolicyOptions ConsumerRetry { get; set; } = new();
 }
 
 /// <summary>
-/// Retry policy for outbox dispatch and consumer execution.
-/// Applied as exponential backoff at the MassTransit consumer endpoint and as the
-/// dead-letter threshold in the outbox processor.
+/// Exponential-backoff retry settings. A single instance applies to one role: see
+/// <see cref="MessagingOptions.RetryPolicy"/> (outbox dispatch) and
+/// <see cref="MessagingOptions.ConsumerRetry"/> (consumer endpoint).
 /// </summary>
 public sealed class RetryPolicyOptions
 {

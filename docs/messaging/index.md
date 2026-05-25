@@ -22,31 +22,53 @@ dotnet add package ModulusKit.Messaging
 
 ## Quick Setup
 
-Register messaging in your host project's `Program.cs` or composition root:
+Register messaging in your host project's `Program.cs` or composition root. The recommended way is
+to bind the `Messaging` section from configuration — this is the section `modulus init --transport`
+scaffolds into `appsettings.json`:
+
+```json
+// appsettings.json
+{
+  "Messaging": {
+    "Transport": "RabbitMq",
+    "ConnectionString": "amqp://guest:guest@localhost:5672"
+  }
+}
+```
 
 ```csharp
 using Modulus.Messaging;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddModulusMessaging(options =>
+builder.Services.AddModulusMessaging(builder.Configuration, options =>
 {
-    options.Transport = Transport.RabbitMq;
-    options.ConnectionString = "amqp://guest:guest@localhost:5672";
     options.Assemblies.Add(typeof(Program).Assembly);
 });
 ```
 
+The callback supplies values that cannot be bound from configuration — the handler assemblies and an
+optional Azure `TokenCredential` — and runs after binding, so it can also override any bound value.
+
 You can add multiple assemblies to scan for handlers across all your modules:
+
+```csharp
+builder.Services.AddModulusMessaging(builder.Configuration, options =>
+{
+    options.Assemblies.Add(typeof(CatalogModule).Assembly);
+    options.Assemblies.Add(typeof(OrdersModule).Assembly);
+    options.Assemblies.Add(typeof(PaymentModule).Assembly);
+});
+```
+
+Or configure everything imperatively without a configuration section:
 
 ```csharp
 builder.Services.AddModulusMessaging(options =>
 {
     options.Transport = Transport.RabbitMq;
     options.ConnectionString = "amqp://guest:guest@localhost:5672";
-    options.Assemblies.Add(typeof(CatalogModule).Assembly);
-    options.Assemblies.Add(typeof(OrdersModule).Assembly);
-    options.Assemblies.Add(typeof(PaymentModule).Assembly);
+    options.Assemblies.Add(typeof(Program).Assembly);
 });
 ```
 
@@ -59,6 +81,10 @@ builder.Services.AddModulusMessaging(options =>
 | `Assemblies` | `List<Assembly>` | Empty | Assemblies to scan for `IIntegrationEventHandler<T>` implementations. |
 | `OutboxPollInterval` | `TimeSpan` | `5 seconds` | How often the `OutboxProcessor` polls for pending outbox messages. Minimum: 1 second. |
 | `OutboxBatchSize` | `int` | `100` | Maximum number of outbox messages to process per polling cycle. Valid range: 1–1000. |
+| `RetryPolicy` | `RetryPolicyOptions` | 5 attempts | Outbox dispatch retry: how many times the `OutboxProcessor` re-publishes a message before dead-lettering it. |
+| `ConsumerRetry` | `RetryPolicyOptions` | 5 attempts | MassTransit consumer-endpoint retry: how many times a handler is re-executed on failure. Independent of `RetryPolicy`. |
+
+Both retry options are `RetryPolicyOptions` with `MaxAttempts` (≥ 1), `InitialInterval`, `MaxInterval`, and `IntervalIncrement` (`MaxInterval` ≥ `InitialInterval`). Bind them under `Messaging:RetryPolicy:*` and `Messaging:ConsumerRetry:*`.
 
 ::: info Handler auto-discovery
 `AddModulusMessaging` scans the provided assemblies for all `IIntegrationEventHandler<TEvent>` implementations. Each handler is wrapped with `IdempotentConsumerAdapter<TEvent>` and registered as a MassTransit consumer automatically. No manual consumer registration is needed.

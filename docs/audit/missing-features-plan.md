@@ -24,6 +24,18 @@ These were originally listed as PR6-PR10. They should not drive new roadmap work
 - The CLI supports explicit connection strings and appsettings-based lookup.
 - `IOutboxAdminStore` / `EfOutboxAdminStore` provide the admin surface.
 
+### Done — Configuration-driven messaging setup (PR12)
+
+- `AddModulusMessaging(IServiceCollection, IConfiguration, Action<MessagingOptions> configure)` binds the `Messaging` section (`MessagingOptions.SectionName`) and then applies the callback. The callback is **required** so callers consciously supply the members that cannot be bound from configuration (`Assemblies`, Azure `Credential`); an empty `Assemblies` is allowed for publish-only hosts that use `IMessageBus` directly.
+- The callback runs after binding, so it overrides bound values and supplies the non-bindable members.
+- Outbox dispatch retry (`RetryPolicy`) and MassTransit consumer-endpoint retry (`ConsumerRetry`) are **separate** options — they no longer share one `MaxAttempts`, which previously conflated the outbox dead-letter threshold with consumer re-execution (and compounded under the in-memory transport).
+- Both overloads share `AddModulusMessagingCore`, so validation runs identically:
+  - `OutboxBatchSize` range and poll-interval minimum.
+  - Transport/connection-string checks.
+  - `RetryPolicy` and `ConsumerRetry` (`MaxAttempts >= 1`, non-negative intervals, `MaxInterval >= InitialInterval`). The `MaxAttempts >= 1` guard prevents a config value of 0/negative from silently starving the outbox via `EfOutboxStore.GetPending`'s `Attempts < MaxAttempts` predicate.
+- `tests/Modulus.Messaging.Tests/DependencyInjection/ConfigurationBindingTests.cs` covers binding, scalar/retry options, invalid transport, missing connection string, callback override, Azure credential, null guards (configuration and callback), publish-only (empty `Assemblies`) registration, retry-policy validation for both `RetryPolicy` and `ConsumerRetry`, and their independent binding.
+- `Program.cs.template` registers the messaging guidance **before** `builder.Build()` with the required usings in the header (only the migration call stays after), guarded by `InitHandlerTests`. The package README and messaging docs show the binder overload.
+
 ### Mostly Done — Generator polish
 
 - Generated output includes `[System.CodeDom.Compiler.GeneratedCode]`.
@@ -46,16 +58,6 @@ Fixed sleeps still exist in messaging tests and are the most obvious reliability
 - Replace `Task.Delay(1000)` in `ConsumerAdapterTests`, `IdempotentConsumerAdapterTests`, `MassTransitMessageBusTests`, and `OutboxProcessorTests`.
 - Add a shared `WaitForConditionAsync(Func<Task<bool>> predicate, TimeSpan timeout)` helper.
 - Extract an `IOutboxDispatcher` from `OutboxProcessor` so tests can execute one dispatch pass directly instead of racing the `BackgroundService` lifetime.
-
-### PR12 — Configuration-driven messaging setup
-
-`modulus init --transport` writes a `Messaging` section, and the docs show configuration-driven setup, but the library does not expose a first-class binder.
-
-- Add `AddModulusMessaging(this IServiceCollection, IConfiguration configuration, Action<MessagingOptions>? configure = null)`.
-- Bind `Messaging:Transport`, `Messaging:ConnectionString`, `Messaging:FullyQualifiedNamespace`, `Messaging:OutboxBatchSize`, `Messaging:OutboxPollInterval`, and retry options.
-- Keep assembly discovery explicit through the optional callback, e.g. `options.Assemblies.Add(typeof(Program).Assembly)`.
-- Add tests for valid binding, invalid transport names, Azure credential/FQNS combinations, and callback overrides.
-- Update generated `Program.cs.template` comments and messaging docs to use the binder.
 
 ### PR13 — Aspire transport/resource wiring
 
@@ -180,11 +182,10 @@ Docs have enough C# snippets that drift is likely. A compile check would catch s
 ## Sequencing Summary
 
 ```
-Done: PR6 E2E, PR7 versioning, PR8 outbox CLI, PR10 generator polish
+Done: PR6 E2E, PR7 versioning, PR8 outbox CLI, PR10 generator polish, PR12 config-driven messaging
 Reframed: PR9 provider-agnostic migration guidance
 
 PR11 Deflake messaging tests
-PR12 Configuration-driven messaging setup
 PR13 Aspire transport/resource wiring
 PR14 modulus doctor
 PR15 Template generator tests

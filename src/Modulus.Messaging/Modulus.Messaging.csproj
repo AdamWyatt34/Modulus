@@ -33,6 +33,7 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
     <PackageReference Include="Azure.Core" />
     <!-- Pin Newtonsoft.Json to a patched version (transitive via MassTransit 7.x). -->
     <PackageReference Include="Newtonsoft.Json" />

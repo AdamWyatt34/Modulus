@@ -1,6 +1,10 @@
 using {{RootNamespace}}.BuildingBlocks.Application.DependencyInjection;
 using {{RootNamespace}}.WebApi.Middleware;
 using Scalar.AspNetCore;
+// Uncomment alongside the ModulusKit.Messaging registration below (usings must stay at the top):
+// using Modulus.Messaging;                     // AddModulusMessaging / AddModulusOutbox / AddModulusInbox
+// using Modulus.Messaging.DependencyInjection; // UseModulusMessagingMigrationsAsync
+// using Microsoft.EntityFrameworkCore;         // UseSqlServer (or your chosen EF Core provider)
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,12 +32,22 @@ builder.Services.AddAllModules(builder.Configuration);
 // Per-module configuration: uncomment to load modules.{name}.json files
 // builder.Configuration.AddModuleConfiguration("Catalog", "Ordering");
 
+// To enable ModulusKit.Messaging, install the package and register it here — before builder.Build().
+// The "Messaging" section in appsettings.json is already scaffolded; the callback supplies the handler
+// assemblies and any Azure credential. Also uncomment the matching usings at the top of this file:
+//
+//   builder.Services.AddModulusMessaging(builder.Configuration, options =>
+//   {
+//       options.Assemblies.Add(typeof(Program).Assembly);
+//   });
+//   builder.Services.AddModulusOutbox(o => o.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
+//   builder.Services.AddModulusInbox(o => o.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
+
 var app = builder.Build();
 
-// When you wire ModulusKit.Messaging with AddModulusOutbox / AddModulusInbox, uncomment to
-// apply pending outbox + inbox migrations at startup. Safe no-op if neither context is registered.
+// If you enabled ModulusKit.Messaging above, uncomment to apply pending outbox + inbox migrations
+// at startup (safe no-op if neither context is registered):
 //
-//   using Modulus.Messaging.DependencyInjection;
 //   await app.UseModulusMessagingMigrationsAsync();
 
 app.UseExceptionHandler();

@@ -17,6 +17,7 @@ public class ServiceCollectionExtensionsTests
             services.AddModulusMessaging(options =>
             {
                 options.Transport = Transport.RabbitMq;
+                options.Assemblies.Add(typeof(ServiceCollectionExtensionsTests).Assembly);
                 // ConnectionString intentionally omitted
             });
         });
@@ -35,6 +36,7 @@ public class ServiceCollectionExtensionsTests
             services.AddModulusMessaging(options =>
             {
                 options.Transport = Transport.AzureServiceBus;
+                options.Assemblies.Add(typeof(ServiceCollectionExtensionsTests).Assembly);
                 // ConnectionString intentionally omitted
             });
         });
