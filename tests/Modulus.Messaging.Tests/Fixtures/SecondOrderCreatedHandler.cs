@@ -2,7 +2,7 @@ using Modulus.Messaging.Abstractions;
 
 namespace Modulus.Messaging.Tests.Fixtures;
 
-public class TestOrderCreatedHandler : IIntegrationEventHandler<TestOrderCreatedEvent>
+public class SecondOrderCreatedHandler : IIntegrationEventHandler<TestOrderCreatedEvent>
 {
     private readonly System.Threading.Lock _sync = new();
 
@@ -10,7 +10,6 @@ public class TestOrderCreatedHandler : IIntegrationEventHandler<TestOrderCreated
 
     public Task Handle(TestOrderCreatedEvent @event, CancellationToken cancellationToken = default)
     {
-        // Transports may deliver concurrently; serialize mutation of the capture list.
         lock (_sync)
         {
             HandledEvents.Add(@event);
