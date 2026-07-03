@@ -51,7 +51,15 @@ jobs:
         run: dotnet build --no-restore --configuration Release
 
       - name: Test (unit)
-        run: dotnet test --no-build --configuration Release --verbosity normal --filter "Category!=E2E&Category!=Integration"
+        run: dotnet test --no-build --configuration Release --verbosity normal --filter "Category!=E2E&Category!=Integration" --collect:"XPlat Code Coverage" --results-directory ./coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        # Requires the CODECOV_TOKEN repository secret; harmless no-op failure until it exists.
+        continue-on-error: true
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          directory: ./coverage
 
       - name: Pack
         run: dotnet pack --no-build --configuration Release --output ./nupkgs
