@@ -217,37 +217,52 @@ You can create your own pipeline behaviors for concerns like caching, authorizat
 
 ### Example: Unit of Work Behavior
 
-This behavior wraps the handler in a database transaction and commits on success:
+The library **ships** a `UnitOfWorkBehavior` (in `Modulus.Mediator.Behaviors`) that calls `IUnitOfWork.SaveChangesAsync()` after a successful command — the library's `IUnitOfWork` deliberately exposes only that one member, and EF Core's `SaveChanges` is already transactional per call. Register the shipped behavior and implement `IUnitOfWork` over your `DbContext`:
 
+<!-- verify -->
 ```csharp
-public sealed class UnitOfWorkBehavior<TRequest, TResponse>
+public sealed class CatalogDbContext(DbContextOptions<CatalogDbContext> options) : DbContext(options);
+
+public sealed class CatalogUnitOfWork(CatalogDbContext dbContext) : IUnitOfWork
+{
+    public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        => dbContext.SaveChangesAsync(cancellationToken);
+}
+```
+
+If you need an explicit multi-`SaveChanges` transaction (e.g. several DbContexts in one command), that is a richer contract than the library's — define your **own** interface and behavior:
+
+<!-- verify -->
+```csharp
+// User-owned: a wider transactional contract than the library IUnitOfWork.
+public interface ITransactionalUnitOfWork
+{
+    Task BeginTransactionAsync(CancellationToken cancellationToken = default);
+    Task CommitAsync(CancellationToken cancellationToken = default);
+    Task RollbackAsync(CancellationToken cancellationToken = default);
+}
+
+public sealed class TransactionBehavior<TRequest, TResponse>(ITransactionalUnitOfWork unitOfWork)
     : IPipelineBehavior<TRequest, TResponse>
     where TRequest : ICommand
     where TResponse : Result
 {
-    private readonly IUnitOfWork _unitOfWork;
-
-    public UnitOfWorkBehavior(IUnitOfWork unitOfWork)
-    {
-        _unitOfWork = unitOfWork;
-    }
-
     public async Task<TResponse> Handle(
         TRequest request,
         RequestHandlerDelegate<TResponse> next,
         CancellationToken cancellationToken)
     {
-        await _unitOfWork.BeginTransactionAsync(cancellationToken);
+        await unitOfWork.BeginTransactionAsync(cancellationToken);
 
         var result = await next();
 
         if (result.IsSuccess)
         {
-            await _unitOfWork.CommitAsync(cancellationToken);
+            await unitOfWork.CommitAsync(cancellationToken);
         }
         else
         {
-            await _unitOfWork.RollbackAsync(cancellationToken);
+            await unitOfWork.RollbackAsync(cancellationToken);
         }
 
         return result;
@@ -256,7 +271,7 @@ public sealed class UnitOfWorkBehavior<TRequest, TResponse>
 ```
 
 ::: tip Constrain to commands only
-Notice the `where TRequest : ICommand` constraint. This ensures the behavior only applies to commands (which mutate state), not queries (which are read-only). Without this constraint, the behavior would wrap queries in unnecessary transactions.
+Notice the `where TRequest : ICommand` constraint. This ensures the behavior only applies to commands (which mutate state), not queries (which are read-only). Without this constraint, the behavior would wrap queries in unnecessary transactions. (The shipped `UnitOfWorkBehavior` does the equivalent check at runtime so it can also cover `ICommand<T>`.)
 :::
 
 ### Example: Caching Behavior (Queries Only)

@@ -80,6 +80,8 @@ Modulus ships as a CLI tool plus a set of companion library packages. The CLI au
 | [`ModulusKit.Messaging.RabbitMq`](https://www.nuget.org/packages/ModulusKit.Messaging.RabbitMq) | RabbitMQ transport for ModulusKit.Messaging |
 | [`ModulusKit.Messaging.AzureServiceBus`](https://www.nuget.org/packages/ModulusKit.Messaging.AzureServiceBus) | Azure Service Bus transport for ModulusKit.Messaging |
 | [`ModulusKit.Messaging.Abstractions`](https://www.nuget.org/packages/ModulusKit.Messaging.Abstractions) | Messaging interfaces and integration event contracts |
+| [`ModulusKit.Generators`](https://www.nuget.org/packages/ModulusKit.Generators) | Roslyn source generators for handler registration and module discovery |
+| [`ModulusKit.Analyzers`](https://www.nuget.org/packages/ModulusKit.Analyzers) | Roslyn analyzers enforcing modular architecture (MOD001–MOD005) |
 
 ::: tip Abstractions packages
 The `Abstractions` packages contain only interfaces and contracts with zero third-party dependencies. Reference them in your Domain and Application layers to keep those layers clean. The implementation packages (`ModulusKit.Mediator` and `ModulusKit.Messaging`) are referenced only in Infrastructure and host projects.
