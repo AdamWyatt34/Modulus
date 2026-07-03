@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **CLI `modulus dlq list|replay`**: inspect and replay broker dead-letter queues for RabbitMQ (`{endpoint}.dead-letter`, confirm-then-ack replay) and Azure Service Bus (subscription DLQ, clone-and-resend). Replayed messages keep their EventId, so the inbox re-runs only handlers that never succeeded. `RabbitMqTopology` and `AzureServiceBusTopology` are now public for tooling.
 - **CLI `modulus upgrade`**: bumps all `ModulusKit.*` pins in `Directory.Packages.props` to a target version (default: the CLI's own version) with `--dry-run` support, preserving file formatting.
 - **Scaffolding**: Aspire templates moved to Aspire 13.4.6 with the correct AppHost shape (`Aspire.AppHost.Sdk` + `Aspire.Hosting.AppHost`; the previously referenced `Aspire.Hosting.Defaults` package does not exist on nuget.org, so `--aspire` scaffolds could not restore). ServiceDefaults package pins refreshed.
 - **Messaging metrics**: new `Modulus.Messaging` meter — outbox dispatch counter (outcome-tagged), consumer handler duration histogram, inbox dedup counter, consumer retry and dead-letter counters. Subscribe with `AddMeter("Modulus.Messaging")`; works without metrics DI.

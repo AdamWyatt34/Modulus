@@ -18,11 +18,18 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <!-- Broker clients for `modulus dlq` (a self-contained tool package: these do not
+         flow into any consumer's dependency graph). -->
+    <PackageReference Include="RabbitMQ.Client" />
+    <PackageReference Include="Azure.Messaging.ServiceBus" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Modulus.Templates\Modulus.Templates.csproj" />
     <ProjectReference Include="..\Modulus.Messaging\Modulus.Messaging.csproj" />
+    <!-- Topology naming conventions for `modulus dlq`. -->
+    <ProjectReference Include="..\Modulus.Messaging.RabbitMq\Modulus.Messaging.RabbitMq.csproj" />
+    <ProjectReference Include="..\Modulus.Messaging.AzureServiceBus\Modulus.Messaging.AzureServiceBus.csproj" />
   </ItemGroup>
 
   <ItemGroup>

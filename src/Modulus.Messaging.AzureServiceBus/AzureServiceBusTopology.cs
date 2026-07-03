@@ -7,8 +7,9 @@ namespace Modulus.Messaging.AzureServiceBus;
 /// <summary>
 /// Pure naming conventions for the Azure Service Bus topology: a topic per event type and a
 /// subscription per endpoint. Requires Standard or Premium tier — the Basic tier has no topics.
+/// Public so operational tooling (e.g. <c>modulus dlq</c>) and user scripts can derive entity names.
 /// </summary>
-internal static class AzureServiceBusTopology
+public static class AzureServiceBusTopology
 {
     // Azure Service Bus limit for subscription names.
     private const int MaxSubscriptionNameLength = 50;

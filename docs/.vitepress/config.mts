@@ -140,6 +140,7 @@ export default withMermaid(
               { text: 'modulus add-event', link: '/cli/add-event' },
               { text: 'modulus add-consumer', link: '/cli/add-consumer' },
               { text: 'modulus remove-module', link: '/cli/remove-module' },
+              { text: 'modulus dlq', link: '/cli/dlq' },
               { text: 'modulus doctor', link: '/cli/doctor' },
               { text: 'modulus upgrade', link: '/cli/upgrade' },
               { text: 'modulus version', link: '/cli/version' },

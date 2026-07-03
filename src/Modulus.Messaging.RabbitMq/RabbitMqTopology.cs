@@ -5,9 +5,10 @@ namespace Modulus.Messaging.RabbitMq;
 /// <summary>
 /// Pure naming conventions for the RabbitMQ topology:
 /// a durable fanout exchange per event type, one durable queue per endpoint bound to every
-/// subscribed exchange, and a per-endpoint dead-letter exchange and queue.
+/// subscribed exchange, and a per-endpoint dead-letter exchange and queue. Public so
+/// operational tooling (e.g. <c>modulus dlq</c>) and user scripts can derive entity names.
 /// </summary>
-internal static class RabbitMqTopology
+public static class RabbitMqTopology
 {
     /// <summary>Exchange name for an event type: the lower-cased stable wire name.</summary>
     public static string ExchangeName(string messageTypeName)
