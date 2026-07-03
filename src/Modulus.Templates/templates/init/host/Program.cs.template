@@ -1,4 +1,6 @@
 using {{RootNamespace}}.BuildingBlocks.Application.DependencyInjection;
+// Source-generated AddModulusHandlers/AddAllModules/MapAllModuleEndpoints land in this namespace.
+using {{RootNamespace}}.WebApi;
 using {{RootNamespace}}.WebApi.Middleware;
 using Scalar.AspNetCore;
 // Uncomment alongside the ModulusKit.Messaging registration below (usings must stay at the top):

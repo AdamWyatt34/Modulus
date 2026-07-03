@@ -66,6 +66,20 @@ public class EntityGeneratorTests
     }
 
     [Fact]
+    public void Generate_UnitTest_DeclaresIdInEveryTestMethod()
+    {
+        var generator = new EntityGenerator();
+
+        var outputs = generator.Generate(CreateOptions(isAggregate: true));
+
+        var test = outputs.Single(o => o.RelativePath.EndsWith("ProductTests.cs"));
+        // Both generated test methods pass `id` to Create and must declare it.
+        var declarations = test.Content.Split("var id =").Length - 1;
+        var usages = test.Content.Split(".Create(id").Length - 1;
+        declarations.ShouldBe(usages);
+    }
+
+    [Fact]
     public void Generate_WithProperties_AddsPropertiesToEntityAndFactory()
     {
         var generator = new EntityGenerator();

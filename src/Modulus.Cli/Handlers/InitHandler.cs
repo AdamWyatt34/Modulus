@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using Modulus.Cli.Infrastructure;
@@ -45,6 +46,12 @@ public sealed class InitHandler(
             IncludeAspire = includeAspire,
             Transport = transport,
         };
+
+        // Default from the CLI's own MinVer-stamped version, not InitOptions' fallback:
+        // the Templates assembly is unversioned, so its informational version is always 1.0.0.
+        modulusKitVersion = string.IsNullOrWhiteSpace(modulusKitVersion)
+            ? ResolveCliVersion()
+            : modulusKitVersion;
 
         if (!string.IsNullOrWhiteSpace(modulusKitVersion))
         {
@@ -99,6 +106,20 @@ public sealed class InitHandler(
         console.WriteLine($"  Git: {(noGit ? "Skipped" : "Initialized")}");
 
         return 0;
+    }
+
+    internal static string? ResolveCliVersion()
+    {
+        var version = typeof(InitHandler).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+            .InformationalVersion;
+
+        if (version is null)
+            return null;
+
+        // Strip the +commitHash suffix if present (e.g. "1.2.0+abc123" → "1.2.0")
+        var plusIndex = version.IndexOf('+');
+        return plusIndex >= 0 ? version[..plusIndex] : version;
     }
 
     internal static string InjectMessagingConfig(string appSettingsContent, string transport)

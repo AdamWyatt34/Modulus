@@ -19,6 +19,19 @@ public class TemplateEngineInitTests
     };
 
     [Fact]
+    public void GenerateInit_HostProgram_ImportsGeneratedExtensionsNamespace()
+    {
+        var engine = new TemplateEngine();
+
+        var outputs = engine.GenerateInit(CreateOptions());
+
+        // AddModulusHandlers/AddAllModules/MapAllModuleEndpoints are source-generated into the
+        // host root namespace; top-level statements cannot see them without this using.
+        var program = outputs.Single(o => o.RelativePath == "src/EShop.WebApi/Program.cs");
+        program.Content.ShouldContain("using EShop.WebApi;");
+    }
+
+    [Fact]
     public void GenerateInit_Default_ProducesKeyFiles()
     {
         var engine = new TemplateEngine();

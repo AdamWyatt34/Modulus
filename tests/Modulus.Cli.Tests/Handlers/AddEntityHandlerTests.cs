@@ -121,8 +121,10 @@ public class AddEntityHandlerTests
     }
 
     [Fact]
-    public async Task AddEntity_aggregate_repository_extends_IRepository()
+    public async Task AddEntity_aggregate_repository_is_self_contained()
     {
+        // No IRepository<,> base: the shared abstraction lives in BuildingBlocks.Application,
+        // which the Domain project must not reference.
         SeedModulusSolutionWithModule();
         var handler = CreateHandler();
 
@@ -130,7 +132,9 @@ public class AddEntityHandlerTests
             isAggregate: true, idType: "guid", properties: null);
 
         var content = _fs.ReadAllText(@"C:\work\EShop\src\Modules\Catalog\src\Catalog.Domain\Repositories\IProductRepository.cs");
-        content.ShouldContain(": IRepository<Product, Guid>");
+        content.ShouldNotContain(": IRepository<");
+        content.ShouldNotContain("BuildingBlocks.Application");
+        content.ShouldContain("Task<Product?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);");
     }
 
     [Fact]

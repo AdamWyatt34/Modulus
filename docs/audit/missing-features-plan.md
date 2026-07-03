@@ -1,215 +1,127 @@
 # Missing Features & Nice-to-Haves — Backlog Plan
 
-Backlog of work outside the top-10 fix plan ([`top-10-fixes-plan.md`](top-10-fixes-plan.md)). This document is status-aware: completed items stay listed for auditability, while active items are prioritized by package experience and release readiness.
+Backlog of work outside the top-10 fix plan ([`top-10-fixes-plan.md`](top-10-fixes-plan.md)). This document is status-aware: completed items stay listed for auditability, while active items are prioritized by package experience and release readiness. The active backlog below is driven by the July 2026 sweep in [`gap-analysis-2026-07.md`](gap-analysis-2026-07.md).
 
-## Completed / Mostly Done
+## Done
 
-These were originally listed as PR6-PR10. They should not drive new roadmap work unless a follow-up is called out below.
+One line each; details live in the linked docs, tests, and CHANGELOG.
 
-### Done — End-to-end CLI integration test
+- **PR6 — E2E CLI integration test**: `init` → `add-module` → `dotnet build`, tagged `Category=E2E`, run on Linux + Windows (`tests/Modulus.Cli.IntegrationTests/InitAddModuleBuildTests.cs`). *Currently red at HEAD — see PR27.*
+- **PR7 — Per-package versioning**: MinVer tag prefixes per package; `ci.yml` publishes only the package matching the pushed tag (all 9 prefixes verified consistent).
+- **PR8 — Outbox dead-letter CLI**: `modulus outbox list-failed | retry | purge` over `IOutboxAdminStore`/`EfOutboxAdminStore`.
+- **PR9 (reframed) — Provider-agnostic messaging migrations**: consumer-owned migrations + `UseModulusMessagingMigrationsAsync()` startup helper instead of bundled provider migrations.
+- **PR10 — Generator polish**: `[GeneratedCode]` attribution, `record class` handlers, `[ModulusModule]` support.
+- **PR11 — Deflaked messaging tests**: fixed sleeps replaced with condition waits; `IOutboxDispatcher` extracted from `OutboxProcessor` for single-pass dispatch in tests and tooling.
+- **PR12 — Configuration-driven messaging**: `AddModulusMessaging(IConfiguration, Action<MessagingOptions>)` binder overload with shared validation; `RetryPolicy` and `ConsumerRetry` separated.
+- **PR13 — Aspire transport wiring**: `init --aspire --transport rabbitmq` provisions the RabbitMQ AppHost resource and references it from the WebApi; E2E covers the build.
+- **PR14 — `modulus doctor`**: six checks (solution shape, version skew, module layers, messaging config, project references, migration guidance), `--json`/`--strict`, exit codes 0/1/2.
+- **PR15 — `Modulus.Templates.Tests`**: 41 tests over all template generators and the template engine.
+- **PR16 — Sample application**: `samples/SampleApp` (CLI-dogfooded, ProjectReference-wired, `sample-build` CI job) using mediator + messaging/outbox + generators.
+- **PR17 — Event/consumer scaffolding**: `modulus add-event` / `modulus add-consumer` with cross-module Integration-only `ProjectReference` auto-wiring.
+- **PR18 (partial) — Module lifecycle**: `modulus remove-module` shipped with dry-run default and `--confirm`/`--force`; `rename-module` deliberately deferred (see backlog).
+- **PR19 — Docs snippet validation**: `scripts/Validate-DocsSnippets.ps1` + `docs-snippets` CI job, 31 `<!-- verify -->`-marked snippets compiled against source.
+- **PR20 — Coverage reporting**: coverlet collection + Codecov upload in CI (`continue-on-error` until the `CODECOV_TOKEN` secret lands; badge deferred — see backlog).
+- **PR21 — Shell completion docs**: `docs/cli/completions.md` (PowerShell, Bash, Zsh via dotnet-suggest).
+- **PR22 — Distributed tracing**: `TracingBehavior` in the mediator, outbox `ActivitySource`, OpenTelemetry recipe (`docs/recipes/opentelemetry.md`).
+- **PR23 — Package icon + NuGet polish**: central `PackageIcon` in `Directory.Build.props`, per-package READMEs, post-MassTransit descriptions.
+- **PR24 — Governance**: CODEOWNERS, issue forms, PR template.
+- **PR25 — `TreatWarningsAsErrors` in CI**: warning-clean build, strict in CI / tolerant locally (`Directory.Build.props`).
+- **MassTransit removal (the big one)**: in-house transport layer — `ModulusKit.Messaging` core + in-memory, `ModulusKit.Messaging.RabbitMq`, `ModulusKit.Messaging.AzureServiceBus` (9 packages total); RabbitMQ Testcontainers integration suite (CI non-blocking); `docs/messaging/migrating-from-masstransit.md`; docs sweep; Newtonsoft.Json transitive pin gone at HEAD.
 
-- `tests/Modulus.Cli.IntegrationTests/InitAddModuleBuildTests.cs` covers `init` → `add-module` → `dotnet build`.
-- The test is tagged `[Trait("Category", "E2E")]`.
-- CI runs E2E separately on Linux and Windows.
+## Tier 0 — Release blockers (the consumer journey is broken at the front door)
 
-### Done — Per-package versioning
+### PR27 — Fix the scaffold-compile break (one structural cause remaining)
 
-- Packable projects use `MinVer` with package-specific tag prefixes (`cli-v`, `mediator-v`, `messaging-v`, etc.).
-- `.github/workflows/ci.yml` publishes only the package matching the pushed tag prefix.
-- `Directory.Build.props` no longer carries a single shared package version.
+`modulus init` output does not build against any published package set (empirically verified; details in gap-analysis §7). The blocking E2E job fails with it. Two of the three fixes shipped immediately after the sweep:
 
-### Done — Outbox dead-letter tooling
+1. ~~**Template using**~~ — **done**: `templates/init/host/Program.cs.template` now imports `{{RootNamespace}}.WebApi` (where the source-generated extensions land), guarded by a Templates.Tests assertion.
+2. ~~**Version pin bug**~~ — **done**: `InitHandler` now defaults `--modulus-kit-version` from the CLI's MinVer-stamped assembly instead of the unversioned Templates assembly (which always yielded the never-published `1.0.0`).
+3. **E2E against HEAD packages** (remaining, structural): E2E scaffolds against nuget.org, so template↔library drift (e.g. templates referencing the unpublished `UnitOfWorkBehavior`/`IUnitOfWork`) hides until after publish — and with fix 2, a HEAD-built CLI now pins its own unpublished version, so E2E fails at restore until this lands. Pack HEAD into a temp feed in the E2E job and scaffold with `--modulus-kit-version` + `RestoreSources`. Until then, **expect the E2E job to be red at HEAD**; PR28 (publishing the 2.0 wave) also unblocks it for tagged builds.
 
-- `modulus outbox list-failed`, `retry`, and `purge` exist.
-- The CLI supports explicit connection strings and appsettings-based lookup.
-- `IOutboxAdminStore` / `EfOutboxAdminStore` provide the admin surface.
+### PR28 — Ship the messaging 2.0 release wave
 
-### Done — Configuration-driven messaging setup (PR12)
+- Cut CHANGELOG `[Unreleased]` into versioned entries; tag the coordinated set (`messaging-v2.0.0`, `messaging-abs-v2.0.0`, first tags for the two transport packages) plus the mediator release PR27 depends on.
+- Document the multi-tag release procedure in CONTRIBUTING (which still says "six/seven packages" and omits the transport prefixes from its example loop).
+- Decide `IMessageBus.Send` **before** tagging: zero call sites, no consuming pipeline — `[Obsolete]`/remove inside the open breaking window, or commit to a documented point-to-point story. Cheapest correct move: remove now, reintroduce designed.
+- Side effect: fresh scaffolds stop pulling the vulnerable Newtonsoft.Json 12.0.1 through published 1.x messaging (NU1903).
 
-- `AddModulusMessaging(IServiceCollection, IConfiguration, Action<MessagingOptions> configure)` binds the `Messaging` section (`MessagingOptions.SectionName`) and then applies the callback. The callback is **required** so callers consciously supply the members that cannot be bound from configuration (`Assemblies`, Azure `Credential`); an empty `Assemblies` is allowed for publish-only hosts that use `IMessageBus` directly.
-- The callback runs after binding, so it overrides bound values and supplies the non-bindable members.
-- Outbox dispatch retry (`RetryPolicy`) and MassTransit consumer-endpoint retry (`ConsumerRetry`) are **separate** options — they no longer share one `MaxAttempts`, which previously conflated the outbox dead-letter threshold with consumer re-execution (and compounded under the in-memory transport).
-- Both overloads share `AddModulusMessagingCore`, so validation runs identically:
-  - `OutboxBatchSize` range and poll-interval minimum.
-  - Transport/connection-string checks.
-  - `RetryPolicy` and `ConsumerRetry` (`MaxAttempts >= 1`, non-negative intervals, `MaxInterval >= InitialInterval`). The `MaxAttempts >= 1` guard prevents a config value of 0/negative from silently starving the outbox via `EfOutboxStore.GetPending`'s `Attempts < MaxAttempts` predicate.
-- `tests/Modulus.Messaging.Tests/DependencyInjection/ConfigurationBindingTests.cs` covers binding, scalar/retry options, invalid transport, missing connection string, callback override, Azure credential, null guards (configuration and callback), publish-only (empty `Assemblies`) registration, retry-policy validation for both `RetryPolicy` and `ConsumerRetry`, and their independent binding.
-- `Program.cs.template` registers the messaging guidance **before** `builder.Build()` with the required usings in the header (only the migration call stays after), guarded by `InitHandlerTests`. The package README and messaging docs show the binder overload.
+## Tier 1 — Correctness and operability
 
-### Mostly Done — Generator polish
+### PR29 — Inbox row-level dedup (reserve-before-execute)
 
-- Generated output includes `[System.CodeDom.Compiler.GeneratedCode]`.
-- `HandlerRegistrationGenerator` supports `record class` handlers.
-- `ModuleRegistrationGenerator` supports `[ModulusModule]`.
-- Follow-up: keep this area covered by generator snapshot tests in the active backlog.
+`ConsumerDispatcher` checks `HasBeenProcessed` before running the handler and records the consumer only after success — two concurrent duplicate deliveries can both execute. Insert the consumer record first (constraint violation ⇒ already claimed), then execute; add a concurrent-duplicate test. Until it lands, document the guarantee as at-least-once-per-handler under concurrent redelivery.
 
-### Reframed — Messaging migrations
+### PR30 — Operational docs debt
 
-The original backlog proposed shipping concrete EF Core migrations under `Modulus.Messaging`. The codebase now takes the better library shape: provider-agnostic contexts plus consumer-owned migrations, documented under `src/Modulus.Messaging/Migrations/README.md`, with `UseModulusMessagingMigrationsAsync()` as a startup helper.
+- `docs/cli/outbox.md` + sidebar entry — the only undocumented CLI command, and it's the ops one.
+- Fix the `UnitOfWorkBehavior` example in `docs/mediator/pipeline-behaviors.md` (calls `BeginTransactionAsync`/`Commit`/`Rollback` that don't exist on the library `IUnitOfWork`) and add `<!-- verify -->`.
+- Graceful-shutdown page: hosted-service stop ordering, in-flight semantics per transport, k8s guidance; pair with letting `OutboxProcessor` finish its in-flight dispatch pass on stop.
+- Broker DLQ conventions page: RabbitMQ `{queue}.dlx`/`{queue}.dead-letter`, ASB native DLQ + `RetriesExhausted` reason, and how to inspect/replay with native tooling (until PR33).
+- Add `ModulusKit.Generators`/`ModulusKit.Analyzers` rows to the getting-started package table (lists 7 of 9); sweep stale package counts (CLAUDE.md, CONTRIBUTING).
 
-Follow-up should focus on templates, docs, and validation rather than committing provider-specific generated migrations.
+### PR31 — Messaging health checks
 
-### Done — Integration event / consumer scaffolding (PR17)
+`AddModulusMessagingHealthChecks()`: broker connectivity probe + outbox backlog-depth check with a configurable threshold; wire into the scaffold's existing `AddHealthChecks()`/`/readyz`.
 
-Messaging is now a fully scaffold-able pillar, matching commands/queries/entities/endpoints.
+### PR32 — Messaging metrics (counterpart to tracing)
 
-- `modulus add-event <Name> --module <Module> [--properties "OrderId:Guid,Total:decimal"]` creates an `IntegrationEvent` record in the module's `Integration` project (`EventGenerator`/`AddEventHandler`).
-- `modulus add-consumer <EventName> --module <Module> [--event-module <SourceModule>]` creates an `IIntegrationEventHandler<TEvent>` in the consuming module's `Infrastructure` project (`ConsumerGenerator`/`AddConsumerHandler`).
-- `add-consumer` locates the event across modules' `Integration` projects (with `--event-module` to disambiguate) and **auto-wires the cross-module `ProjectReference`** to the source `Integration` project — the only MOD001-compliant cross-module dependency — so the scaffold compiles immediately. The csproj edit is idempotent.
-- Handlers are discovered/registered automatically by the source generator and MassTransit consumer wiring; no manual DI registration.
-- Covered by `tests/Modulus.Cli.Tests/Handlers/AddEventHandlerTests.cs` and `AddConsumerHandlerTests.cs`. Docs: `docs/cli/add-event.md`, `docs/cli/add-consumer.md`.
+`Meter("Modulus.Messaging")`: outbox dispatch counter (outcome-tagged), pending-outbox gauge, consumer handler duration histogram, inbox dedup counter. Instrument `OutboxDispatcher` and `ConsumerDispatcher` (currently logging-only); extend the OpenTelemetry recipe.
 
-## Tier 1 — Best Next Additions for 1.x
+### PR33 — Broker DLQ tooling
 
-### PR11 — Deflake messaging tests
+`modulus dlq list|replay --transport rabbitmq|azureservicebus`, mirroring the outbox CLI's connection-string/appsettings ergonomics. Docs-first via PR30; build after health/metrics since native broker tools cover the interim.
 
-Fixed sleeps still exist in messaging tests and are the most obvious reliability gap.
+## Tier 2 — Hardening and upgrade path
 
-- Replace `Task.Delay(1000)` in `ConsumerAdapterTests`, `IdempotentConsumerAdapterTests`, `MassTransitMessageBusTests`, and `OutboxProcessorTests`.
-- Add a shared `WaitForConditionAsync(Func<Task<bool>> predicate, TimeSpan timeout)` helper.
-- Extract an `IOutboxDispatcher` from `OutboxProcessor` so tests can execute one dispatch pass directly instead of racing the `BackgroundService` lifetime.
+### PR34 — Transport-layer test cold spots
 
-### PR13 — Aspire transport/resource wiring
+- `OutboxProcessorTests` (loop lifetime, error recovery, cancellation) and `TransportConsumerHostTests` (start/stop, publish-only early return).
+- Unit tests for `RabbitMqTransport` internals (connection/channel locking, confirms, DLX provisioning, nack paths) — today only non-blocking Testcontainers happy paths cover them; promote the integration job to blocking once stable.
+- Azure Service Bus: transport-class unit tests; evaluate an emulator-based integration suite (currently no ASB integration tests at all).
 
-`modulus init --aspire --transport rabbitmq` should create a runnable Aspire experience, not just an AppHost that references the WebApi.
+### PR35 — `modulus upgrade`
 
-- For `--transport rabbitmq`, add a RabbitMQ resource in `AppHost` and reference it from the WebApi project.
-- Emit appsettings placeholders that line up with `AddModulusMessaging(IConfiguration, ...)`.
-- Keep `inmemory` as the zero-dependency default.
-- Document Azure Service Bus as an external cloud resource rather than trying to provision it by default.
-- Add E2E coverage for `init --aspire --transport rabbitmq` building successfully.
+Bump `ModulusKit.*` pins in an existing solution's `Directory.Packages.props` and run `doctor` after. Becomes important the moment 2.0 ships and 1.x scaffolds exist in the wild. Also: stop hardcoding the Aspire version (`TemplateEngine.cs` pins 9.2.0 inline).
 
-### PR14 — `modulus doctor`
+### PR36 — CI vulnerable-package scan for the sample
 
-Add a diagnostic command that validates scaffold health without forcing users to reverse-engineer generated files.
+The root scan never restores `samples/SampleApp/SampleApp.slnx`, which keeps its own `Directory.Packages.props` precisely to pin advisories (SQLitePCLRaw, Microsoft.OpenApi). Add an explicit scan step.
 
-- Checks: solution shape, expected package references, package version skew, module discovery artifacts, missing `appsettings` messaging entries, unresolved generated project references, and whether outbox/inbox contexts are registered without migration guidance.
-- Optional flags: `--json`, `--strict`, `--solution`.
-- Exit code 0 for healthy, 1 for errors, 2 for warnings under `--strict`.
-- Tests use fixture directories instead of invoking full builds.
+## Tier 3 — Deferred / on-demand
 
-### PR15 — Tests for `Modulus.Templates` generators
+- **`rename-module`** — deferred as high-risk (namespaces, csproj names, folders, generated registration names). Document the manual procedure in the interim (PR30 can host it).
+- **PR26 — BenchmarkDotNet baseline** — deferred pre-adoption; revisit when performance questions arrive from real consumers.
+- **Codecov badge** — once uploads are stable (token secret pending; upload step is `continue-on-error`).
+- **CLI candy on demand**: `list-*` for events/consumers/entities, `--json` on scaffold commands, `--dry-run` naming alignment for `remove-module`, `--version` alias.
 
-The template generator classes remain a high-regression area because small string changes affect scaffolded consumers.
+## What's deliberately not on this list
 
-- New project `tests/Modulus.Templates.Tests/Generators/`.
-- One test class per generator (`CommandGenerator`, `QueryGenerator`, `EntityGenerator`, `EndpointGenerator`, `ModuleGenerator`, `InitGenerator`, etc.).
-- Prefer focused assertions for critical content and snapshot-style tests for whole-file output where readability is high.
-- Include explicit cases for `--no-endpoints`, package version substitution, Aspire inclusion/exclusion, and messaging config injection.
-
-## Tier 2 — Product Completeness
-
-### PR16 — Sample application
-
-A sample app gives users a known-good reference for the full package suite.
-
-- Add `samples/SampleApp/`.
-- Use all three pillars: mediator, messaging/outbox, and generators.
-- Define one entity, one command, one query, one integration event, and one integration event handler.
-- Include a short sample README with setup, migration, run, and test commands.
-- Add the sample to `Modulus.slnx` or a dedicated CI sample-build job.
-
-### PR17 — Integration event / consumer scaffolding
-
-**Done.** See [Done — Integration event / consumer scaffolding (PR17)](#done--integration-event--consumer-scaffolding-pr17) in the Completed section. Handlers land in `Infrastructure` (the only module project with messaging access), and cross-module references are auto-wired Integration-only.
-
-### PR18 — Module lifecycle commands
-
-Adding modules is supported; safely removing or renaming them is still manual and error-prone.
-
-- Add `modulus remove-module <ModuleName>` with a dry-run by default or an explicit `--confirm`.
-- Add `modulus rename-module <OldName> <NewName>` only if the implementation can be made robust across namespaces, project files, folders, and generated registration names.
-- Start with `remove-module` if rename risk is too high.
-- Tests should assert `.slnx` updates, folder deletion, and no path traversal.
-
-### PR19 — Docs snippet validation
-
-Docs have enough C# snippets that drift is likely. A compile check would catch stale APIs before users do.
-
-- Add a docs-snippet test project or script that extracts fenced `csharp` snippets marked as compileable.
-- Start with high-value docs: messaging, mediator, CLI first-solution, and extraction.
-- Fix or mark intentionally illustrative snippets.
-- Add CI coverage once the initial set is stable.
-
-### PR20 — Code coverage reporting
-
-- Add `coverlet.collector` centrally and to test projects.
-- CI step: `dotnet test --collect:"XPlat Code Coverage" --results-directory ./coverage`.
-- Upload to Codecov via `codecov/codecov-action@v4`.
-- Add a README badge only after uploads are stable.
-
-## Tier 3 — Release Polish / Optional Investments
-
-### PR21 — Shell tab completion
-
-- System.CommandLine 2.0.3 has built-in completion support.
-- Add README and CLI docs for Bash, Zsh, and PowerShell completion.
-- Test completion through System.CommandLine APIs or deterministic command output; avoid brittle terminal keypress simulations.
-
-### PR22 — `Activity` / `ActivitySource` for distributed tracing
-
-- Add `TracingBehavior<TRequest, TResponse>` in `src/Modulus.Mediator/Behaviors/`.
-- Add an `ActivitySource` for outbox dispatch in `Modulus.Messaging`.
-- Tag request/event type, success/failure, error code count, and retry/dead-letter outcome.
-- Document OpenTelemetry registration.
-
-### PR23 — Package icon + NuGet polish
-
-- Add `assets/icon.png` (128x128 PNG).
-- Set `<PackageIcon>icon.png</PackageIcon>` and pack the asset for each package.
-- Ensure every package has a package README and consistent tags/description.
-
-### PR24 — Governance cleanup
-
-`CONTRIBUTING.md` and `SECURITY.md` exist, so only the remaining governance pieces belong here.
-
-- Add `CODEOWNERS`.
-- Add issue templates under `.github/ISSUE_TEMPLATE/`.
-- Add a pull request template with test/documentation checklist.
-
-### PR25 — `TreatWarningsAsErrors` in CI
-
-- Add:
-  ```xml
-  <PropertyGroup>
-    <TreatWarningsAsErrors Condition="'$(ContinuousIntegrationBuild)' == 'true'">true</TreatWarningsAsErrors>
-  </PropertyGroup>
-  ```
-- Run a warning cleanup first.
-- Keep local builds tolerant unless the repo is already warning-clean enough to make strict local builds productive.
-
-### PR26 — BenchmarkDotNet baseline
-
-- New project `bench/Modulus.Bench/`.
-- Benchmarks: mediator dispatch overhead, outbox insert/dispatch throughput, generator cache hit vs full rebuild.
-- Run manually or on a scheduled CI workflow; do not gate PRs on benchmark numbers.
+- **MassTransit v8 upgrade** — resolved by removal: MassTransit was replaced entirely by the in-house transport layer (see `docs/messaging/migrating-from-masstransit.md`). The v7-pin-with-CVE-monitoring trade no longer exists.
+- **`ModulusKit.Messaging.RabbitMq` / `ModulusKit.Messaging.AzureServiceBus` package split** — shipped as part of the transport rewrite; kept here only so the old [HIGH] entry in [`code-review.md`](code-review.md) reads as resolved.
+- **Provider-specific bundled EF migrations** — Modulus stays provider-agnostic; templates/docs/tooling around consumer-owned migrations instead.
+- **MediatR migration** — Modulus deliberately ships its own mediator. Not a missing feature.
+- **GraphQL / gRPC scaffolding** — out of project scope.
 
 ## Sequencing Summary
 
 ```
-Done: PR6 E2E, PR7 versioning, PR8 outbox CLI, PR10 generator polish, PR12 config-driven messaging,
-      PR17 integration event / consumer scaffolding
-Reframed: PR9 provider-agnostic migration guidance
+Done: PR6-PR25 (see Done section), MassTransit removal → in-house transports (9 packages)
 
-PR11 Deflake messaging tests
-PR13 Aspire transport/resource wiring
-PR14 modulus doctor
-PR15 Template generator tests
-    └── 1.x package experience and release-readiness baseline
+PR27 Fix scaffold-compile break (template using, version pin, E2E vs HEAD packages)
+PR28 Messaging 2.0 release wave (tags, CONTRIBUTING, IMessageBus.Send decision)
+    └── unblocks install → scaffold → build for real users; E2E goes green
 
-PR16 Sample application
-PR18 Module lifecycle commands
-PR19 Docs snippet validation
-PR20 Coverage reporting
-    └── Product completeness and contributor confidence
+PR29 Inbox reserve-before-execute
+PR30 Operational docs debt (outbox CLI page, IUnitOfWork snippet, shutdown, DLQ, package table)
+PR31 Messaging health checks
+PR32 Messaging metrics
+PR33 Broker DLQ tooling
+    └── run → observe → operate parity with the outbox/tracing work
 
-PR21+ Optional polish, observability, governance, benchmarks
+PR34 Transport test cold spots
+PR35 modulus upgrade (+ Aspire version pin)
+PR36 Sample vulnerable scan
+    └── hardening + the upgrade leg of the journey
+
+Deferred: rename-module, PR26 benchmarks, Codecov badge, CLI candy
 ```
-
-## What's deliberately not on this list
-
-- **MassTransit v8 upgrade** — resolved differently: MassTransit was removed entirely in favor of an in-house transport layer (see `docs/messaging/migrating-from-masstransit.md`). The v7-pin-with-CVE-monitoring trade no longer exists.
-- **`ModulusKit.Messaging.RabbitMq` / `ModulusKit.Messaging.AzureServiceBus` package split** — listed in [`code-review.md`](code-review.md) as [HIGH] but only matters once Modulus has enough consumers that transitive-dep weight becomes a complaint. Defer until requested.
-- **Provider-specific bundled EF migrations** — Modulus should stay provider-agnostic. Improve templates/docs/tooling around consumer-owned migrations instead.
-- **MediatR migration** — Modulus deliberately ships its own mediator. Not a missing feature.
-- **GraphQL / gRPC scaffolding** — out of project scope.
