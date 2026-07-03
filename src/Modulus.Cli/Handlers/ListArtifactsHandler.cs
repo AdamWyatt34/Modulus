@@ -59,8 +59,8 @@ public sealed class ListArtifactsHandler(
                 {
                     rows.Add(new ArtifactRow(
                         moduleName,
-                        Path.GetFileNameWithoutExtension(file),
-                        Path.GetRelativePath(solutionRoot, file)));
+                        PathText.GetFileNameWithoutExtension(file),
+                        PathText.GetRelativePath(solutionRoot, file)));
                 }
             }
         }

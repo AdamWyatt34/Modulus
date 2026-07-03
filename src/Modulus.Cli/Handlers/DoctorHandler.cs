@@ -345,8 +345,9 @@ public sealed class DoctorHandler(
 
             foreach (var include in references)
             {
-                var normalized = include!.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
-                var targetPath = Path.GetFullPath(Path.Combine(csprojDir, normalized));
+                // Separator-agnostic: Path.GetFullPath cannot collapse ".." through
+                // backslashes on Linux, where they are literal name characters.
+                var targetPath = PathText.ResolveRelative(csprojDir, include!);
 
                 if (!fileSystem.FileExists(targetPath))
                 {
