@@ -4,6 +4,7 @@ using Scalar.AspNetCore;
 // Uncomment alongside the ModulusKit.Messaging registration below (usings must stay at the top):
 // using Modulus.Messaging;                     // AddModulusMessaging / AddModulusOutbox / AddModulusInbox
 // using Modulus.Messaging.DependencyInjection; // UseModulusMessagingMigrationsAsync
+// using Modulus.Messaging.RabbitMq;            // AddModulusRabbitMqTransport (ModulusKit.Messaging.RabbitMq package)
 // using Microsoft.EntityFrameworkCore;         // UseSqlServer (or your chosen EF Core provider)
 
 var builder = WebApplication.CreateBuilder(args);
@@ -42,6 +43,11 @@ builder.Services.AddAllModules(builder.Configuration);
 //   });
 //   builder.Services.AddModulusOutbox(o => o.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
 //   builder.Services.AddModulusInbox(o => o.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
+//
+// Broker transports ship as separate packages and need one extra registration (in-memory needs none):
+//
+//   builder.Services.AddModulusRabbitMqTransport();          // ModulusKit.Messaging.RabbitMq
+//   builder.Services.AddModulusAzureServiceBusTransport();   // ModulusKit.Messaging.AzureServiceBus
 
 var app = builder.Build();
 

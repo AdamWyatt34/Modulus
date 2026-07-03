@@ -9,6 +9,8 @@ on:
       - 'mediator-abs-v*'
       - 'messaging-v*'
       - 'messaging-abs-v*'
+      - 'messaging-rabbitmq-v*'
+      - 'messaging-asb-v*'
       - 'generators-v*'
       - 'analyzers-v*'
   pull_request:
@@ -137,8 +139,10 @@ jobs:
             'cli-v'           = 'ModulusKit.Cli'
             'mediator-v'      = 'ModulusKit.Mediator'
             'mediator-abs-v'  = 'ModulusKit.Mediator.Abstractions'
-            'messaging-v'     = 'ModulusKit.Messaging'
-            'messaging-abs-v' = 'ModulusKit.Messaging.Abstractions'
+            'messaging-v'          = 'ModulusKit.Messaging'
+            'messaging-abs-v'      = 'ModulusKit.Messaging.Abstractions'
+            'messaging-rabbitmq-v' = 'ModulusKit.Messaging.RabbitMq'
+            'messaging-asb-v'      = 'ModulusKit.Messaging.AzureServiceBus'
             'generators-v'    = 'ModulusKit.Generators'
             'analyzers-v'     = 'ModulusKit.Analyzers'
           }

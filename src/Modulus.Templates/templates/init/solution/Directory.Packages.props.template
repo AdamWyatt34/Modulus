@@ -10,6 +10,9 @@
     <PackageVersion Include="ModulusKit.Mediator.Abstractions" Version="{{ModulusKitVersion}}" />
     <PackageVersion Include="ModulusKit.Messaging" Version="{{ModulusKitVersion}}" />
     <PackageVersion Include="ModulusKit.Messaging.Abstractions" Version="{{ModulusKitVersion}}" />
+    <!-- Broker transports for ModulusKit.Messaging — reference the one matching Messaging:Transport -->
+    <PackageVersion Include="ModulusKit.Messaging.RabbitMq" Version="{{ModulusKitVersion}}" />
+    <PackageVersion Include="ModulusKit.Messaging.AzureServiceBus" Version="{{ModulusKitVersion}}" />
 
     <!-- Application -->
     <PackageVersion Include="FluentValidation" Version="12.1.1" />
