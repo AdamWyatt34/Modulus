@@ -1,9 +1,11 @@
+using System.Diagnostics.Metrics;
 using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Modulus.Messaging.Abstractions;
+using Modulus.Messaging.Diagnostics;
 using Modulus.Messaging.Dispatch;
 using Modulus.Messaging.Inbox;
 using Modulus.Messaging.InMemory;
@@ -118,6 +120,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(new TransportSubscriptionCatalog(subscriptions));
 
         services.AddSingleton(CreateTransport);
+        // Lenient: hosts without metrics DI (no IMeterFactory) still get a working meter.
+        services.AddSingleton(provider => new MessagingMetrics(provider.GetService<IMeterFactory>()));
         services.AddSingleton<ConsumerDispatcher>();
 
         services.AddScoped<IMessageBus, TransportMessageBus>();

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Modulus.Messaging.Abstractions;
+using Modulus.Messaging.Diagnostics;
 using Modulus.Messaging.Dispatch;
 using Modulus.Messaging.Serialization;
 using Modulus.Messaging.Tests.Fixtures;
@@ -33,7 +34,8 @@ public class ConsumerDispatcherTests
             provider.GetRequiredService<IServiceScopeFactory>(),
             new MessageTypeRegistry([typeof(TestOrderCreatedEvent).Assembly]),
             NullLogger<ConsumerDispatcher>.Instance,
-            options ?? FastRetryOptions());
+            options ?? FastRetryOptions(),
+            new MessagingMetrics(meterFactory: null));
     }
 
     private static TransportEnvelope EnvelopeFor(TestOrderCreatedEvent @event) => new(

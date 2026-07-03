@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Messaging metrics**: new `Modulus.Messaging` meter — outbox dispatch counter (outcome-tagged), consumer handler duration histogram, inbox dedup counter, consumer retry and dead-letter counters. Subscribe with `AddMeter("Modulus.Messaging")`; works without metrics DI.
 - **Messaging health checks**: `AddHealthChecks().AddModulusMessaging()` registers a broker connectivity check (via the new optional `ITransportHealthProbe` on `IMessageTransport` implementations) and an outbox backlog-depth check with configurable degraded/unhealthy thresholds, both tagged `ready`/`messaging`. `IOutboxStore` gains `CountPending` (breaking for custom implementations); `ModulusKit.Messaging` now depends on `Microsoft.Extensions.Diagnostics.HealthChecks`. Scaffolded hosts filter `/readyz` on the `ready` tag.
 - `IOutboxDispatcher` extraction from `OutboxProcessor` (single synchronous dispatch pass, used by tests and tooling).
 - RabbitMQ Testcontainers integration test suite (`Category=Integration`) and a non-blocking CI job for it.

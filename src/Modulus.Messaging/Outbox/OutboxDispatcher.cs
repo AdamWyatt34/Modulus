@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Modulus.Messaging.Abstractions;
+using Modulus.Messaging.Diagnostics;
 using Modulus.Messaging.Internals;
 using Modulus.Messaging.Serialization;
 using Modulus.Messaging.Transports;
@@ -16,7 +17,8 @@ internal sealed class OutboxDispatcher(
     IMessageTransport transport,
     MessageTypeRegistry typeRegistry,
     ILogger<OutboxDispatcher> logger,
-    MessagingOptions options) : IOutboxDispatcher
+    MessagingOptions options,
+    MessagingMetrics metrics) : IOutboxDispatcher
 {
     /// <summary>The <see cref="ActivitySource"/> name to subscribe to in OpenTelemetry configuration.</summary>
     public const string ActivitySourceName = "Modulus.Messaging.Outbox";
@@ -78,6 +80,7 @@ internal sealed class OutboxDispatcher(
                         message.Id,
                         message.EventType);
                     activity?.SetTag("modulus.outcome", "skipped_unknown_type");
+                    metrics.OutboxMessage("skipped_unknown_type");
                     continue;
                 }
 
@@ -88,6 +91,8 @@ internal sealed class OutboxDispatcher(
                     logger.LogWarning(
                         "Failed to deserialize outbox message {MessageId}",
                         message.Id);
+                    activity?.SetTag("modulus.outcome", "deserialize_failed");
+                    metrics.OutboxMessage("deserialize_failed");
                     continue;
                 }
 
@@ -101,15 +106,16 @@ internal sealed class OutboxDispatcher(
                 await transport.PublishAsync(envelope, cancellationToken).ConfigureAwait(false);
                 processedIds.Add(message.Id);
                 activity?.SetTag("modulus.outcome", "published");
+                metrics.OutboxMessage("published");
             }
             catch (Exception ex)
             {
                 var nextAttempt = message.Attempts + 1;
+                var outcome = nextAttempt >= maxAttempts ? "dead_lettered" : "retry_pending";
                 activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-                activity?.SetTag(
-                    "modulus.outcome",
-                    nextAttempt >= maxAttempts ? "dead_lettered" : "retry_pending");
+                activity?.SetTag("modulus.outcome", outcome);
                 activity?.SetTag("modulus.attempt", nextAttempt);
+                metrics.OutboxMessage(outcome);
 
                 if (nextAttempt >= maxAttempts)
                 {

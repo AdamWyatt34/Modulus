@@ -7,8 +7,23 @@ Modulus emits standard `System.Diagnostics` telemetry — no vendor SDK, no requ
 | Signal | Source / Meter | What you get |
 |---|---|---|
 | Traces | `Modulus.Mediator` (ActivitySource) | One span per mediator request via `TracingBehavior`: request type, outcome (`success` / `failure` with error count and first error code / `exception`) |
-| Traces | `Modulus.Messaging.Outbox` (ActivitySource) | One producer span per outbox dispatch: message id, event type, outcome (`published` / `skipped_unknown_type` / `retry_pending` / `dead_lettered`), attempt number |
+| Traces | `Modulus.Messaging.Outbox` (ActivitySource) | One producer span per outbox dispatch: message id, event type, outcome (`published` / `skipped_unknown_type` / `deserialize_failed` / `retry_pending` / `dead_lettered`), attempt number |
 | Metrics | `Modulus.Mediator` (Meter) | `modulus.mediator.handler.duration` histogram (ms) tagged with handler and outcome via `MetricsBehavior` |
+| Metrics | `Modulus.Messaging` (Meter) | Outbox and consumer pipeline instruments — see the table below |
+
+### The `Modulus.Messaging` meter
+
+Registered automatically by `AddModulusMessaging(...)`; works with or without metrics DI (`IMeterFactory` is optional).
+
+| Instrument | Type | Tags | Meaning |
+|---|---|---|---|
+| `modulus.messaging.outbox.messages` | Counter | `outcome` (`published` / `skipped_unknown_type` / `deserialize_failed` / `retry_pending` / `dead_lettered`) | Outbox dispatch attempts by outcome |
+| `modulus.messaging.consumer.handler.duration` | Histogram (ms) | `handler`, `outcome` (`success` / `failure`) | Integration event handler execution time |
+| `modulus.messaging.inbox.deduplicated` | Counter | `handler` | Handler executions skipped by inbox idempotency |
+| `modulus.messaging.consumer.retries` | Counter | `message_type` | In-process consumer retry attempts |
+| `modulus.messaging.consumer.dead_lettered` | Counter | `message_type` | Messages handed to the transport for dead-lettering |
+
+There is deliberately no pending-outbox gauge: an observable gauge would run a database query on the metrics collection thread every scrape. Backlog depth is a readiness concern — use the [messaging health checks](./health-checks#built-in-messaging-health-checks) (`modulus_messaging_outbox`) instead, or chart `outbox.messages` outcome rates.
 
 ## Registration
 
@@ -31,7 +46,8 @@ builder.Services.AddOpenTelemetry()
         .AddOtlpExporter())
     .WithMetrics(metrics => metrics
         .AddMeter("Modulus.Mediator")
+        .AddMeter("Modulus.Messaging")
         .AddOtlpExporter());
 ```
 
-With Aspire, the scaffolded ServiceDefaults project already configures the OTLP exporter — adding the two sources and the meter is all that's needed.
+With Aspire, the scaffolded ServiceDefaults project already configures the OTLP exporter — adding the two sources and the two meters is all that's needed.

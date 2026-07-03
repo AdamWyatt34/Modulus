@@ -1,7 +1,9 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Modulus.Messaging.Abstractions;
+using Modulus.Messaging.Diagnostics;
 using Modulus.Messaging.Serialization;
 using Modulus.Messaging.Transports;
 
@@ -22,7 +24,8 @@ internal sealed class ConsumerDispatcher(
     IServiceScopeFactory scopeFactory,
     MessageTypeRegistry typeRegistry,
     ILogger<ConsumerDispatcher> logger,
-    MessagingOptions options)
+    MessagingOptions options,
+    MessagingMetrics metrics)
 {
     public async Task<MessageDispatchResult> DispatchAsync(
         TransportEnvelope envelope,
@@ -50,6 +53,7 @@ internal sealed class ConsumerDispatcher(
                 "Message {MessageId} of type {MessageType} has an unreadable body. Dead-lettering without retry.",
                 envelope.MessageId,
                 envelope.MessageType);
+            metrics.ConsumerDeadLettered(envelope.MessageType);
             return MessageDispatchResult.DeadLetter;
         }
 
@@ -59,6 +63,7 @@ internal sealed class ConsumerDispatcher(
                 "Message {MessageId} of type {MessageType} deserialized to null or a non-event. Dead-lettering without retry.",
                 envelope.MessageId,
                 envelope.MessageType);
+            metrics.ConsumerDeadLettered(envelope.MessageType);
             return MessageDispatchResult.DeadLetter;
         }
 
@@ -89,6 +94,7 @@ internal sealed class ConsumerDispatcher(
                         envelope.MessageId,
                         envelope.MessageType,
                         attempt);
+                    metrics.ConsumerDeadLettered(envelope.MessageType);
                     return MessageDispatchResult.DeadLetter;
                 }
 
@@ -99,6 +105,7 @@ internal sealed class ConsumerDispatcher(
                     envelope.MessageType,
                     attempt,
                     maxAttempts);
+                metrics.ConsumerRetry(envelope.MessageType);
 
                 var delay = RetryDelayCalculator.GetDelay(options.ConsumerRetry, attempt);
                 if (delay > TimeSpan.Zero)
@@ -127,7 +134,7 @@ internal sealed class ConsumerDispatcher(
         {
             // No inbox configured: direct execution with no deduplication.
             foreach (var handler in handlers)
-                await handler.Handle(@event, cancellationToken).ConfigureAwait(false);
+                await HandleTimed(handler, @event, cancellationToken).ConfigureAwait(false);
             return;
         }
 
@@ -143,7 +150,10 @@ internal sealed class ConsumerDispatcher(
                     .ConfigureAwait(false);
 
                 if (alreadyProcessed)
+                {
+                    metrics.InboxDeduplicated(handler.Name);
                     continue;
+                }
 
                 var reserved = await inboxStore
                     .TryReserve(@event.EventId, handler.Name, options.ConsumerReservationTimeout, cancellationToken)
@@ -153,7 +163,10 @@ internal sealed class ConsumerDispatcher(
                 {
                     // The pair may have completed between the check and the reserve.
                     if (await inboxStore.HasBeenProcessed(@event.EventId, handler.Name, cancellationToken).ConfigureAwait(false))
+                    {
+                        metrics.InboxDeduplicated(handler.Name);
                         continue;
+                    }
 
                     throw new InboxReservationPendingException(@event.EventId, handler.Name);
                 }
@@ -161,12 +174,30 @@ internal sealed class ConsumerDispatcher(
                 reservedByThisDispatch.Add(handler.Name);
             }
 
-            await handler.Handle(@event, cancellationToken).ConfigureAwait(false);
+            await HandleTimed(handler, @event, cancellationToken).ConfigureAwait(false);
             await inboxStore.MarkConsumerProcessed(@event.EventId, handler.Name, cancellationToken).ConfigureAwait(false);
 
             // Completed pairs are covered by the HasBeenProcessed fast path from here on;
             // dropping them keeps a later retry from re-executing a succeeded handler.
             reservedByThisDispatch.Remove(handler.Name);
+        }
+    }
+
+    private async Task HandleTimed(
+        HandlerDescriptor handler,
+        IIntegrationEvent @event,
+        CancellationToken cancellationToken)
+    {
+        var start = Stopwatch.GetTimestamp();
+        try
+        {
+            await handler.Handle(@event, cancellationToken).ConfigureAwait(false);
+            metrics.HandlerDuration(Stopwatch.GetElapsedTime(start).TotalMilliseconds, handler.Name, "success");
+        }
+        catch
+        {
+            metrics.HandlerDuration(Stopwatch.GetElapsedTime(start).TotalMilliseconds, handler.Name, "failure");
+            throw;
         }
     }
 }
