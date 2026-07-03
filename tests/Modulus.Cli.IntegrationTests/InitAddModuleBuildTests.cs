@@ -48,12 +48,9 @@ public class InitAddModuleBuildTests
         var moduleRoot = Path.Combine(solutionRoot, "src", "Modules", moduleName);
         Directory.Exists(moduleRoot).ShouldBeTrue($"expected module directory at {moduleRoot}");
 
-        var buildExit = await processRunner.RunAsync(
-            "dotnet",
-            ["build", slnxPath, "--configuration", "Release", "--nologo"],
-            solutionRoot);
+        var (buildExit, buildErrors) = await CapturingProcessRunner.BuildAsync(slnxPath, solutionRoot);
 
-        buildExit.ShouldBe(0, "scaffolded solution should build cleanly");
+        buildExit.ShouldBe(0, $"scaffolded solution should build cleanly:\n{buildErrors}");
     }
 
     [Fact]
@@ -84,12 +81,9 @@ public class InitAddModuleBuildTests
         File.ReadAllText(appHostProgram).ShouldContain("AddRabbitMQ");
 
         var slnxPath = Path.Combine(solutionRoot, $"{solutionName}.slnx");
-        var buildExit = await processRunner.RunAsync(
-            "dotnet",
-            ["build", slnxPath, "--configuration", "Release", "--nologo"],
-            solutionRoot);
+        var (buildExit, buildErrors) = await CapturingProcessRunner.BuildAsync(slnxPath, solutionRoot);
 
-        buildExit.ShouldBe(0, "aspire + rabbitmq scaffold should build cleanly");
+        buildExit.ShouldBe(0, $"aspire + rabbitmq scaffold should build cleanly:\n{buildErrors}");
     }
 
     [Fact]
@@ -155,11 +149,8 @@ public class InitAddModuleBuildTests
         File.ReadAllText(consumingInfraCsproj)
             .ShouldContain($"{sourceModule}.Integration.csproj");
 
-        var buildExit = await processRunner.RunAsync(
-            "dotnet",
-            ["build", slnxPath, "--configuration", "Release", "--nologo"],
-            solutionRoot);
+        var (buildExit, buildErrors) = await CapturingProcessRunner.BuildAsync(slnxPath, solutionRoot);
 
-        buildExit.ShouldBe(0, "solution with a scaffolded event and consumer should build cleanly");
+        buildExit.ShouldBe(0, $"solution with a scaffolded event and consumer should build cleanly:\n{buildErrors}");
     }
 }

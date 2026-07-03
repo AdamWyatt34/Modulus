@@ -1,0 +1,95 @@
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Logging;
+using OpenTelemetry;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
+
+namespace Microsoft.Extensions.Hosting;
+
+/// <summary>
+/// Aspire service defaults: OpenTelemetry, default health checks, service discovery, and
+/// resilient HTTP clients. Declared in the Microsoft.Extensions.Hosting namespace so hosts
+/// can call <c>builder.AddServiceDefaults()</c> without an extra using.
+/// </summary>
+public static class Extensions
+{
+    public static TBuilder AddServiceDefaults<TBuilder>(this TBuilder builder)
+        where TBuilder : IHostApplicationBuilder
+    {
+        builder.ConfigureOpenTelemetry();
+        builder.AddDefaultHealthChecks();
+
+        builder.Services.AddServiceDiscovery();
+        builder.Services.ConfigureHttpClientDefaults(http =>
+        {
+            http.AddStandardResilienceHandler();
+            http.AddServiceDiscovery();
+        });
+
+        return builder;
+    }
+
+    public static TBuilder ConfigureOpenTelemetry<TBuilder>(this TBuilder builder)
+        where TBuilder : IHostApplicationBuilder
+    {
+        builder.Logging.AddOpenTelemetry(logging =>
+        {
+            logging.IncludeFormattedMessage = true;
+            logging.IncludeScopes = true;
+        });
+
+        builder.Services.AddOpenTelemetry()
+            .WithMetrics(metrics => metrics
+                .AddAspNetCoreInstrumentation()
+                .AddHttpClientInstrumentation()
+                .AddRuntimeInstrumentation()
+                .AddMeter("Modulus.Mediator")
+                .AddMeter("Modulus.Messaging"))
+            .WithTracing(tracing => tracing
+                .AddAspNetCoreInstrumentation()
+                .AddHttpClientInstrumentation()
+                .AddSource("Modulus.Mediator")
+                .AddSource("Modulus.Messaging.Outbox"));
+
+        // The Aspire AppHost injects OTEL_EXPORTER_OTLP_ENDPOINT; without it (running the
+        // WebApi standalone) no exporter is registered and telemetry is a no-op.
+        if (!string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]))
+        {
+            builder.Services.AddOpenTelemetry().UseOtlpExporter();
+        }
+
+        return builder;
+    }
+
+    public static TBuilder AddDefaultHealthChecks<TBuilder>(this TBuilder builder)
+        where TBuilder : IHostApplicationBuilder
+    {
+        builder.Services.AddHealthChecks()
+            // Liveness: the app is responsive.
+            .AddCheck("self", () => HealthCheckResult.Healthy(), ["live"]);
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Maps Aspire's conventional development-time endpoints (<c>/health</c>, <c>/alive</c>).
+    /// The Modulus scaffold already maps <c>/healthz</c> and <c>/readyz</c> in Program.cs;
+    /// call this only if you also want the Aspire dashboard conventions.
+    /// </summary>
+    public static WebApplication MapDefaultEndpoints(this WebApplication app)
+    {
+        if (app.Environment.IsDevelopment())
+        {
+            app.MapHealthChecks("/health");
+            app.MapHealthChecks("/alive", new HealthCheckOptions
+            {
+                Predicate = r => r.Tags.Contains("live"),
+            });
+        }
+
+        return app;
+    }
+}

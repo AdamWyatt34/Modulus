@@ -20,6 +20,14 @@ public sealed class ProcessRunner : IProcessRunner
             CreateNoWindow = true,
         };
 
+        // With redirected pipes, `dotnet build`/`restore` children can hang this runner:
+        // MSBuild node-reuse workers and the Roslyn compiler server outlive the build,
+        // inherit the pipe's write handle, and keep ReadToEnd from ever completing.
+        // Disable the daemons for our children (env vars double as MSBuild properties).
+        psi.Environment["MSBUILDDISABLENODEREUSE"] = "1";
+        psi.Environment["UseSharedCompilation"] = "false";
+        psi.Environment["DOTNET_CLI_USE_MSBUILD_SERVER"] = "0";
+
         foreach (var arg in arguments)
             psi.ArgumentList.Add(arg);
 

@@ -140,6 +140,8 @@ internal static class ResourceManifest
             = "init/aspire/{{SolutionName}}.AppHost/Program.cs.template",
         ["Modulus.Templates.templates.init.aspire.ServiceDefaults.csproj.template"]
             = "init/aspire/{{SolutionName}}.ServiceDefaults/{{SolutionName}}.ServiceDefaults.csproj.template",
+        ["Modulus.Templates.templates.init.aspire.ServiceDefaultsExtensions.cs.template"]
+            = "init/aspire/{{SolutionName}}.ServiceDefaults/Extensions.cs.template",
 
         // ──────────────────────────────────────────────────────
         // Module / Src / Domain

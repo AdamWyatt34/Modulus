@@ -207,10 +207,12 @@ public sealed class TemplateEngine
         if (csprojIndex >= 0)
         {
             var csproj = outputs[csprojIndex];
+            // Versionless under the scaffold's Central Package Management; the pin lives in
+            // Directory.Packages.props ({{AspireVersion}}).
             var content = csproj.Content.Replace(
-                $"<PackageReference Include=\"Aspire.Hosting.AppHost\" Version=\"{AspireVersion}\" />",
-                $"<PackageReference Include=\"Aspire.Hosting.AppHost\" Version=\"{AspireVersion}\" />\n" +
-                $"    <PackageReference Include=\"Aspire.Hosting.RabbitMQ\" Version=\"{AspireVersion}\" />");
+                "<PackageReference Include=\"Aspire.Hosting.AppHost\" />",
+                "<PackageReference Include=\"Aspire.Hosting.AppHost\" />\n" +
+                "    <PackageReference Include=\"Aspire.Hosting.RabbitMQ\" />");
 
             outputs[csprojIndex] = csproj with { Content = content };
         }

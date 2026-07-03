@@ -38,6 +38,17 @@
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.4" />
     <PackageVersion Include="Scalar.AspNetCore" Version="2.4.18" />
 
+    <!-- Aspire (used by the aspire/ projects when scaffolded with the aspire flag; harmless otherwise) -->
+    <PackageVersion Include="Aspire.Hosting.AppHost" Version="{{AspireVersion}}" />
+    <PackageVersion Include="Aspire.Hosting.RabbitMQ" Version="{{AspireVersion}}" />
+    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.7.0" />
+    <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.7.0" />
+    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.16.0" />
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.16.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.16.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.16.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.15.1" />
+
     <!-- Testing -->
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.3.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />
