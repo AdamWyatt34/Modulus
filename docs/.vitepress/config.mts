@@ -137,7 +137,12 @@ export default withMermaid(
               { text: 'modulus add-command', link: '/cli/add-command' },
               { text: 'modulus add-query', link: '/cli/add-query' },
               { text: 'modulus add-endpoint', link: '/cli/add-endpoint' },
+              { text: 'modulus add-event', link: '/cli/add-event' },
+              { text: 'modulus add-consumer', link: '/cli/add-consumer' },
+              { text: 'modulus remove-module', link: '/cli/remove-module' },
+              { text: 'modulus doctor', link: '/cli/doctor' },
               { text: 'modulus version', link: '/cli/version' },
+              { text: 'Shell completion', link: '/cli/completions' },
             ]
           }
         ],
@@ -161,6 +166,7 @@ export default withMermaid(
               { text: 'Caching', link: '/recipes/caching' },
               { text: 'Strongly Typed IDs', link: '/recipes/strongly-typed-ids' },
               { text: 'Sagas', link: '/recipes/sagas' },
+              { text: 'OpenTelemetry', link: '/recipes/opentelemetry' },
               { text: 'API Versioning', link: '/recipes/api-versioning' },
               { text: 'Health Checks', link: '/recipes/health-checks' },
             ]

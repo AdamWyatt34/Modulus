@@ -27,7 +27,11 @@ dotnet tool update --global ModulusKit.Cli
 | [`modulus add-endpoint`](./add-endpoint) | Scaffold a minimal API endpoint |
 | [`modulus add-event`](./add-event) | Scaffold an integration event |
 | [`modulus add-consumer`](./add-consumer) | Scaffold an integration event handler and wire the cross-module reference |
+| [`modulus remove-module`](./remove-module) | Remove a module (dry-run by default) |
+| [`modulus doctor`](./doctor) | Validate the health of a scaffolded solution |
 | [`modulus version`](./version) | Display the installed CLI version |
+
+See also: [shell tab completion](./completions).
 
 ## Common Patterns
 
