@@ -15,7 +15,12 @@
     <PackageProjectUrl>https://github.com/adamwyatt34/Modulus</PackageProjectUrl>
     <RepositoryUrl>https://github.com/adamwyatt34/Modulus</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
+    <PackageIcon>icon.png</PackageIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)assets\icon.png" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
 
   <!-- Reproducible builds + forensic traceability of shipped binaries -->
   <PropertyGroup>
