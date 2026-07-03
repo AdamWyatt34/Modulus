@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <PackageId>ModulusKit.Messaging.AzureServiceBus</PackageId>
+    <Description>Azure Service Bus transport for ModulusKit.Messaging, built directly on Azure.Messaging.ServiceBus with topic-per-event topology and subscription-per-endpoint consumers. Requires Standard or Premium tier (topics).</Description>
+    <PackageTags>messaging;azure-service-bus;transport;outbox;modular-monolith</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <MinVerTagPrefix>messaging-asb-v</MinVerTagPrefix>
+    <MinVerDefaultPreReleaseIdentifiers>alpha.0</MinVerDefaultPreReleaseIdentifiers>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MinVer" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Modulus.Messaging.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Modulus.Messaging\Modulus.Messaging.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.Messaging.ServiceBus" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+  </ItemGroup>
+
+</Project>
