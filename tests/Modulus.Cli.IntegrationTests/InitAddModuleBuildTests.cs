@@ -55,6 +55,40 @@ public class InitAddModuleBuildTests
     }
 
     [Fact]
+    public async Task Init_Aspire_RabbitMq_Then_Build_Succeeds()
+    {
+        using var temp = new TempDirectory("modulus-e2e-aspire-rmq");
+
+        var fileSystem = new FileSystem();
+        var processRunner = new ProcessRunner();
+        var console = new ConsoleOutput();
+
+        const string solutionName = "Sample";
+
+        var initHandler = new InitHandler(fileSystem, processRunner, console);
+        var initExit = await initHandler.ExecuteAsync(
+            solutionName: solutionName,
+            outputDirectory: temp.Path,
+            includeAspire: true,
+            transport: "rabbitmq",
+            noGit: true);
+        initExit.ShouldBe(0, "modulus init --aspire --transport rabbitmq should succeed");
+
+        var solutionRoot = Path.Combine(temp.Path, solutionName);
+        var appHostProgram = Path.Combine(
+            solutionRoot, "aspire", $"{solutionName}.AppHost", "Program.cs");
+        File.ReadAllText(appHostProgram).ShouldContain("AddRabbitMQ");
+
+        var slnxPath = Path.Combine(solutionRoot, $"{solutionName}.slnx");
+        var buildExit = await processRunner.RunAsync(
+            "dotnet",
+            ["build", slnxPath, "--configuration", "Release", "--nologo"],
+            solutionRoot);
+
+        buildExit.ShouldBe(0, "aspire + rabbitmq scaffold should build cleanly");
+    }
+
+    [Fact]
     public async Task Init_AddModules_AddEvent_AddConsumer_Then_Build_Succeeds()
     {
         using var temp = new TempDirectory("modulus-e2e-messaging");

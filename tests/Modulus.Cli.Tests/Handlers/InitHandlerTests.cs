@@ -66,6 +66,50 @@ public class InitHandlerTests
     }
 
     [Fact]
+    public async Task Init_aspire_with_rabbitmq_adds_broker_resource_to_apphost()
+    {
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync("EShop", @"C:\work", includeAspire: true, "rabbitmq", noGit: true);
+
+        result.ShouldBe(0);
+
+        var appHostProgram = _fs.ReadAllText(@"C:\work\EShop\aspire\EShop.AppHost\Program.cs");
+        appHostProgram.ShouldContain("builder.AddRabbitMQ(\"messaging\")");
+        appHostProgram.ShouldContain(".WithReference(rabbitmq)");
+        appHostProgram.ShouldContain(".WaitFor(rabbitmq)");
+
+        var appHostCsproj = _fs.ReadAllText(@"C:\work\EShop\aspire\EShop.AppHost\EShop.AppHost.csproj");
+        appHostCsproj.ShouldContain("Aspire.Hosting.RabbitMQ");
+    }
+
+    [Fact]
+    public async Task Init_aspire_with_inmemory_has_no_broker_resource()
+    {
+        var handler = CreateHandler();
+
+        await handler.ExecuteAsync("EShop", @"C:\work", includeAspire: true, "inmemory", noGit: true);
+
+        var appHostProgram = _fs.ReadAllText(@"C:\work\EShop\aspire\EShop.AppHost\Program.cs");
+        appHostProgram.ShouldNotContain("AddRabbitMQ");
+
+        var appHostCsproj = _fs.ReadAllText(@"C:\work\EShop\aspire\EShop.AppHost\EShop.AppHost.csproj");
+        appHostCsproj.ShouldNotContain("Aspire.Hosting.RabbitMQ");
+    }
+
+    [Fact]
+    public async Task Init_aspire_with_azureservicebus_has_no_local_broker_resource()
+    {
+        // Azure Service Bus is an external cloud resource; the AppHost provisions nothing locally.
+        var handler = CreateHandler();
+
+        await handler.ExecuteAsync("EShop", @"C:\work", includeAspire: true, "azureservicebus", noGit: true);
+
+        var appHostProgram = _fs.ReadAllText(@"C:\work\EShop\aspire\EShop.AppHost\Program.cs");
+        appHostProgram.ShouldNotContain("AddRabbitMQ");
+    }
+
+    [Fact]
     public async Task Init_without_aspire_excludes_aspire_projects()
     {
         var handler = CreateHandler();

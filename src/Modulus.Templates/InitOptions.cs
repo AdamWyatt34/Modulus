@@ -18,6 +18,13 @@ public sealed record InitOptions
     public bool IncludeAspire { get; init; }
 
     /// <summary>
+    /// The messaging transport selected at init ("inmemory", "rabbitmq", or "azureservicebus").
+    /// With <see cref="IncludeAspire"/>, "rabbitmq" adds a RabbitMQ container resource to the
+    /// AppHost; "azureservicebus" is an external cloud resource and adds nothing locally.
+    /// </summary>
+    public string Transport { get; init; } = "inmemory";
+
+    /// <summary>
     /// The version of ModulusKit packages to reference in Directory.Packages.props.
     /// Defaults to the CLI's own assembly version so scaffolded solutions always match the installed CLI.
     /// </summary>

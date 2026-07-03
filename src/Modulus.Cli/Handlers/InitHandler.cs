@@ -43,6 +43,7 @@ public sealed class InitHandler(
         {
             SolutionName = solutionName,
             IncludeAspire = includeAspire,
+            Transport = transport,
         };
 
         if (!string.IsNullOrWhiteSpace(modulusKitVersion))

@@ -40,6 +40,11 @@ builder.Services.AddAllModules(builder.Configuration);
 //   builder.Services.AddModulusMessaging(builder.Configuration, options =>
 //   {
 //       options.Assemblies.Add(typeof(Program).Assembly);
+//
+//       // Under Aspire, the RabbitMQ resource injects ConnectionStrings:messaging — use it
+//       // when appsettings.json leaves Messaging:ConnectionString empty:
+//       if (string.IsNullOrEmpty(options.ConnectionString))
+//           options.ConnectionString = builder.Configuration.GetConnectionString("messaging");
 //   });
 //   builder.Services.AddModulusOutbox(o => o.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
 //   builder.Services.AddModulusInbox(o => o.UseSqlServer(builder.Configuration.GetConnectionString("Default")));

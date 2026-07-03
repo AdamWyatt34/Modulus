@@ -52,6 +52,11 @@ public sealed class TemplateEngine
             InjectAspireIntoSlnx(outputs, options.SolutionName);
             InjectAspireIntoProgram(outputs, options.SolutionName);
             InjectAspireIntoWebApiCsproj(outputs, options.SolutionName);
+
+            if (string.Equals(options.Transport, "rabbitmq", StringComparison.OrdinalIgnoreCase))
+            {
+                InjectRabbitMqIntoAppHost(outputs, options.SolutionName);
+            }
         }
 
         return outputs;
@@ -164,6 +169,42 @@ public sealed class TemplateEngine
 
         var content = csproj.Content.Replace("</Project>", serviceDefaultsRef + "</Project>");
         outputs[csprojIndex] = csproj with { Content = content };
+    }
+
+    private static void InjectRabbitMqIntoAppHost(List<TemplateOutput> outputs, string solutionName)
+    {
+        // AppHost Program.cs: add the RabbitMQ container resource and reference it from the WebApi.
+        var programIndex = outputs.FindIndex(o =>
+            o.RelativePath.EndsWith("Program.cs", StringComparison.Ordinal)
+            && o.RelativePath.Contains($"{solutionName}.AppHost"));
+
+        if (programIndex >= 0)
+        {
+            var program = outputs[programIndex];
+            var content = program.Content.Replace(
+                $"builder.AddProject<Projects.{solutionName}_WebApi>(\"webapi\");",
+                $"var rabbitmq = builder.AddRabbitMQ(\"messaging\");\n\n" +
+                $"builder.AddProject<Projects.{solutionName}_WebApi>(\"webapi\")\n" +
+                $"    .WithReference(rabbitmq)\n" +
+                $"    .WaitFor(rabbitmq);");
+
+            outputs[programIndex] = program with { Content = content };
+        }
+
+        // AppHost csproj: add the RabbitMQ hosting integration package.
+        var csprojIndex = outputs.FindIndex(o =>
+            o.RelativePath.EndsWith($"{solutionName}.AppHost.csproj", StringComparison.Ordinal));
+
+        if (csprojIndex >= 0)
+        {
+            var csproj = outputs[csprojIndex];
+            var content = csproj.Content.Replace(
+                "<PackageReference Include=\"Aspire.Hosting.Defaults\" Version=\"9.2.0\" />",
+                "<PackageReference Include=\"Aspire.Hosting.Defaults\" Version=\"9.2.0\" />\n" +
+                "    <PackageReference Include=\"Aspire.Hosting.RabbitMQ\" Version=\"9.2.0\" />");
+
+            outputs[csprojIndex] = csproj with { Content = content };
+        }
     }
 
     private static void InjectAspireIntoSlnx(List<TemplateOutput> outputs, string solutionName)
