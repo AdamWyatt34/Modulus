@@ -93,17 +93,4 @@ public class MessageBusTests
 
         await TestWait.WaitForConditionAsync(() => handler.HandledEvents.Count == 2);
     }
-
-    [Fact]
-    public async Task Send_UnsupportedDestinationScheme_Throws()
-    {
-        var services = BuildServices();
-        await using var harness = await MessagingTestHarness.StartAsync(services);
-
-        using var scope = harness.Provider.CreateScope();
-        var messageBus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
-
-        await Should.ThrowAsync<ArgumentException>(() =>
-            messageBus.Send(new TestOrderCreatedEvent { OrderId = 1, CustomerName = "X" }, new Uri("rabbitmq://host/q")));
-    }
 }

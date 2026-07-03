@@ -97,14 +97,6 @@ public class InMemoryTransportTests
     }
 
     [Fact]
-    public async Task Send_AlwaysDropsAndDoesNotThrow()
-    {
-        await using var transport = new InMemoryTransport(NullLogger<InMemoryTransport>.Instance);
-
-        await Should.NotThrowAsync(() => transport.SendAsync(Envelope(), "some-queue"));
-    }
-
-    [Fact]
     public async Task DeadLetterResult_IsLoggedAndDropped_ProcessingContinues()
     {
         await using var transport = new InMemoryTransport(NullLogger<InMemoryTransport>.Instance);

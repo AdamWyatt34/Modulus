@@ -22,7 +22,6 @@ internal sealed class AzureServiceBusTransport(
 
     private readonly ConcurrentDictionary<string, ServiceBusSender> _senders = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, bool> _provisionedTopics = new(StringComparer.Ordinal);
-    private readonly ConcurrentDictionary<string, bool> _provisionedQueues = new(StringComparer.Ordinal);
     private readonly List<ServiceBusProcessor> _processors = [];
     private readonly SemaphoreSlim _provisionLock = new(1, 1);
 
@@ -52,32 +51,6 @@ internal sealed class AzureServiceBusTransport(
         }
 
         var sender = _senders.GetOrAdd(topic, name => Client.CreateSender(name));
-        await sender.SendMessageAsync(
-            AzureServiceBusEnvelopeMapper.ToServiceBusMessage(envelope),
-            cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task SendAsync(TransportEnvelope envelope, string queueName, CancellationToken cancellationToken = default)
-    {
-        var queue = AzureServiceBusTopology.SendQueueName(queueName);
-
-        if (options.AutoProvision && !_provisionedQueues.ContainsKey(queue))
-        {
-            await _provisionLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-            try
-            {
-                if (!await AdminClient.QueueExistsAsync(queue, cancellationToken).ConfigureAwait(false))
-                    await AdminClient.CreateQueueAsync(queue, cancellationToken).ConfigureAwait(false);
-            }
-            finally
-            {
-                _provisionLock.Release();
-            }
-
-            _provisionedQueues.TryAdd(queue, true);
-        }
-
-        var sender = _senders.GetOrAdd($"queue:{queue}", _ => Client.CreateSender(queue));
         await sender.SendMessageAsync(
             AzureServiceBusEnvelopeMapper.ToServiceBusMessage(envelope),
             cancellationToken).ConfigureAwait(false);

@@ -24,8 +24,4 @@ internal static class RabbitMqTopology
     /// <summary>The queue bound to the dead-letter exchange.</summary>
     public static string DeadLetterQueueName(string endpointName)
         => $"{QueueName(endpointName)}.dead-letter";
-
-    /// <summary>Point-to-point send queue for a command type (published via the default exchange).</summary>
-    public static string SendQueueName(string queueName)
-        => EndpointNameResolver.Sanitize(queueName);
 }

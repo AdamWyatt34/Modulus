@@ -11,9 +11,6 @@ public interface IMessageTransport : IAsyncDisposable
     /// <summary>Publishes an event envelope to all subscribers of its message type.</summary>
     Task PublishAsync(TransportEnvelope envelope, CancellationToken cancellationToken = default);
 
-    /// <summary>Sends an envelope point-to-point to a named queue.</summary>
-    Task SendAsync(TransportEnvelope envelope, string queueName, CancellationToken cancellationToken = default);
-
     /// <summary>
     /// Provisions topology for the given subscriptions and begins delivering messages to
     /// <paramref name="onMessage"/>. Delivery continues until <see cref="StopConsumingAsync"/>.

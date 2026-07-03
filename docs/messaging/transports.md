@@ -164,7 +164,6 @@ builder.Services.AddModulusRabbitMqTransport();
 | Queue (per endpoint) | `{EndpointName}` | Durable; bound to every exchange the endpoint subscribes to; replicas sharing the name compete |
 | Dead-letter exchange | `{EndpointName}.dlx` | Targeted via the queue's `x-dead-letter-exchange` argument |
 | Dead-letter queue | `{EndpointName}.dead-letter` | Bound to the dead-letter exchange |
-| Send queue (point-to-point) | Command type name | `Send` publishes via the **default exchange** with the queue name as routing key |
 
 When consumer retries are exhausted, the message is rejected without requeue and RabbitMQ routes it through `{EndpointName}.dlx` into `{EndpointName}.dead-letter`.
 
@@ -218,7 +217,6 @@ The topology is built on topics and subscriptions, which the **Basic** tier does
 | Topic (per event type) | Lower-cased full type name, e.g. `myapp.orders.integration.ordercreatedevent` | One topic per published event type |
 | Subscription (per endpoint) | `{EndpointName}` | Names longer than the 50-character service limit are truncated with a stable 8-character hash suffix so distinct endpoints never collide |
 | Dead-letter queue | Subscription's built-in DLQ | Dead-lettered with reason `RetriesExhausted` after consumer retries run out |
-| Send queue (point-to-point) | Command type name | `Send` delivers to a queue named after the command type |
 
 ### Consumption Model
 

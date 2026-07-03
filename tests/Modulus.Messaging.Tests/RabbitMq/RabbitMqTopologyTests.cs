@@ -26,11 +26,4 @@ public class RabbitMqTopologyTests
         RabbitMqTopology.DeadLetterExchangeName("checkout").ShouldBe("checkout.dlx");
         RabbitMqTopology.DeadLetterQueueName("checkout").ShouldBe("checkout.dead-letter");
     }
-
-    [Fact]
-    public void SendQueueName_SanitizesCommandTypeName()
-    {
-        RabbitMqTopology.SendQueueName("ProvisionTenantCommand")
-            .ShouldBe("provisiontenantcommand");
-    }
 }

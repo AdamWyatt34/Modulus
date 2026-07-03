@@ -18,7 +18,6 @@ internal sealed class RabbitMqTransport(
 {
     private readonly SemaphoreSlim _connectionLock = new(1, 1);
     private readonly HashSet<string> _declaredExchanges = new(StringComparer.Ordinal);
-    private readonly HashSet<string> _declaredSendQueues = new(StringComparer.Ordinal);
 
     private IConnection? _connection;
     private IChannel? _publishChannel;
@@ -96,29 +95,6 @@ internal sealed class RabbitMqTransport(
         await channel.BasicPublishAsync(
             exchange,
             routingKey: string.Empty,
-            mandatory: false,
-            basicProperties: RabbitMqEnvelopeMapper.ToBasicProperties(envelope),
-            body: envelope.Body,
-            cancellationToken: cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task SendAsync(TransportEnvelope envelope, string queueName, CancellationToken cancellationToken = default)
-    {
-        var channel = await GetPublishChannelAsync(cancellationToken).ConfigureAwait(false);
-        var queue = RabbitMqTopology.SendQueueName(queueName);
-
-        if (options.AutoProvision && !_declaredSendQueues.Contains(queue))
-        {
-            await channel.QueueDeclareAsync(
-                queue, durable: true, exclusive: false, autoDelete: false,
-                cancellationToken: cancellationToken).ConfigureAwait(false);
-            _declaredSendQueues.Add(queue);
-        }
-
-        // Default exchange routes by queue name.
-        await channel.BasicPublishAsync(
-            exchange: string.Empty,
-            routingKey: queue,
             mandatory: false,
             basicProperties: RabbitMqEnvelopeMapper.ToBasicProperties(envelope),
             body: envelope.Body,

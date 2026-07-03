@@ -23,15 +23,6 @@ internal sealed class InMemoryTransport(ILogger<InMemoryTransport> logger) : IMe
             await channel.Writer.WriteAsync(envelope, cancellationToken).ConfigureAwait(false);
     }
 
-    public Task SendAsync(TransportEnvelope envelope, string queueName, CancellationToken cancellationToken = default)
-    {
-        logger.LogWarning(
-            "In-memory transport has no point-to-point consumers; message {MessageId} to queue {Queue} was dropped.",
-            envelope.MessageId,
-            queueName);
-        return Task.CompletedTask;
-    }
-
     public Task StartConsumingAsync(
         IReadOnlyList<TransportSubscription> subscriptions,
         Func<TransportEnvelope, CancellationToken, Task<MessageDispatchResult>> onMessage,

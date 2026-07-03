@@ -3,11 +3,10 @@ using Modulus.Messaging.Transports;
 
 namespace Modulus.Messaging.Tests.Fixtures;
 
-/// <summary>Records published/sent envelopes; can be told to fail publishes.</summary>
+/// <summary>Records published envelopes; can be told to fail publishes.</summary>
 public sealed class FakeMessageTransport : IMessageTransport
 {
     public ConcurrentQueue<TransportEnvelope> Published { get; } = [];
-    public ConcurrentQueue<(TransportEnvelope Envelope, string Queue)> Sent { get; } = [];
 
     /// <summary>When set, every publish throws this exception.</summary>
     public Exception? PublishFailure { get; set; }
@@ -18,12 +17,6 @@ public sealed class FakeMessageTransport : IMessageTransport
             throw PublishFailure;
 
         Published.Enqueue(envelope);
-        return Task.CompletedTask;
-    }
-
-    public Task SendAsync(TransportEnvelope envelope, string queueName, CancellationToken cancellationToken = default)
-    {
-        Sent.Enqueue((envelope, queueName));
         return Task.CompletedTask;
     }
 

@@ -31,14 +31,6 @@ public interface IMessageBus
     // Publish an event to all subscribers
     Task Publish<TEvent>(TEvent @event, CancellationToken ct = default)
         where TEvent : IIntegrationEvent;
-
-    // Send a command (routed by type name)
-    Task Send<TCommand>(TCommand command, CancellationToken ct = default)
-        where TCommand : class;
-
-    // Send a command to a specific destination
-    Task Send<TCommand>(TCommand command, Uri destination, CancellationToken ct = default)
-        where TCommand : class;
 }
 ```
 

@@ -33,8 +33,4 @@ internal static class AzureServiceBusTopology
 
         return $"{sanitized[..(MaxSubscriptionNameLength - 9)]}-{hash}";
     }
-
-    /// <summary>Point-to-point send queue for a command type.</summary>
-    public static string SendQueueName(string queueName)
-        => EndpointNameResolver.Sanitize(queueName);
 }

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Removed
+
+- **BREAKING — Messaging**: `IMessageBus.Send` (both overloads) and the transport-level point-to-point path (`IMessageTransport.SendAsync`) are gone. Modulus never ran a consuming pipeline for commands, so the API implied wiring that didn't exist. Use integration events for cross-module communication, or direct broker access for queues owned by external services.
+
 ### Changed
 
 - **BREAKING — Messaging (`Modulus.Messaging`)**: MassTransit has been replaced with an in-house transport layer to remove the last commercially licensed dependency.

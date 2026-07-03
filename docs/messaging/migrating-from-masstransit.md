@@ -63,9 +63,12 @@ The MassTransit-era adapter had a bug-turned-behavior: when multiple `IIntegrati
 
 If you have events with multiple handlers, audit them before upgrading: handlers that never ran before will start running.
 
-### Send is fire-into-a-named-queue
+### Send was removed
 
-`IMessageBus.Send` keeps its `queue:{name}` convention (default destination = the command type name), but it is now a plain point-to-point delivery into that queue -- there is **no consuming pipeline on the receiving side** provided by Modulus. The receiving service is responsible for consuming the queue itself. Under MassTransit, a `Send` could be picked up by a registered MassTransit consumer; that implicit wiring no longer exists.
+`IMessageBus.Send` no longer exists. Modulus never provided a consuming pipeline for point-to-point commands (the receiving side had to consume the queue itself), so the API implied wiring that MassTransit used to supply and Modulus does not. Migrate `Send` call sites to one of:
+
+- an **integration event** (`Publish` + `IIntegrationEventHandler<T>` in the receiving module) when the receiver lives in the same solution, or
+- direct broker access (e.g. RabbitMQ.Client / Azure SDK) when you genuinely need to enqueue into a queue owned by an external service.
 
 ### Other behavior notes
 
