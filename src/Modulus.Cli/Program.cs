@@ -14,6 +14,8 @@ rootCommand.Subcommands.Add(AddEntityCommand.Create(fileSystem, consoleOutput));
 rootCommand.Subcommands.Add(AddCommandCommand.Create(fileSystem, consoleOutput));
 rootCommand.Subcommands.Add(AddQueryCommand.Create(fileSystem, consoleOutput));
 rootCommand.Subcommands.Add(AddEndpointCommand.Create(fileSystem, consoleOutput));
+rootCommand.Subcommands.Add(AddEventCommand.Create(fileSystem, consoleOutput));
+rootCommand.Subcommands.Add(AddConsumerCommand.Create(fileSystem, consoleOutput));
 rootCommand.Subcommands.Add(ListModulesCommand.Create(fileSystem, consoleOutput));
 rootCommand.Subcommands.Add(OutboxCommand.Create(fileSystem, consoleOutput));
 rootCommand.Subcommands.Add(VersionCommand.Create(consoleOutput));

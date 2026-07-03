@@ -52,6 +52,18 @@ Each module gets its own Domain, Application, Infrastructure, Api, and Integrati
 modulus list-modules
 ```
 
+### Wire up cross-module messaging
+
+```bash
+# Define an integration event in the publishing module
+modulus add-event OrderPlaced --module Orders --properties "OrderId:Guid,Total:decimal"
+
+# Generate a handler in the consuming module (auto-wires the cross-module reference)
+modulus add-consumer OrderPlaced --module Catalog
+```
+
+`add-event` creates the event in the module's `Integration` project; `add-consumer` creates an `IIntegrationEventHandler<T>` in the consuming module's `Infrastructure` project and adds the MOD001-compliant `Integration` project reference automatically. Handlers are discovered and registered by the source generator — no manual wiring.
+
 Strongly typed IDs, handler registration, and module discovery all work automatically once the packages are referenced. No additional setup is needed.
 
 ## Architecture Overview

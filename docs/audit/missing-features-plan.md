@@ -49,6 +49,16 @@ The original backlog proposed shipping concrete EF Core migrations under `Modulu
 
 Follow-up should focus on templates, docs, and validation rather than committing provider-specific generated migrations.
 
+### Done — Integration event / consumer scaffolding (PR17)
+
+Messaging is now a fully scaffold-able pillar, matching commands/queries/entities/endpoints.
+
+- `modulus add-event <Name> --module <Module> [--properties "OrderId:Guid,Total:decimal"]` creates an `IntegrationEvent` record in the module's `Integration` project (`EventGenerator`/`AddEventHandler`).
+- `modulus add-consumer <EventName> --module <Module> [--event-module <SourceModule>]` creates an `IIntegrationEventHandler<TEvent>` in the consuming module's `Infrastructure` project (`ConsumerGenerator`/`AddConsumerHandler`).
+- `add-consumer` locates the event across modules' `Integration` projects (with `--event-module` to disambiguate) and **auto-wires the cross-module `ProjectReference`** to the source `Integration` project — the only MOD001-compliant cross-module dependency — so the scaffold compiles immediately. The csproj edit is idempotent.
+- Handlers are discovered/registered automatically by the source generator and MassTransit consumer wiring; no manual DI registration.
+- Covered by `tests/Modulus.Cli.Tests/Handlers/AddEventHandlerTests.cs` and `AddConsumerHandlerTests.cs`. Docs: `docs/cli/add-event.md`, `docs/cli/add-consumer.md`.
+
 ## Tier 1 — Best Next Additions for 1.x
 
 ### PR11 — Deflake messaging tests
@@ -101,12 +111,7 @@ A sample app gives users a known-good reference for the full package suite.
 
 ### PR17 — Integration event / consumer scaffolding
 
-Messaging is a first-class pillar, but the CLI scaffolds commands, queries, entities, and endpoints only.
-
-- Add `modulus add-event <Name> --module <ModuleName>` to create an integration event in the module's Integration project.
-- Add `modulus add-consumer <EventName> --module <ModuleName>` to create an `IIntegrationEventHandler<TEvent>` implementation in Application or Infrastructure based on existing conventions.
-- Validate cross-module references stay Integration-only.
-- Add docs under `docs/cli/` and messaging recipes.
+**Done.** See [Done — Integration event / consumer scaffolding (PR17)](#done--integration-event--consumer-scaffolding-pr17) in the Completed section. Handlers land in `Infrastructure` (the only module project with messaging access), and cross-module references are auto-wired Integration-only.
 
 ### PR18 — Module lifecycle commands
 
@@ -182,7 +187,8 @@ Docs have enough C# snippets that drift is likely. A compile check would catch s
 ## Sequencing Summary
 
 ```
-Done: PR6 E2E, PR7 versioning, PR8 outbox CLI, PR10 generator polish, PR12 config-driven messaging
+Done: PR6 E2E, PR7 versioning, PR8 outbox CLI, PR10 generator polish, PR12 config-driven messaging,
+      PR17 integration event / consumer scaffolding
 Reframed: PR9 provider-agnostic migration guidance
 
 PR11 Deflake messaging tests
@@ -192,7 +198,6 @@ PR15 Template generator tests
     └── 1.x package experience and release-readiness baseline
 
 PR16 Sample application
-PR17 Integration event / consumer scaffolding
 PR18 Module lifecycle commands
 PR19 Docs snippet validation
 PR20 Coverage reporting

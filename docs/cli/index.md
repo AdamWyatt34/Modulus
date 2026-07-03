@@ -25,6 +25,8 @@ dotnet tool update --global ModulusKit.Cli
 | [`modulus add-command`](./add-command) | Scaffold a command, handler, and validator |
 | [`modulus add-query`](./add-query) | Scaffold a query and handler |
 | [`modulus add-endpoint`](./add-endpoint) | Scaffold a minimal API endpoint |
+| [`modulus add-event`](./add-event) | Scaffold an integration event |
+| [`modulus add-consumer`](./add-consumer) | Scaffold an integration event handler and wire the cross-module reference |
 | [`modulus version`](./version) | Display the installed CLI version |
 
 ## Common Patterns
@@ -86,6 +88,10 @@ modulus add-command PlaceOrder --module Orders --result-type Guid
 modulus add-endpoint CreateProduct --module Catalog --method POST --route / --command CreateProduct --result-type Guid
 modulus add-endpoint GetProduct --module Catalog --method GET --route "/{id:guid}" --query GetProductById --result-type ProductDto
 
-# 7. Run it
+# 7. Add cross-module messaging (integration events + consumers)
+modulus add-event OrderPlaced --module Orders --properties "OrderId:Guid,Total:decimal"
+modulus add-consumer OrderPlaced --module Catalog
+
+# 8. Run it
 dotnet run --project src/EShop.WebApi
 ```
