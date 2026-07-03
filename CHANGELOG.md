@@ -31,7 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Messaging metrics**: new `Modulus.Messaging` meter — outbox dispatch counter (outcome-tagged), consumer handler duration histogram, inbox dedup counter, consumer retry and dead-letter counters. Subscribe with `AddMeter("Modulus.Messaging")`; works without metrics DI.
 - **Messaging health checks**: `AddHealthChecks().AddModulusMessaging()` registers a broker connectivity check (via the new optional `ITransportHealthProbe` on `IMessageTransport` implementations) and an outbox backlog-depth check with configurable degraded/unhealthy thresholds, both tagged `ready`/`messaging`. `IOutboxStore` gains `CountPending` (breaking for custom implementations); `ModulusKit.Messaging` now depends on `Microsoft.Extensions.Diagnostics.HealthChecks`. Scaffolded hosts filter `/readyz` on the `ready` tag.
 - `IOutboxDispatcher` extraction from `OutboxProcessor` (single synchronous dispatch pass, used by tests and tooling).
-- RabbitMQ Testcontainers integration test suite (`Category=Integration`) and a non-blocking CI job for it.
+- RabbitMQ Testcontainers integration test suite (`Category=Integration`); the CI job now **blocks publishing** and covers roundtrip, dead-lettering, inbox dedup, unknown-type acknowledge, consume restart, and `AutoProvision=false` against pre-declared topology.
+- Azure Service Bus **emulator** integration test suite (Testcontainers, official emulator + SQL companion; `AutoProvision=false` with a checked-in `Config.json` pinned to the topology helpers by a drift-guard test) — non-blocking CI job until proven stable.
+- Unit coverage for the hosted services: `OutboxProcessor` poll loop (repetition, exception resilience, prompt cancellation) and `TransportConsumerHost` lifecycle (publish-only early return, subscription forwarding, stop).
 
 ## [1.1.0] - 2026-03-05
 

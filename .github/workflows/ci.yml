@@ -71,8 +71,34 @@ jobs:
           path: ./nupkgs/*.nupkg
 
   messaging-integration:
-    # Broker integration tests (Testcontainers + Docker). Non-blocking: infrastructure
-    # flakiness here must not gate package CI.
+    # RabbitMQ broker integration tests (Testcontainers + Docker). Blocking: this suite is
+    # the end-to-end proof of the transport layer and gates publishing.
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Test (RabbitMQ integration)
+        run: dotnet test tests/Modulus.Messaging.RabbitMq.IntegrationTests --no-build --configuration Release --verbosity normal --filter "Category=Integration"
+
+  asb-integration:
+    # Azure Service Bus emulator integration tests (Testcontainers: emulator + SQL companion).
+    # Non-blocking until the emulator pair proves stable in CI; promote like the RabbitMQ job then.
     needs: build
     runs-on: ubuntu-latest
     continue-on-error: true
@@ -94,8 +120,8 @@ jobs:
       - name: Build
         run: dotnet build --no-restore --configuration Release
 
-      - name: Test (broker integration)
-        run: dotnet test --no-build --configuration Release --verbosity normal --filter "Category=Integration"
+      - name: Test (Azure Service Bus emulator integration)
+        run: dotnet test tests/Modulus.Messaging.AzureServiceBus.IntegrationTests --no-build --configuration Release --verbosity normal --filter "Category=Integration"
 
   e2e:
     needs: build
@@ -192,7 +218,7 @@ jobs:
         run: dotnet build samples/SampleApp/SampleApp.slnx --configuration Release --no-restore
 
   publish:
-    needs: [build, e2e]
+    needs: [build, e2e, messaging-integration]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
 
