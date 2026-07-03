@@ -26,6 +26,15 @@ public interface IOutboxStore
     Task<IReadOnlyList<OutboxMessage>> GetPending(int batchSize, int maxAttempts, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Counts unprocessed outbox messages whose attempt count is below <paramref name="maxAttempts"/> —
+    /// the same population <see cref="GetPending"/> draws from. Used by the backlog-depth health check.
+    /// </summary>
+    /// <param name="maxAttempts">Messages whose <see cref="OutboxMessage.Attempts"/> is at or above this value are excluded.</param>
+    /// <param name="cancellationToken">A token to observe for cancellation.</param>
+    /// <returns>The number of pending outbox messages eligible for publishing.</returns>
+    Task<int> CountPending(int maxAttempts, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Marks the specified outbox messages as processed.
     /// </summary>
     /// <param name="ids">The identifiers of the messages to mark as processed.</param>

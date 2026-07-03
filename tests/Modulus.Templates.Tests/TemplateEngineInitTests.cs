@@ -32,6 +32,20 @@ public class TemplateEngineInitTests
     }
 
     [Fact]
+    public void GenerateInit_HostProgram_FiltersReadinessOnReadyTag()
+    {
+        var engine = new TemplateEngine();
+
+        var outputs = engine.GenerateInit(CreateOptions());
+
+        // The ModulusKit messaging health checks are tagged "ready"; /readyz must filter on
+        // that tag (and the guidance block must show how to register them).
+        var program = outputs.Single(o => o.RelativePath == "src/EShop.WebApi/Program.cs");
+        program.Content.ShouldContain("check.Tags.Contains(\"ready\")");
+        program.Content.ShouldContain("AddHealthChecks().AddModulusMessaging()");
+    }
+
+    [Fact]
     public void GenerateInit_Default_ProducesKeyFiles()
     {
         var engine = new TemplateEngine();

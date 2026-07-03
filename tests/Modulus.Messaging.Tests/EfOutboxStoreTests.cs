@@ -118,4 +118,24 @@ public class EfOutboxStoreTests
         var pending = await store.GetPending(10, int.MaxValue);
         pending.Count.ShouldBe(0);
     }
+
+    [Fact]
+    public async Task CountPending_counts_only_unprocessed_below_max_attempts()
+    {
+        using var provider = CreateProvider();
+        using var scope = provider.CreateScope();
+        var store = scope.ServiceProvider.GetRequiredService<IOutboxStore>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<OutboxDbContext>();
+
+        await store.Save(new TestOrderCreatedEvent { OrderId = 1, CustomerName = "Pending" });
+        await store.Save(new TestOrderCreatedEvent { OrderId = 2, CustomerName = "Processed" });
+        await store.Save(new TestOrderCreatedEvent { OrderId = 3, CustomerName = "DeadLettered" });
+
+        var messages = await dbContext.OutboxMessages.OrderBy(m => m.CreatedAt).ToListAsync();
+        messages[1].ProcessedAt = DateTime.UtcNow;
+        messages[2].Attempts = 5;
+        await dbContext.SaveChangesAsync();
+
+        (await store.CountPending(maxAttempts: 5)).ShouldBe(1);
+    }
 }

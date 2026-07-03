@@ -11,7 +11,7 @@ namespace Modulus.Messaging.InMemory;
 /// subscribes to drops the message (like a fanout exchange with no bindings), and
 /// dead-lettered messages are logged and dropped — there is no in-memory dead-letter queue.
 /// </summary>
-internal sealed class InMemoryTransport(ILogger<InMemoryTransport> logger) : IMessageTransport
+internal sealed class InMemoryTransport(ILogger<InMemoryTransport> logger) : IMessageTransport, ITransportHealthProbe
 {
     private readonly ConcurrentDictionary<string, Channel<TransportEnvelope>> _channels = new(StringComparer.Ordinal);
     private readonly List<Task> _readerLoops = [];
@@ -109,6 +109,9 @@ internal sealed class InMemoryTransport(ILogger<InMemoryTransport> logger) : IMe
             _stopSource = null;
         }
     }
+
+    public ValueTask<TransportHealth> CheckHealthAsync(CancellationToken cancellationToken = default)
+        => ValueTask.FromResult(new TransportHealth(true, "In-memory transport has no broker."));
 
     public async ValueTask DisposeAsync() => await StopConsumingAsync().ConfigureAwait(false);
 }

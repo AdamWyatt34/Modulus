@@ -60,6 +60,7 @@ public interface IOutboxStore
 {
     Task Save(IIntegrationEvent @event, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<OutboxMessage>> GetPending(int batchSize, int maxAttempts, CancellationToken cancellationToken = default);
+    Task<int> CountPending(int maxAttempts, CancellationToken cancellationToken = default);
     Task MarkAsProcessed(IEnumerable<Guid> ids, CancellationToken cancellationToken = default);
     Task MarkAsFailed(Guid messageId, string error, CancellationToken cancellationToken = default);
 }
@@ -69,6 +70,7 @@ public interface IOutboxStore
 |---|---|
 | `Save` | Serializes and saves an integration event as an `OutboxMessage`. |
 | `GetPending` | Retrieves up to `batchSize` unprocessed messages whose attempt count is below `maxAttempts`, ordered by creation time. Dead-lettered rows are excluded so they do not starve newer rows. |
+| `CountPending` | Counts the same population `GetPending` draws from. Used by the backlog-depth health check. |
 | `MarkAsProcessed` | Marks the specified messages as processed so they are not picked up again. |
 | `MarkAsFailed` | Increments a message's attempt counter and records the failure message. |
 

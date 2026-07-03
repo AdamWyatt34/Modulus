@@ -76,6 +76,9 @@ public class CreateOrderHandlerTests
             int batchSize, int maxAttempts, CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<OutboxMessage>>([]);
 
+        public Task<int> CountPending(int maxAttempts, CancellationToken cancellationToken = default)
+            => Task.FromResult(0);
+
         public Task MarkAsProcessed(IEnumerable<Guid> ids, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
 

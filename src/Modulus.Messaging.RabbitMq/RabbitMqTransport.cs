@@ -14,7 +14,7 @@ namespace Modulus.Messaging.RabbitMq;
 /// </summary>
 internal sealed class RabbitMqTransport(
     MessagingOptions options,
-    ILogger<RabbitMqTransport> logger) : IMessageTransport
+    ILogger<RabbitMqTransport> logger) : IMessageTransport, ITransportHealthProbe
 {
     private readonly SemaphoreSlim _connectionLock = new(1, 1);
     private readonly HashSet<string> _declaredExchanges = new(StringComparer.Ordinal);
@@ -196,6 +196,23 @@ internal sealed class RabbitMqTransport(
 
         _consumerTag = await _consumeChannel.BasicConsumeAsync(
             queue, autoAck: false, consumer, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async ValueTask<TransportHealth> CheckHealthAsync(CancellationToken cancellationToken = default)
+    {
+        // A real connectivity probe: establishes the connection if it doesn't exist yet,
+        // so an unreachable broker surfaces before the first publish.
+        try
+        {
+            var connection = await GetConnectionAsync(cancellationToken).ConfigureAwait(false);
+            return connection.IsOpen
+                ? new TransportHealth(true, "RabbitMQ connection is open.")
+                : new TransportHealth(false, "RabbitMQ connection is closed.");
+        }
+        catch (Exception ex)
+        {
+            return new TransportHealth(false, $"RabbitMQ connection failed: {ex.Message}");
+        }
     }
 
     public async Task StopConsumingAsync(CancellationToken cancellationToken = default)

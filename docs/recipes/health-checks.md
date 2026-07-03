@@ -22,6 +22,30 @@ app.MapDefaultEndpoints();
 
 You can add module-specific health checks on top of the Aspire defaults.
 
+### Built-In Messaging Health Checks
+
+`ModulusKit.Messaging` ships its own checks — no extra packages needed. After `AddModulusMessaging(...)`, chain them onto `AddHealthChecks()`:
+
+```csharp
+using Modulus.Messaging.HealthChecks;
+
+builder.Services.AddHealthChecks()
+    .AddModulusMessaging(options =>
+    {
+        options.OutboxDegradedThreshold = 100;    // default
+        options.OutboxUnhealthyThreshold = 1000;  // default
+    });
+```
+
+This registers two checks, both tagged `ready` and `messaging`:
+
+| Check | What it does |
+|---|---|
+| `modulus_messaging_transport` | Probes broker connectivity. RabbitMQ establishes its connection to verify reachability; Azure Service Bus reports the client's lifecycle state (the Azure SDK connects lazily); the in-memory transport is always healthy. Custom transports opt in by implementing `ITransportHealthProbe`. |
+| `modulus_messaging_outbox` | Counts pending (unprocessed, not dead-lettered) outbox rows. `Degraded` at the degraded threshold, `Unhealthy` at the unhealthy threshold — a growing backlog means dispatch is failing or falling behind. Hosts without an outbox report healthy. |
+
+The scaffolded host's `/readyz` endpoint already filters on the `ready` tag, so these checks gate readiness automatically.
+
 ### Step 1: Install Health Check Packages
 
 If you are not using Aspire ServiceDefaults, or want to add database-specific checks:

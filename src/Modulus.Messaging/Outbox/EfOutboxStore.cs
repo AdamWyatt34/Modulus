@@ -33,6 +33,16 @@ internal sealed class EfOutboxStore(OutboxDbContext dbContext) : IOutboxStore
             .ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<int> CountPending(
+        int maxAttempts,
+        CancellationToken cancellationToken = default)
+    {
+        return await dbContext.OutboxMessages
+            .AsNoTracking()
+            .CountAsync(m => m.ProcessedAt == null && m.Attempts < maxAttempts, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
     public async Task MarkAsProcessed(
         IEnumerable<Guid> ids,
         CancellationToken cancellationToken = default)

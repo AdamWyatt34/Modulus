@@ -2,6 +2,7 @@ using {{RootNamespace}}.BuildingBlocks.Application.DependencyInjection;
 // Source-generated AddModulusHandlers/AddAllModules/MapAllModuleEndpoints land in this namespace.
 using {{RootNamespace}}.WebApi;
 using {{RootNamespace}}.WebApi.Middleware;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Scalar.AspNetCore;
 // Uncomment alongside the ModulusKit.Messaging registration below (usings must stay at the top):
 // using Modulus.Messaging;                     // AddModulusMessaging / AddModulusOutbox / AddModulusInbox
@@ -51,6 +52,11 @@ builder.Services.AddAllModules(builder.Configuration);
 //   builder.Services.AddModulusOutbox(o => o.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
 //   builder.Services.AddModulusInbox(o => o.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
 //
+// Messaging health checks (broker connectivity + outbox backlog depth, tagged "ready" so they
+// gate /readyz below). Also add `using Modulus.Messaging.HealthChecks;` at the top:
+//
+//   builder.Services.AddHealthChecks().AddModulusMessaging();
+//
 // Broker transports ship as separate packages and need one extra registration (in-memory needs none):
 //
 //   builder.Services.AddModulusRabbitMqTransport();          // ModulusKit.Messaging.RabbitMq
@@ -82,7 +88,11 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapHealthChecks("/healthz");
-app.MapHealthChecks("/readyz");
+// Readiness runs only "ready"-tagged checks (e.g. the ModulusKit messaging checks); liveness runs all.
+app.MapHealthChecks("/readyz", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready"),
+});
 
 app.MapAllModuleEndpoints();
 

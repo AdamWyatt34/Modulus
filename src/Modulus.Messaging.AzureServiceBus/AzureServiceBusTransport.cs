@@ -16,7 +16,7 @@ namespace Modulus.Messaging.AzureServiceBus;
 /// </summary>
 internal sealed class AzureServiceBusTransport(
     MessagingOptions options,
-    ILogger<AzureServiceBusTransport> logger) : IMessageTransport
+    ILogger<AzureServiceBusTransport> logger) : IMessageTransport, ITransportHealthProbe
 {
     private static readonly TimeSpan MaxLockRenewal = TimeSpan.FromMinutes(5);
 
@@ -139,6 +139,23 @@ internal sealed class AzureServiceBusTransport(
         finally
         {
             _provisionLock.Release();
+        }
+    }
+
+    public ValueTask<TransportHealth> CheckHealthAsync(CancellationToken cancellationToken = default)
+    {
+        // The Azure SDK connects lazily and exposes no cheap connectivity probe without
+        // Manage rights; report the client's lifecycle state honestly rather than pinging.
+        try
+        {
+            var client = Client;
+            return ValueTask.FromResult(client.IsClosed
+                ? new TransportHealth(false, "Azure Service Bus client is closed.")
+                : new TransportHealth(true, "Azure Service Bus client is available (connectivity is verified on first use)."));
+        }
+        catch (Exception ex)
+        {
+            return ValueTask.FromResult(new TransportHealth(false, $"Azure Service Bus client creation failed: {ex.Message}"));
         }
     }
 
