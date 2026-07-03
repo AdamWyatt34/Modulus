@@ -33,6 +33,26 @@ public sealed class MessagingOptions
     /// <summary>Gets the list of assemblies to scan for <see cref="Abstractions.IIntegrationEventHandler{TEvent}"/> implementations.</summary>
     public List<Assembly> Assemblies { get; } = [];
 
+    /// <summary>
+    /// Gets or sets the endpoint identity of this host: the RabbitMQ queue name and the Azure Service Bus
+    /// subscription name its consumers receive on. Replicas sharing an endpoint name compete for messages.
+    /// Defaults to the entry assembly name, lower-cased and sanitized to broker-safe characters.
+    /// </summary>
+    public string? EndpointName { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of messages the broker delivers ahead of acknowledgement
+    /// (RabbitMQ prefetch / Azure Service Bus concurrent calls and prefetch). Defaults to 10.
+    /// </summary>
+    public int PrefetchCount { get; set; } = 10;
+
+    /// <summary>
+    /// Gets or sets whether the transport declares its own topology (exchanges, queues, topics,
+    /// subscriptions) at startup and on first publish. Defaults to <c>true</c>. Set to <c>false</c>
+    /// for least-privilege deployments where entities are pre-created.
+    /// </summary>
+    public bool AutoProvision { get; set; } = true;
+
     /// <summary>Gets or sets how frequently the outbox processor polls for pending messages. Defaults to 5 seconds.</summary>
     public TimeSpan OutboxPollInterval { get; set; } = TimeSpan.FromSeconds(5);
 

@@ -4,6 +4,7 @@
     <Project Path="src/Modulus.Mediator.Abstractions/Modulus.Mediator.Abstractions.csproj" />
     <Project Path="src/Modulus.Mediator/Modulus.Mediator.csproj" />
     <Project Path="src/Modulus.Messaging.Abstractions/Modulus.Messaging.Abstractions.csproj" />
+    <Project Path="src/Modulus.Messaging.RabbitMq/Modulus.Messaging.RabbitMq.csproj" />
     <Project Path="src/Modulus.Messaging/Modulus.Messaging.csproj" />
     <Project Path="src/Modulus.Templates/Modulus.Templates.csproj" />
     <Project Path="src/Modulus.Generators/Modulus.Generators.csproj" />

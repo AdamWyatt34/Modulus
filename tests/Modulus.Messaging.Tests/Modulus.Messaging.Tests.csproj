@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Modulus.Messaging\Modulus.Messaging.csproj" />
+    <ProjectReference Include="..\..\src\Modulus.Messaging.RabbitMq\Modulus.Messaging.RabbitMq.csproj" />
   </ItemGroup>
 
 </Project>
