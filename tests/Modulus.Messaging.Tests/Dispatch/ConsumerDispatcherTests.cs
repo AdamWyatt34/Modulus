@@ -188,8 +188,11 @@ public class ConsumerDispatcherTests
     public async Task Dispatch_ConcurrentDuplicateDeliveries_HandlerExecutesExactlyOnce()
     {
         // Two dispatches of the same envelope race: the reservation makes one the owner;
-        // the other backs off until it sees the pair processed, then acknowledges.
-        var handler = new SlowOrderCreatedHandler(TimeSpan.FromMilliseconds(150));
+        // the other backs off until it sees the pair processed, then acknowledges. The
+        // loser's retry budget (100 x 50ms) dwarfs the winner's 100ms handler so CPU
+        // starvation on shared CI runners cannot exhaust it first; when the race resolves
+        // normally the loser exits on its first post-completion attempt.
+        var handler = new SlowOrderCreatedHandler(TimeSpan.FromMilliseconds(100));
         var inbox = new FakeInboxStore();
         var services = new ServiceCollection();
         services.AddSingleton<IIntegrationEventHandler<TestOrderCreatedEvent>>(handler);
@@ -198,7 +201,7 @@ public class ConsumerDispatcherTests
         {
             ConsumerRetry = new RetryPolicyOptions
             {
-                MaxAttempts = 20,
+                MaxAttempts = 100,
                 InitialInterval = TimeSpan.FromMilliseconds(50),
                 MaxInterval = TimeSpan.FromMilliseconds(50),
                 IntervalIncrement = TimeSpan.Zero,

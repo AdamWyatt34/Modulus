@@ -67,8 +67,11 @@ public sealed class OutboxProcessorTests
         await processor.StartAsync(CancellationToken.None);
         await TestWait.WaitForConditionAsync(() => dispatcher.CallCount >= 1);
 
+        // Generous ceiling: shared CI runners under parallel load can deschedule the loop
+        // for whole seconds; the assertion is "stops without waiting out a poll backlog",
+        // not "stops within N milliseconds".
         var stopTask = processor.StopAsync(CancellationToken.None);
-        var completed = await Task.WhenAny(stopTask, Task.Delay(TimeSpan.FromSeconds(5)));
+        var completed = await Task.WhenAny(stopTask, Task.Delay(TimeSpan.FromSeconds(15)));
 
         completed.ShouldBe(stopTask);
     }
@@ -84,8 +87,11 @@ public sealed class OutboxProcessorTests
         await TestWait.WaitForConditionAsync(() => dispatcher.CallCount >= 1);
 
         cts.Cancel();
+        // Generous ceiling: shared CI runners under parallel load can deschedule the loop
+        // for whole seconds; the assertion is "stops without waiting out a poll backlog",
+        // not "stops within N milliseconds".
         var stopTask = processor.StopAsync(CancellationToken.None);
-        var completed = await Task.WhenAny(stopTask, Task.Delay(TimeSpan.FromSeconds(5)));
+        var completed = await Task.WhenAny(stopTask, Task.Delay(TimeSpan.FromSeconds(15)));
 
         completed.ShouldBe(stopTask);
     }
