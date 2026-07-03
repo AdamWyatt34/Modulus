@@ -10,6 +10,7 @@ var rootCommand = new RootCommand("Modulus - Modular Monolith CLI scaffolding to
 
 rootCommand.Subcommands.Add(InitCommand.Create(fileSystem, processRunner, consoleOutput));
 rootCommand.Subcommands.Add(AddModuleCommand.Create(fileSystem, processRunner, consoleOutput));
+rootCommand.Subcommands.Add(RemoveModuleCommand.Create(fileSystem, processRunner, consoleOutput));
 rootCommand.Subcommands.Add(AddEntityCommand.Create(fileSystem, consoleOutput));
 rootCommand.Subcommands.Add(AddCommandCommand.Create(fileSystem, consoleOutput));
 rootCommand.Subcommands.Add(AddQueryCommand.Create(fileSystem, consoleOutput));

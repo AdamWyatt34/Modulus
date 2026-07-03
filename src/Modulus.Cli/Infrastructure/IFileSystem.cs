@@ -3,6 +3,7 @@ namespace Modulus.Cli.Infrastructure;
 public interface IFileSystem
 {
     void CreateDirectory(string path);
+    void DeleteDirectory(string path, bool recursive);
     void WriteAllText(string path, string content);
     bool FileExists(string path);
     bool DirectoryExists(string path);

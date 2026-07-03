@@ -4,6 +4,8 @@ public sealed class FileSystem : IFileSystem
 {
     public void CreateDirectory(string path) => Directory.CreateDirectory(path);
 
+    public void DeleteDirectory(string path, bool recursive) => Directory.Delete(path, recursive);
+
     public void WriteAllText(string path, string content) => File.WriteAllText(path, content);
 
     public bool FileExists(string path) => File.Exists(path);

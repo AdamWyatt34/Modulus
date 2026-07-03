@@ -33,6 +33,46 @@ public sealed class FakeFileSystem : IFileSystem
         RegisterParentDirectories(normalized);
     }
 
+    public void DeleteDirectory(string path, bool recursive)
+    {
+        var normalized = Normalize(path);
+
+        if (!_directories.Contains(normalized))
+            throw new DirectoryNotFoundException($"Directory not found: {path}");
+
+        if (!recursive)
+        {
+            var hasChildren = _directories.Any(d => IsWithin(d, normalized))
+                || _files.Keys.Any(f => IsWithin(f, normalized));
+            if (hasChildren)
+                throw new IOException($"Directory is not empty: {path}");
+
+            _directories.Remove(normalized);
+            return;
+        }
+
+        var prefix = normalized + Sep;
+
+        var dirsToRemove = _directories
+            .Where(d => string.Equals(d, normalized, StringComparison.OrdinalIgnoreCase)
+                || d.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        foreach (var dir in dirsToRemove)
+            _directories.Remove(dir);
+
+        var filesToRemove = _files.Keys
+            .Where(f => f.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        foreach (var file in filesToRemove)
+            _files.Remove(file);
+    }
+
+    private static bool IsWithin(string candidate, string normalizedParent)
+    {
+        var prefix = normalizedParent + Sep;
+        return candidate.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+    }
+
     public void WriteAllText(string path, string content)
     {
         var normalized = Normalize(path);
