@@ -21,6 +21,7 @@
     <InternalsVisibleTo Include="Modulus.Messaging.Tests" />
     <InternalsVisibleTo Include="Modulus.Messaging.RabbitMq" />
     <InternalsVisibleTo Include="Modulus.Messaging.AzureServiceBus" />
+    <InternalsVisibleTo Include="Modulus.Messaging.RabbitMq.IntegrationTests" />
   </ItemGroup>
 
   <ItemGroup>
