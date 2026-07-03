@@ -19,5 +19,6 @@
     <Project Path="tests/Modulus.Messaging.Tests/Modulus.Messaging.Tests.csproj" />
     <Project Path="tests/Modulus.Generators.Tests/Modulus.Generators.Tests.csproj" />
     <Project Path="tests/Modulus.Analyzers.Tests/Modulus.Analyzers.Tests.csproj" />
+    <Project Path="tests/Modulus.Templates.Tests/Modulus.Templates.Tests.csproj" />
   </Folder>
 </Solution>
