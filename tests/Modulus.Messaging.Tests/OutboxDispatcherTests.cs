@@ -4,13 +4,14 @@ using Microsoft.Extensions.DependencyInjection;
 using Modulus.Messaging.Abstractions;
 using Modulus.Messaging.Outbox;
 using Modulus.Messaging.Tests.Fixtures;
+using Modulus.Messaging.Transports;
 using Shouldly;
 using Xunit;
 
 namespace Modulus.Messaging.Tests;
 
-// Drives the real IOutboxDispatcher (extracted from OutboxProcessor) for a single
-// synchronous dispatch pass — no BackgroundService lifetime to race against.
+// Drives the real IOutboxDispatcher for single synchronous dispatch passes against a
+// FakeMessageTransport — no BackgroundService lifetime, no broker, no waits.
 // Uses Sqlite in-memory because EfOutboxStore.MarkAsProcessed relies on
 // ExecuteUpdateAsync, which the EF Core InMemory provider does not support.
 public sealed class OutboxDispatcherTests : IDisposable
@@ -25,7 +26,9 @@ public sealed class OutboxDispatcherTests : IDisposable
 
     public void Dispose() => _connection.Dispose();
 
-    private ServiceProvider BuildProvider(TestOrderCreatedHandler? handler = null)
+    private ServiceProvider BuildProvider(
+        FakeMessageTransport transport,
+        Action<MessagingOptions>? configureOptions = null)
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -34,10 +37,11 @@ public sealed class OutboxDispatcherTests : IDisposable
         {
             options.Transport = Transport.InMemory;
             options.Assemblies.Add(typeof(TestOrderCreatedEvent).Assembly);
+            configureOptions?.Invoke(options);
         });
 
-        if (handler is not null)
-            services.AddSingleton<IIntegrationEventHandler<TestOrderCreatedEvent>>(handler);
+        // Last registration wins: the dispatcher publishes to the fake.
+        services.AddSingleton<IMessageTransport>(transport);
 
         var provider = services.BuildServiceProvider();
 
@@ -47,51 +51,47 @@ public sealed class OutboxDispatcherTests : IDisposable
         return provider;
     }
 
-    [Fact]
-    public async Task DispatchPending_PendingMessage_PublishesAndMarksProcessed()
+    private static async Task SeedEvent(ServiceProvider provider, int orderId = 77)
     {
-        var handler = new TestOrderCreatedHandler();
-        using var provider = BuildProvider(handler);
-
-        using (var seedScope = provider.CreateScope())
+        using var scope = provider.CreateScope();
+        var outboxStore = scope.ServiceProvider.GetRequiredService<IOutboxStore>();
+        await outboxStore.Save(new TestOrderCreatedEvent
         {
-            var outboxStore = seedScope.ServiceProvider.GetRequiredService<IOutboxStore>();
-            await outboxStore.Save(new TestOrderCreatedEvent
-            {
-                OrderId = 77,
-                CustomerName = "Outbox Test"
-            });
-        }
+            OrderId = orderId,
+            CustomerName = $"Customer {orderId}"
+        });
+    }
 
-        var busControl = provider.GetRequiredService<MassTransit.IBusControl>();
-        await busControl.StartAsync();
+    private static async Task<IReadOnlyList<Abstractions.OutboxMessage>> GetPending(ServiceProvider provider)
+    {
+        using var scope = provider.CreateScope();
+        var outboxStore = scope.ServiceProvider.GetRequiredService<IOutboxStore>();
+        return await outboxStore.GetPending(100, int.MaxValue);
+    }
 
-        try
-        {
-            var dispatcher = provider.GetRequiredService<IOutboxDispatcher>();
-            await dispatcher.DispatchPendingAsync();
+    [Fact]
+    public async Task DispatchPending_PendingMessage_PublishesEnvelopeAndMarksProcessed()
+    {
+        var transport = new FakeMessageTransport();
+        using var provider = BuildProvider(transport);
+        await SeedEvent(provider, orderId: 77);
 
-            await TestWait.WaitForConditionAsync(
-                () => handler.HandledEvents.Count == 1,
-                because: "the dispatched event should reach the handler");
+        var dispatcher = provider.GetRequiredService<IOutboxDispatcher>();
+        await dispatcher.DispatchPendingAsync();
 
-            handler.HandledEvents[0].OrderId.ShouldBe(77);
+        transport.Published.Count.ShouldBe(1);
+        transport.Published.TryPeek(out var envelope).ShouldBeTrue();
+        envelope!.MessageType.ShouldBe(typeof(TestOrderCreatedEvent).FullName);
+        envelope.MessageId.ShouldNotBe(Guid.Empty);
 
-            using var scope = provider.CreateScope();
-            var outboxStore = scope.ServiceProvider.GetRequiredService<IOutboxStore>();
-            var stillPending = await outboxStore.GetPending(100, int.MaxValue);
-            stillPending.ShouldBeEmpty();
-        }
-        finally
-        {
-            await busControl.StopAsync();
-        }
+        (await GetPending(provider)).ShouldBeEmpty();
     }
 
     [Fact]
     public async Task DispatchPending_UnknownEventType_SkipsAndLeavesPending()
     {
-        using var provider = BuildProvider();
+        var transport = new FakeMessageTransport();
+        using var provider = BuildProvider(transport);
 
         using (var seedScope = provider.CreateScope())
         {
@@ -109,16 +109,95 @@ public sealed class OutboxDispatcherTests : IDisposable
         var dispatcher = provider.GetRequiredService<IOutboxDispatcher>();
         await dispatcher.DispatchPendingAsync();
 
-        using var scope = provider.CreateScope();
-        var outboxStore = scope.ServiceProvider.GetRequiredService<IOutboxStore>();
-        var stillPending = await outboxStore.GetPending(100, int.MaxValue);
+        transport.Published.ShouldBeEmpty();
+        var stillPending = await GetPending(provider);
         stillPending.Count.ShouldBe(1);
         stillPending[0].Attempts.ShouldBe(0);
     }
 
     [Fact]
+    public async Task DispatchPending_TransportFails_MarksFailedWithErrorAndIncrementsAttempts()
+    {
+        var transport = new FakeMessageTransport
+        {
+            PublishFailure = new InvalidOperationException("broker unavailable"),
+        };
+        using var provider = BuildProvider(transport);
+        await SeedEvent(provider);
+
+        var dispatcher = provider.GetRequiredService<IOutboxDispatcher>();
+        await dispatcher.DispatchPendingAsync();
+
+        var stillPending = await GetPending(provider);
+        stillPending.Count.ShouldBe(1);
+        stillPending[0].Attempts.ShouldBe(1);
+        stillPending[0].LastError.ShouldBe("broker unavailable");
+    }
+
+    [Fact]
+    public async Task DispatchPending_TransportRecovers_RetriedMessageIsPublished()
+    {
+        var transport = new FakeMessageTransport
+        {
+            PublishFailure = new InvalidOperationException("transient"),
+        };
+        using var provider = BuildProvider(transport);
+        await SeedEvent(provider);
+
+        var dispatcher = provider.GetRequiredService<IOutboxDispatcher>();
+        await dispatcher.DispatchPendingAsync();
+
+        transport.PublishFailure = null;
+        await dispatcher.DispatchPendingAsync();
+
+        transport.Published.Count.ShouldBe(1);
+        (await GetPending(provider)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task DispatchPending_AttemptsAtThreshold_MessageNoLongerFetched()
+    {
+        var transport = new FakeMessageTransport
+        {
+            PublishFailure = new InvalidOperationException("permanent"),
+        };
+        using var provider = BuildProvider(transport, options =>
+        {
+            options.RetryPolicy.MaxAttempts = 2;
+        });
+        await SeedEvent(provider);
+
+        var dispatcher = provider.GetRequiredService<IOutboxDispatcher>();
+        await dispatcher.DispatchPendingAsync(); // attempt 1
+        await dispatcher.DispatchPendingAsync(); // attempt 2 -> dead-letter threshold
+
+        transport.PublishFailure = null;
+        await dispatcher.DispatchPendingAsync(); // no longer fetched: Attempts >= MaxAttempts
+
+        transport.Published.ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task DispatchPending_BatchSizeRespected_ProcessesOnlyBatch()
     {
+        var transport = new FakeMessageTransport();
+        using var provider = BuildProvider(transport, options => options.OutboxBatchSize = 2);
+
+        for (var i = 1; i <= 3; i++)
+            await SeedEvent(provider, orderId: i);
+
+        var dispatcher = provider.GetRequiredService<IOutboxDispatcher>();
+        await dispatcher.DispatchPendingAsync();
+
+        transport.Published.Count.ShouldBe(2);
+        (await GetPending(provider)).Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task DispatchPending_EndToEnd_InMemoryTransportDeliversToHandler()
+    {
+        // Full outbox -> transport -> consumer pipeline -> handler roundtrip using the
+        // real in-memory transport and hosted services.
         var handler = new TestOrderCreatedHandler();
         var services = new ServiceCollection();
         services.AddLogging();
@@ -127,36 +206,22 @@ public sealed class OutboxDispatcherTests : IDisposable
         {
             options.Transport = Transport.InMemory;
             options.Assemblies.Add(typeof(TestOrderCreatedEvent).Assembly);
-            options.OutboxBatchSize = 2;
         });
         services.AddSingleton<IIntegrationEventHandler<TestOrderCreatedEvent>>(handler);
-        using var provider = services.BuildServiceProvider();
 
-        using (var scope = provider.CreateScope())
+        using (var schemaProvider = services.BuildServiceProvider())
+        using (var scope = schemaProvider.CreateScope())
         {
-            var dbContext = scope.ServiceProvider.GetRequiredService<OutboxDbContext>();
-            dbContext.Database.EnsureCreated();
-            var outboxStore = scope.ServiceProvider.GetRequiredService<IOutboxStore>();
-            for (var i = 1; i <= 3; i++)
-                await outboxStore.Save(new TestOrderCreatedEvent { OrderId = i, CustomerName = $"C{i}" });
+            scope.ServiceProvider.GetRequiredService<OutboxDbContext>().Database.EnsureCreated();
         }
 
-        var busControl = provider.GetRequiredService<MassTransit.IBusControl>();
-        await busControl.StartAsync();
+        await using var harness = await MessagingTestHarness.StartAsync(services);
+        await SeedEvent(harness.Provider, orderId: 7);
 
-        try
-        {
-            var dispatcher = provider.GetRequiredService<IOutboxDispatcher>();
-            await dispatcher.DispatchPendingAsync();
+        var dispatcher = harness.Provider.GetRequiredService<IOutboxDispatcher>();
+        await dispatcher.DispatchPendingAsync();
 
-            using var scope = provider.CreateScope();
-            var outboxStore = scope.ServiceProvider.GetRequiredService<IOutboxStore>();
-            var stillPending = await outboxStore.GetPending(100, int.MaxValue);
-            stillPending.Count.ShouldBe(1);
-        }
-        finally
-        {
-            await busControl.StopAsync();
-        }
+        await TestWait.WaitForConditionAsync(() => handler.HandledEvents.Count == 1);
+        handler.HandledEvents[0].OrderId.ShouldBe(7);
     }
 }

@@ -1,14 +1,16 @@
 using System.Reflection;
-using GreenPipes;
-using MassTransit;
-using MassTransit.ExtensionsDependencyInjectionIntegration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Modulus.Messaging.Abstractions;
+using Modulus.Messaging.Dispatch;
 using Modulus.Messaging.Inbox;
+using Modulus.Messaging.InMemory;
 using Modulus.Messaging.Internals;
 using Modulus.Messaging.Outbox;
+using Modulus.Messaging.Serialization;
+using Modulus.Messaging.Transports;
 
 namespace Modulus.Messaging;
 
@@ -16,8 +18,8 @@ public static class ServiceCollectionExtensions
 {
     /// <summary>
     /// Registers the Modulus messaging infrastructure including the message bus, outbox processor,
-    /// inbox idempotency store, and consumer adapters discovered from the assemblies specified
-    /// in <see cref="MessagingOptions"/>.
+    /// inbox idempotency store, and the consumer pipeline for handlers discovered from the
+    /// assemblies specified in <see cref="MessagingOptions"/>.
     /// </summary>
     /// <remarks>
     /// This registers <see cref="IOutboxStore"/> and <see cref="IInboxStore"/> against the
@@ -25,6 +27,8 @@ public static class ServiceCollectionExtensions
     /// separately call <see cref="AddModulusOutbox(IServiceCollection, Action{DbContextOptionsBuilder})"/>
     /// and <see cref="AddModulusInbox(IServiceCollection, Action{DbContextOptionsBuilder})"/>
     /// to wire the database contexts, then apply the schema migrations.
+    /// Broker transports ship as separate packages: install ModulusKit.Messaging.RabbitMq or
+    /// ModulusKit.Messaging.AzureServiceBus and call its <c>AddModulus*Transport()</c> extension.
     /// </remarks>
     /// <param name="services">The service collection.</param>
     /// <param name="configure">A delegate to configure <see cref="MessagingOptions"/>.</param>
@@ -81,11 +85,19 @@ public static class ServiceCollectionExtensions
             throw new ArgumentOutOfRangeException(nameof(options), options.OutboxPollInterval,
                 "OutboxPollInterval must be at least 1 second.");
 
+        if (options.PrefetchCount is <= 0 or > 1000)
+            throw new ArgumentOutOfRangeException(nameof(options), options.PrefetchCount,
+                "PrefetchCount must be between 1 and 1000.");
+
         ValidateRetryPolicy(options.RetryPolicy, nameof(MessagingOptions.RetryPolicy));
         ValidateRetryPolicy(options.ConsumerRetry, nameof(MessagingOptions.ConsumerRetry));
+        ValidateTransportConfiguration(options);
 
         // Empty Assemblies is allowed: publish-only hosts use IMessageBus directly and need no consumers.
         services.AddSingleton(options);
+
+        var typeRegistry = new MessageTypeRegistry(options.Assemblies);
+        services.AddSingleton(typeRegistry);
 
         var handlerRegistrations = DiscoverHandlers(options.Assemblies);
 
@@ -94,26 +106,54 @@ public static class ServiceCollectionExtensions
             services.AddScoped(registration.HandlerInterface, registration.HandlerImplementation);
         }
 
-        services.AddMassTransit(busConfigurator =>
-        {
-            foreach (var registration in handlerRegistrations)
-            {
-                var adapterType = typeof(IdempotentConsumerAdapter<>)
-                    .MakeGenericType(registration.EventType);
+        var subscriptions = handlerRegistrations
+            .Select(registration => registration.EventType)
+            .Distinct()
+            .Select(eventType => new TransportSubscription(eventType, typeRegistry.GetName(eventType)))
+            .ToList();
+        services.AddSingleton(new TransportSubscriptionCatalog(subscriptions));
 
-                busConfigurator.AddConsumer(adapterType);
-            }
+        services.AddSingleton(CreateTransport);
+        services.AddSingleton<ConsumerDispatcher>();
 
-            ConfigureTransport(busConfigurator, options);
-        });
-
-        services.AddScoped<IMessageBus, MassTransitMessageBus>();
+        services.AddScoped<IMessageBus, TransportMessageBus>();
         services.AddScoped<IOutboxStore, EfOutboxStore>();
         services.AddScoped<IOutboxAdminStore, EfOutboxAdminStore>();
         services.AddSingleton<IOutboxDispatcher, OutboxDispatcher>();
+
+        // Consumer host first: its subscriptions must exist before the outbox processor's first
+        // dispatch pass (the in-memory transport drops messages published with no subscriber).
+        // Hosted services stop in reverse order, so shutdown stops the outbox first and then
+        // drains in-flight consumers.
+        services.AddHostedService<TransportConsumerHost>();
         services.AddHostedService<OutboxProcessor>();
 
         return services;
+    }
+
+    private static IMessageTransport CreateTransport(IServiceProvider provider)
+    {
+        var options = provider.GetRequiredService<MessagingOptions>();
+
+        if (options.Transport == Transport.InMemory)
+            return new InMemoryTransport(provider.GetRequiredService<ILogger<InMemoryTransport>>());
+
+        var factory = provider
+            .GetServices<ITransportFactory>()
+            .FirstOrDefault(candidate => candidate.Transport == options.Transport);
+
+        return factory is not null
+            ? factory.Create(provider, options)
+            : throw new InvalidOperationException(options.Transport switch
+            {
+                Transport.RabbitMq =>
+                    "No RabbitMQ transport is registered. Install the ModulusKit.Messaging.RabbitMq package " +
+                    "and call services.AddModulusRabbitMqTransport().",
+                Transport.AzureServiceBus =>
+                    "No Azure Service Bus transport is registered. Install the ModulusKit.Messaging.AzureServiceBus " +
+                    "package and call services.AddModulusAzureServiceBusTransport().",
+                _ => $"Unsupported transport type: {options.Transport}.",
+            });
     }
 
     /// <summary>
@@ -131,8 +171,7 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Registers <see cref="InboxDbContext"/> and <see cref="IInboxStore"/> with the specified
     /// database configuration. Required to enable consumer idempotency — without this call,
-    /// <see cref="Internals.IdempotentConsumerAdapter{TEvent}"/> falls through to direct handler
-    /// execution with no deduplication.
+    /// the consumer pipeline falls through to direct handler execution with no deduplication.
     /// </summary>
     public static IServiceCollection AddModulusInbox(
         this IServiceCollection services,
@@ -143,31 +182,17 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    private static void ConfigureTransport(
-        IServiceCollectionBusConfigurator busConfigurator,
-        MessagingOptions options)
+    private static void ValidateTransportConfiguration(MessagingOptions options)
     {
         switch (options.Transport)
         {
             case Transport.InMemory:
-                busConfigurator.UsingInMemory((context, cfg) =>
-                {
-                    ApplyRetryPolicy(cfg, options.ConsumerRetry);
-                    cfg.ConfigureEndpoints(context);
-                });
                 break;
 
             case Transport.RabbitMq:
                 if (string.IsNullOrWhiteSpace(options.ConnectionString))
                     throw new InvalidOperationException(
                         "ConnectionString is required for RabbitMQ transport.");
-
-                busConfigurator.UsingRabbitMq((context, cfg) =>
-                {
-                    cfg.Host(options.ConnectionString);
-                    ApplyRetryPolicy(cfg, options.ConsumerRetry);
-                    cfg.ConfigureEndpoints(context);
-                });
                 break;
 
             case Transport.AzureServiceBus:
@@ -183,22 +208,6 @@ public static class ServiceCollectionExtensions
                         "ConnectionString or Credential + FullyQualifiedNamespace is required for Azure Service Bus transport.");
                 }
 
-                busConfigurator.UsingAzureServiceBus((context, cfg) =>
-                {
-                    if (options.Credential is not null)
-                    {
-                        cfg.Host(options.FullyQualifiedNamespace!, h =>
-                        {
-                            h.TokenCredential = options.Credential;
-                        });
-                    }
-                    else
-                    {
-                        cfg.Host(options.ConnectionString);
-                    }
-                    ApplyRetryPolicy(cfg, options.ConsumerRetry);
-                    cfg.ConfigureEndpoints(context);
-                });
                 break;
 
             default:
@@ -263,21 +272,6 @@ public static class ServiceCollectionExtensions
         if (retryPolicy.MaxInterval < retryPolicy.InitialInterval)
             throw new ArgumentOutOfRangeException(optionName, retryPolicy.MaxInterval,
                 $"{optionName}.MaxInterval must be greater than or equal to {optionName}.InitialInterval.");
-    }
-
-    private static void ApplyRetryPolicy(IBusFactoryConfigurator cfg, RetryPolicyOptions retryPolicy)
-    {
-        // MaxAttempts in our options includes the original attempt; MassTransit's Exponential
-        // retryCount is the number of *additional* retries after the first attempt.
-        var additionalRetries = Math.Max(0, retryPolicy.MaxAttempts - 1);
-        if (additionalRetries == 0)
-            return;
-
-        cfg.UseMessageRetry(r => r.Exponential(
-            additionalRetries,
-            retryPolicy.InitialInterval,
-            retryPolicy.MaxInterval,
-            retryPolicy.IntervalIncrement));
     }
 
     private sealed record HandlerRegistration(

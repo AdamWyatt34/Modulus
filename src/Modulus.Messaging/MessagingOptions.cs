@@ -63,8 +63,9 @@ public sealed class MessagingOptions
     public RetryPolicyOptions RetryPolicy { get; set; } = new();
 
     /// <summary>
-    /// Gets or sets the retry policy applied at the MassTransit consumer endpoint when a handler throws,
-    /// independent of <see cref="RetryPolicy"/>. (With the in-memory transport the two layers can compound.)
+    /// Gets or sets the in-process retry policy applied by the consumer pipeline when a handler
+    /// throws, independent of <see cref="RetryPolicy"/>. When all attempts are exhausted the
+    /// message is dead-lettered on the transport.
     /// </summary>
     public RetryPolicyOptions ConsumerRetry { get; set; } = new();
 }

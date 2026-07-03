@@ -94,6 +94,28 @@ public class ConfigurationBindingTests
     }
 
     [Fact]
+    public void Bind_EndpointAndTransportTuning_FromConfiguration()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+
+        var configuration = BuildConfiguration(new Dictionary<string, string?>
+        {
+            ["Messaging:EndpointName"] = "checkout-service",
+            ["Messaging:PrefetchCount"] = "25",
+            ["Messaging:AutoProvision"] = "false",
+        });
+
+        services.AddModulusMessaging(configuration, o =>
+            o.Assemblies.Add(typeof(TestOrderCreatedEvent).Assembly));
+
+        var options = services.BuildServiceProvider().GetRequiredService<MessagingOptions>();
+        options.EndpointName.ShouldBe("checkout-service");
+        options.PrefetchCount.ShouldBe(25);
+        options.AutoProvision.ShouldBeFalse();
+    }
+
+    [Fact]
     public void Bind_InvalidTransportName_Throws()
     {
         var services = new ServiceCollection();

@@ -1,19 +1,23 @@
 using System.Reflection;
+using System.Text;
 using System.Text.Json;
-using MassTransit;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Modulus.Messaging.Abstractions;
 using Modulus.Messaging.Internals;
+using Modulus.Messaging.Serialization;
+using Modulus.Messaging.Transports;
 
 namespace Modulus.Messaging.Outbox;
 
 internal sealed class OutboxDispatcher(
     IServiceScopeFactory scopeFactory,
-    IBus bus,
+    IMessageTransport transport,
+    MessageTypeRegistry typeRegistry,
     ILogger<OutboxDispatcher> logger,
     MessagingOptions options) : IOutboxDispatcher
 {
+    // Keyed by AssemblyQualifiedName for compatibility with rows EfOutboxStore already wrote.
     private readonly Dictionary<string, Type> _allowedTypes = BuildAllowlist(options.Assemblies);
 
     private static Dictionary<string, Type> BuildAllowlist(IEnumerable<Assembly> assemblies)
@@ -66,8 +70,9 @@ internal sealed class OutboxDispatcher(
                     continue;
                 }
 
+                // Deserialization doubles as payload validation before the bytes go on the wire.
                 var @event = JsonSerializer.Deserialize(message.Payload, eventType);
-                if (@event is null)
+                if (@event is not IIntegrationEvent integrationEvent)
                 {
                     logger.LogWarning(
                         "Failed to deserialize outbox message {MessageId}",
@@ -75,7 +80,14 @@ internal sealed class OutboxDispatcher(
                     continue;
                 }
 
-                await bus.Publish(@event, eventType, cancellationToken).ConfigureAwait(false);
+                var envelope = new TransportEnvelope(
+                    typeRegistry.GetName(eventType),
+                    integrationEvent.EventId,
+                    integrationEvent.CorrelationId,
+                    integrationEvent.OccurredOn,
+                    Encoding.UTF8.GetBytes(message.Payload));
+
+                await transport.PublishAsync(envelope, cancellationToken).ConfigureAwait(false);
                 processedIds.Add(message.Id);
             }
             catch (Exception ex)

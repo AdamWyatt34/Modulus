@@ -2,8 +2,8 @@
 
   <PropertyGroup>
     <PackageId>ModulusKit.Messaging</PackageId>
-    <Description>Messaging library for .NET modular monoliths with MassTransit integration, supporting RabbitMQ, Azure Service Bus, and in-memory transports with transactional outbox.</Description>
-    <PackageTags>messaging;masstransit;rabbitmq;azure-service-bus;outbox</PackageTags>
+    <Description>Messaging library for .NET modular monoliths with transactional outbox/inbox, consumer retry, and an in-memory transport. RabbitMQ and Azure Service Bus transports ship as ModulusKit.Messaging.RabbitMq and ModulusKit.Messaging.AzureServiceBus.</Description>
+    <PackageTags>messaging;rabbitmq;azure-service-bus;outbox;inbox;modular-monolith</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <MinVerTagPrefix>messaging-v</MinVerTagPrefix>
     <MinVerDefaultPreReleaseIdentifiers>alpha.0</MinVerDefaultPreReleaseIdentifiers>
@@ -28,17 +28,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="MassTransit" />
-    <PackageReference Include="MassTransit.Extensions.DependencyInjection" />
-    <PackageReference Include="MassTransit.RabbitMQ" />
-    <PackageReference Include="MassTransit.Azure.ServiceBus.Core" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
+    <!-- Kept so MessagingOptions.Credential (TokenCredential) stays on the core options type. -->
     <PackageReference Include="Azure.Core" />
-    <!-- Pin Newtonsoft.Json to a patched version (transitive via MassTransit 7.x). -->
-    <PackageReference Include="Newtonsoft.Json" />
   </ItemGroup>
 
 </Project>
