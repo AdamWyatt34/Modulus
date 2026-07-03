@@ -1,0 +1,42 @@
+using System.Diagnostics.CodeAnalysis;
+using Microsoft.EntityFrameworkCore;
+using Modulus.Mediator.Abstractions;
+using SampleApp.BuildingBlocks.Infrastructure.Persistence;
+
+namespace SampleApp.BuildingBlocks.Infrastructure.Outbox;
+
+/// <summary>
+/// Decorator that ensures a domain event handler processes each event at most once.
+/// Checks the OutboxMessageConsumer table before executing the inner handler.
+/// </summary>
+[SuppressMessage("Naming", "CA1711:Identifiers should not have incorrect suffix")]
+public sealed class IdempotentDomainEventHandler<TEvent>(
+    IDomainEventHandler<TEvent> innerHandler,
+    BaseDbContext dbContext) : IDomainEventHandler<TEvent>
+    where TEvent : IDomainEvent
+{
+    public async Task Handle(TEvent domainEvent, CancellationToken cancellationToken = default)
+    {
+        var consumerName = innerHandler.GetType().Name;
+
+        var alreadyProcessed = await dbContext.Set<OutboxMessageConsumer>()
+            .AnyAsync(
+                c => c.OutboxMessageId == domainEvent.Id && c.Name == consumerName,
+                cancellationToken);
+
+        if (alreadyProcessed)
+        {
+            return;
+        }
+
+        await innerHandler.Handle(domainEvent, cancellationToken);
+
+        dbContext.Set<OutboxMessageConsumer>().Add(new OutboxMessageConsumer
+        {
+            OutboxMessageId = domainEvent.Id,
+            Name = consumerName,
+        });
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+}

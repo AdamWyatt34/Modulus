@@ -1,0 +1,12 @@
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace SampleApp.BuildingBlocks.Infrastructure.Registration;
+
+public interface IModuleRegistration
+{
+    static abstract IServiceCollection ConfigureServices(IServiceCollection services, IConfiguration configuration);
+
+    static abstract IEndpointRouteBuilder ConfigureEndpoints(IEndpointRouteBuilder endpoints);
+}

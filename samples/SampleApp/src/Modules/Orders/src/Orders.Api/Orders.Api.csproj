@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Orders.Application\Orders.Application.csproj" />
+    <ProjectReference Include="..\..\..\..\BuildingBlocks.Infrastructure\BuildingBlocks.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- NuGet equivalent: <PackageReference Include="ModulusKit.Mediator.Abstractions" /> -->
+    <ProjectReference Include="..\..\..\..\..\..\..\src\Modulus.Mediator.Abstractions\Modulus.Mediator.Abstractions.csproj" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+</Project>

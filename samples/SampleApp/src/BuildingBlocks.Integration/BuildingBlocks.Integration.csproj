@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <!-- NuGet equivalent: <PackageReference Include="ModulusKit.Messaging.Abstractions" /> -->
+    <ProjectReference Include="..\..\..\..\src\Modulus.Messaging.Abstractions\Modulus.Messaging.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,46 @@
+<Solution>
+  <Folder Name="/src/">
+    <Folder Name="/src/BuildingBlocks/">
+      <Project Path="src/BuildingBlocks.Domain/BuildingBlocks.Domain.csproj" />
+      <Project Path="src/BuildingBlocks.Application/BuildingBlocks.Application.csproj" />
+      <Project Path="src/BuildingBlocks.Infrastructure/BuildingBlocks.Infrastructure.csproj" />
+      <Project Path="src/BuildingBlocks.Integration/BuildingBlocks.Integration.csproj" />
+    </Folder>
+    <Project Path="src/SampleApp.WebApi/SampleApp.WebApi.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/" />
+  <Folder Name="/src/Modules/Notifications/">
+    <Project Path="src/Modules/Notifications/src/Notifications.Api/Notifications.Api.csproj" />
+    <Project Path="src/Modules/Notifications/src/Notifications.Application/Notifications.Application.csproj" />
+    <Project Path="src/Modules/Notifications/src/Notifications.Domain/Notifications.Domain.csproj" />
+    <Project Path="src/Modules/Notifications/src/Notifications.Infrastructure/Notifications.Infrastructure.csproj" />
+    <Project Path="src/Modules/Notifications/src/Notifications.Integration/Notifications.Integration.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Orders/">
+    <Project Path="src/BuildingBlocks.Application/BuildingBlocks.Application.csproj" />
+    <Project Path="src/BuildingBlocks.Domain/BuildingBlocks.Domain.csproj" />
+    <Project Path="src/BuildingBlocks.Infrastructure/BuildingBlocks.Infrastructure.csproj" />
+    <Project Path="src/BuildingBlocks.Integration/BuildingBlocks.Integration.csproj" />
+    <Project Path="src/Modules/Orders/src/Orders.Api/Orders.Api.csproj" />
+    <Project Path="src/Modules/Orders/src/Orders.Application/Orders.Application.csproj" />
+    <Project Path="src/Modules/Orders/src/Orders.Domain/Orders.Domain.csproj" />
+    <Project Path="src/Modules/Orders/src/Orders.Infrastructure/Orders.Infrastructure.csproj" />
+    <Project Path="src/Modules/Orders/src/Orders.Integration/Orders.Integration.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SampleApp.Tests.Common/SampleApp.Tests.Common.csproj" />
+    <Project Path="tests/SampleApp.Tests.Architecture/SampleApp.Tests.Architecture.csproj" />
+    <Project Path="tests/SampleApp.Tests.Integration/SampleApp.Tests.Integration.csproj" />
+  </Folder>
+  <Folder Name="/tests/Modules/" />
+  <Folder Name="/tests/Modules/Notifications/">
+    <Project Path="src/Modules/Notifications/tests/Notifications.Tests.Architecture/Notifications.Tests.Architecture.csproj" />
+    <Project Path="src/Modules/Notifications/tests/Notifications.Tests.Integration/Notifications.Tests.Integration.csproj" />
+    <Project Path="src/Modules/Notifications/tests/Notifications.Tests.Unit/Notifications.Tests.Unit.csproj" />
+  </Folder>
+  <Folder Name="/tests/Modules/Orders/">
+    <Project Path="src/Modules/Orders/tests/Orders.Tests.Architecture/Orders.Tests.Architecture.csproj" />
+    <Project Path="src/Modules/Orders/tests/Orders.Tests.Integration/Orders.Tests.Integration.csproj" />
+    <Project Path="src/Modules/Orders/tests/Orders.Tests.Unit/Orders.Tests.Unit.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,8 @@
+namespace SampleApp.BuildingBlocks.Domain.Entities;
+
+public interface IAuditable
+{
+    DateTime CreatedAtUtc { get; set; }
+
+    DateTime? UpdatedAtUtc { get; set; }
+}

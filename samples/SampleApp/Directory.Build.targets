@@ -1,0 +1,9 @@
+<Project>
+
+  <!--
+    Intentionally (almost) empty. This file stops MSBuild's upward directory walk so the
+    Modulus repository's root Directory.Build.targets does not leak into the sample.
+    A real application scaffolded outside this repository does not need this file.
+  -->
+
+</Project>

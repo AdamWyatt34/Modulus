@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\BuildingBlocks.Domain\BuildingBlocks.Domain.csproj" />
+    <!-- IOrderRepository extends the shared IRepository<,> abstraction from BuildingBlocks.Application -->
+    <ProjectReference Include="..\..\..\..\BuildingBlocks.Application\BuildingBlocks.Application.csproj" />
+  </ItemGroup>
+
+</Project>

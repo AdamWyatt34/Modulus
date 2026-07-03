@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <!-- NuGet equivalent: <PackageReference Include="ModulusKit.Mediator.Abstractions" /> -->
+    <ProjectReference Include="..\..\..\..\src\Modulus.Mediator.Abstractions\Modulus.Mediator.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

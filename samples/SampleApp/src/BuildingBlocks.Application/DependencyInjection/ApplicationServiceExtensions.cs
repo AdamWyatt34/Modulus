@@ -1,0 +1,22 @@
+using Microsoft.Extensions.DependencyInjection;
+using Modulus.Mediator;
+using Modulus.Mediator.Behaviors;
+
+namespace SampleApp.BuildingBlocks.Application.DependencyInjection;
+
+public static class ApplicationServiceExtensions
+{
+    public static IServiceCollection AddApplicationServices(
+        this IServiceCollection services)
+    {
+        services.AddModulusMediator();
+
+        services.AddPipelineBehavior(typeof(UnhandledExceptionBehavior<,>));
+        services.AddPipelineBehavior(typeof(LoggingBehavior<,>));
+        services.AddPipelineBehavior(typeof(MetricsBehavior<,>));
+        services.AddPipelineBehavior(typeof(ValidationBehavior<,>));
+        services.AddPipelineBehavior(typeof(UnitOfWorkBehavior<,>));
+
+        return services;
+    }
+}

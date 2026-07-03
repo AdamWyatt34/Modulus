@@ -1,0 +1,34 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+*.DotSettings.user
+
+## IDE
+.vs/
+.idea/
+*.swp
+
+## Test results
+TestResults/
+
+## Local SQLite databases created at runtime
+*.db
+*.db-shm
+*.db-wal
+
+## OS files
+Thumbs.db
+.DS_Store
+
+## Local settings
+appsettings.Development.json
+appsettings.Local.json
+
+## Secrets and certificates
+*.pfx
+*.key
+*.pem
+*.env
+.env.*

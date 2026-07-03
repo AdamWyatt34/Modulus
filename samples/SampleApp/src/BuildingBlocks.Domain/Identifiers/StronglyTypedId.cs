@@ -1,0 +1,13 @@
+using System.Diagnostics.CodeAnalysis;
+
+namespace SampleApp.BuildingBlocks.Domain.Identifiers;
+
+[SuppressMessage("Design", "CA1036:Override methods on comparable types")]
+public abstract record StronglyTypedId<T>(Guid Value)
+    : IComparable<T>
+    where T : StronglyTypedId<T>
+{
+    public override string ToString() => Value.ToString();
+
+    public int CompareTo(T? other) => other is null ? 1 : Value.CompareTo(other.Value);
+}
