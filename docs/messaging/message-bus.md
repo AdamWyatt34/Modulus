@@ -4,6 +4,7 @@ The `IMessageBus` interface is the single entry point for publishing integration
 
 ## IMessageBus Interface
 
+<!-- verify -->
 ```csharp
 public interface IMessageBus
 {

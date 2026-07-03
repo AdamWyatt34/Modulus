@@ -6,6 +6,7 @@ Domain events represent something meaningful that happened within a module's dom
 
 Every domain event implements `IDomainEvent`:
 
+<!-- verify -->
 ```csharp
 public interface IDomainEvent
 {
@@ -23,6 +24,7 @@ public interface IDomainEvent
 
 Domain events are typically defined in the Domain layer of a module. Use records for immutability and value equality:
 
+<!-- verify -->
 ```csharp
 public sealed record OrderPlacedEvent(
     Guid OrderId,
@@ -59,6 +61,7 @@ public sealed record OrderStatusChangedEvent(
 ::: tip Use a base record for convenience
 If you find yourself repeating the `Id` and `OccurredOnUtc` boilerplate, consider creating a base record in your SharedKernel:
 
+<!-- verify -->
 ```csharp
 public abstract record DomainEventBase : IDomainEvent
 {
@@ -78,16 +81,17 @@ public sealed record OrderPlacedEvent(
 
 Each handler implements `IDomainEventHandler<TEvent>`:
 
+<!-- verify -->
 ```csharp
 public interface IDomainEventHandler<in TEvent> where TEvent : IDomainEvent
 {
-    Task Handle(TEvent domainEvent, CancellationToken cancellationToken);
+    Task Handle(TEvent domainEvent, CancellationToken cancellationToken = default);
 }
 ```
 
 ## Handling Domain Events
 
-Handlers are placed in the Application layer and are auto-discovered by Scrutor when you call `AddModulusMediator(assemblies)`.
+Handlers are placed in the Application layer and are auto-registered by the source-generated `AddModulusHandlers()` extension method.
 
 ### Example: Send a Notification When an Order Is Placed
 

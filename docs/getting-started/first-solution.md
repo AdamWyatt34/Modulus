@@ -168,10 +168,10 @@ namespace EShop.Modules.Catalog.Application.Products.Commands.CreateProduct;
 
 public class CreateProductHandler : ICommandHandler<CreateProduct, Guid>
 {
-    private readonly IRepository<Product> _repository;
+    private readonly IRepository<Product, Guid> _repository;
     private readonly IUnitOfWork _unitOfWork;
 
-    public CreateProductHandler(IRepository<Product> repository, IUnitOfWork unitOfWork)
+    public CreateProductHandler(IRepository<Product, Guid> repository, IUnitOfWork unitOfWork)
     {
         _repository = repository;
         _unitOfWork = unitOfWork;
@@ -184,7 +184,7 @@ public class CreateProductHandler : ICommandHandler<CreateProduct, Guid>
         var product = Product.Create(command.Name, command.Price);
 
         await _repository.AddAsync(product, cancellationToken);
-        await _unitOfWork.CommitAsync(cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return Result<Guid>.Success(product.Id);
     }
@@ -198,9 +198,9 @@ namespace EShop.Modules.Catalog.Application.Products.Queries.GetProductById;
 
 public class GetProductByIdHandler : IQueryHandler<GetProductById, ProductDto>
 {
-    private readonly IRepository<Product> _repository;
+    private readonly IRepository<Product, Guid> _repository;
 
-    public GetProductByIdHandler(IRepository<Product> repository)
+    public GetProductByIdHandler(IRepository<Product, Guid> repository)
     {
         _repository = repository;
     }
@@ -213,7 +213,7 @@ public class GetProductByIdHandler : IQueryHandler<GetProductById, ProductDto>
 
         if (product is null)
         {
-            return Result<ProductDto>.Failure("Product.NotFound", "Product not found.");
+            return Error.NotFound("Product.NotFound", "Product not found.");
         }
 
         return Result<ProductDto>.Success(new ProductDto(
@@ -225,7 +225,7 @@ public class GetProductByIdHandler : IQueryHandler<GetProductById, ProductDto>
 ```
 
 ::: warning Result pattern
-All handlers return `Result<T>` rather than throwing exceptions for expected failure cases. Use `Result<T>.Success(value)` for the happy path and `Result<T>.Failure(code, message)` for known errors. The pipeline and endpoint infrastructure handle the mapping to appropriate HTTP status codes.
+All handlers return `Result<T>` rather than throwing exceptions for expected failure cases. Use `Result<T>.Success(value)` for the happy path and return an `Error` factory value (e.g. `Error.NotFound(code, message)`) for known errors -- it converts implicitly to `Result<T>`. The pipeline and endpoint infrastructure handle the mapping to appropriate HTTP status codes.
 :::
 
 ## Step 8 -- Run the Solution

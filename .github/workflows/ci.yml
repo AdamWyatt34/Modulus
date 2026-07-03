@@ -125,6 +125,25 @@ jobs:
       - name: Test (E2E)
         run: dotnet test --no-build --configuration Release --verbosity normal --filter "Category=E2E"
 
+  docs-snippets:
+    # Compiles the <!-- verify -->-marked C# snippets in docs/ against the current source,
+    # catching stale APIs before users do.
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Validate docs snippets
+        shell: pwsh
+        run: ./scripts/Validate-DocsSnippets.ps1
+
   sample-build:
     # Keeps samples/SampleApp (scaffolded by the CLI, wired to the source projects via
     # ProjectReference) building against the current library code. Not part of the

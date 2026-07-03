@@ -14,6 +14,7 @@ public interface ICommand;
 
 **Example -- delete a product:**
 
+<!-- verify -->
 ```csharp
 public sealed record DeleteProductCommand(Guid ProductId) : ICommand;
 ```
@@ -28,6 +29,7 @@ public interface ICommand<TResult>;
 
 **Example -- create a product and return its ID:**
 
+<!-- verify -->
 ```csharp
 public sealed record CreateProductCommand(
     string Name,
@@ -68,10 +70,11 @@ Every command and query needs a corresponding handler. Handlers contain the actu
 
 Handles commands that return `Result` (no value):
 
+<!-- verify -->
 ```csharp
 public interface ICommandHandler<in TCommand> where TCommand : ICommand
 {
-    Task<Result> Handle(TCommand command, CancellationToken cancellationToken);
+    Task<Result> Handle(TCommand command, CancellationToken cancellationToken = default);
 }
 ```
 
@@ -111,10 +114,11 @@ public sealed class DeleteProductCommandHandler : ICommandHandler<DeleteProductC
 
 Handles commands that return `Result<TResult>`:
 
+<!-- verify -->
 ```csharp
 public interface ICommandHandler<in TCommand, TResult> where TCommand : ICommand<TResult>
 {
-    Task<Result<TResult>> Handle(TCommand command, CancellationToken cancellationToken);
+    Task<Result<TResult>> Handle(TCommand command, CancellationToken cancellationToken = default);
 }
 ```
 
@@ -157,10 +161,11 @@ public sealed class CreateProductCommandHandler
 
 Handles queries that return `Result<TResult>`:
 
+<!-- verify -->
 ```csharp
 public interface IQueryHandler<in TQuery, TResult> where TQuery : IQuery<TResult>
 {
-    Task<Result<TResult>> Handle(TQuery query, CancellationToken cancellationToken);
+    Task<Result<TResult>> Handle(TQuery query, CancellationToken cancellationToken = default);
 }
 ```
 
@@ -250,7 +255,7 @@ public static class ProductEndpoints
 
 ## Handler Auto-Discovery
 
-When you call `AddModulusMediator(assemblies)`, the mediator uses [Scrutor](https://github.com/khellang/Scrutor) to scan the provided assemblies and automatically register all implementations of:
+Handler registration is source-generated: the `ModulusKit.Generators` package produces an `AddModulusHandlers()` extension method at compile time that explicitly registers all implementations of:
 
 - `ICommandHandler<TCommand>`
 - `ICommandHandler<TCommand, TResult>`
@@ -261,7 +266,7 @@ When you call `AddModulusMediator(assemblies)`, the mediator uses [Scrutor](http
 Handlers are registered with **scoped** lifetime by default, so they participate in the same DI scope as your DbContext and other scoped services.
 
 ::: info No manual registration needed
-You do not need to register handlers individually. Just ensure the assembly containing your handlers is passed to `AddModulusMediator()`. Scrutor finds and registers them automatically.
+You do not need to register handlers individually. Just call the source-generated `AddModulusHandlers()` from each module's registration -- the generator finds and registers them at compile time.
 :::
 
 ## Best Practices

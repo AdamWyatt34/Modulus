@@ -61,6 +61,7 @@ The inbox tracks processing at the `(eventId, handlerName)` level. If an event h
 
 The `IInboxStore` interface defines the contract for inbox persistence:
 
+<!-- verify -->
 ```csharp
 public interface IInboxStore
 {
@@ -88,13 +89,14 @@ public interface IInboxStore
 
 Each incoming event is stored as an `InboxMessage`:
 
+<!-- verify -->
 ```csharp
-public class InboxMessage
+public sealed class InboxMessage
 {
-    public Guid Id { get; set; }
-    public string Type { get; set; }
-    public string Content { get; set; }
-    public DateTime OccurredOnUtc { get; set; }
+    public required Guid Id { get; init; }
+    public required string Type { get; init; }
+    public required string Content { get; init; }
+    public required DateTime OccurredOnUtc { get; init; }
     public DateTime? ProcessedOnUtc { get; set; }
 }
 ```
@@ -111,11 +113,12 @@ public class InboxMessage
 
 Per-handler tracking is stored in the `InboxMessageConsumer` table with a composite primary key:
 
+<!-- verify -->
 ```csharp
-public class InboxMessageConsumer
+public sealed class InboxMessageConsumer
 {
-    public Guid InboxMessageId { get; set; }
-    public string Name { get; set; }
+    public required Guid InboxMessageId { get; init; }
+    public required string Name { get; init; }
 }
 ```
 
@@ -186,9 +189,11 @@ This race-safe behavior ensures correctness without requiring distributed locks.
 
 To enable the inbox pattern, register the inbox database context and store:
 
+<!-- verify -->
 ```csharp
 // Registers InboxDbContext and the EF Core inbox store
-builder.Services.AddModulusInbox(o => o.UseSqlServer(connectionString));
+builder.Services.AddModulusInbox(o =>
+    o.UseSqlServer(builder.Configuration.GetConnectionString("Database")));
 ```
 
 That is all. The `ConsumerDispatcher` detects the registered `IInboxStore` and activates deduplication for all handlers automatically.

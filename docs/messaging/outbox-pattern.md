@@ -54,33 +54,39 @@ sequenceDiagram
 
 The `IOutboxStore` interface defines the contract for outbox persistence:
 
+<!-- verify -->
 ```csharp
 public interface IOutboxStore
 {
-    Task Save(IIntegrationEvent @event);
-    Task<IReadOnlyList<OutboxMessage>> GetPending(int batchSize);
-    Task MarkAsProcessed(IEnumerable<Guid> ids);
+    Task Save(IIntegrationEvent @event, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<OutboxMessage>> GetPending(int batchSize, int maxAttempts, CancellationToken cancellationToken = default);
+    Task MarkAsProcessed(IEnumerable<Guid> ids, CancellationToken cancellationToken = default);
+    Task MarkAsFailed(Guid messageId, string error, CancellationToken cancellationToken = default);
 }
 ```
 
 | Method | Description |
 |---|---|
 | `Save` | Serializes and saves an integration event as an `OutboxMessage`. |
-| `GetPending` | Retrieves up to `batchSize` unprocessed messages, ordered by creation time. |
+| `GetPending` | Retrieves up to `batchSize` unprocessed messages whose attempt count is below `maxAttempts`, ordered by creation time. Dead-lettered rows are excluded so they do not starve newer rows. |
 | `MarkAsProcessed` | Marks the specified messages as processed so they are not picked up again. |
+| `MarkAsFailed` | Increments a message's attempt counter and records the failure message. |
 
 ## OutboxMessage Model
 
 Each outbox entry is stored as an `OutboxMessage`:
 
+<!-- verify -->
 ```csharp
-public class OutboxMessage
+public sealed class OutboxMessage
 {
-    public Guid Id { get; set; }
-    public string EventType { get; set; }
-    public string Payload { get; set; }
-    public DateTime CreatedAt { get; set; }
+    public required Guid Id { get; init; }
+    public required string EventType { get; init; }
+    public required string Payload { get; init; }
+    public required DateTime CreatedAt { get; init; }
     public DateTime? ProcessedAt { get; set; }
+    public int Attempts { get; set; }
+    public string? LastError { get; set; }
 }
 ```
 
@@ -91,6 +97,8 @@ public class OutboxMessage
 | `Payload` | `string` | JSON-serialized event data. |
 | `CreatedAt` | `DateTime` | When the outbox message was created. |
 | `ProcessedAt` | `DateTime?` | When the message was successfully published. `null` while pending. |
+| `Attempts` | `int` | Number of failed publish attempts. Once it reaches `RetryPolicy.MaxAttempts` the message is dead-lettered. |
+| `LastError` | `string?` | Error message from the most recent failed publish attempt. |
 
 ## EfOutboxStore
 
@@ -122,6 +130,7 @@ The `OutboxProcessor` is a `BackgroundService` that runs continuously in your ap
 
 Control the polling interval and batch size through `MessagingOptions`:
 
+<!-- verify -->
 ```csharp
 builder.Services.AddModulusRabbitMqTransport();
 builder.Services.AddModulusMessaging(options =>

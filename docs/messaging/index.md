@@ -39,6 +39,7 @@ scaffolds into `appsettings.json`:
 }
 ```
 
+<!-- verify -->
 ```csharp
 using Modulus.Messaging;
 using Modulus.Messaging.RabbitMq;
@@ -71,6 +72,7 @@ builder.Services.AddModulusMessaging(builder.Configuration, options =>
 
 Or configure everything imperatively without a configuration section:
 
+<!-- verify -->
 ```csharp
 builder.Services.AddModulusRabbitMqTransport();
 builder.Services.AddModulusMessaging(options =>

@@ -32,8 +32,10 @@ Reference `ModulusKit.Mediator.Abstractions` in your Domain and Application laye
 
 Register the mediator and pipeline behaviors in your host project's `Program.cs` or composition root:
 
+<!-- verify -->
 ```csharp
 using Modulus.Mediator;
+using Modulus.Mediator.Behaviors;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -58,6 +60,7 @@ Handler registration is automatic -- the `ModulusKit.Generators` package produce
 
 The `IMediator` interface is the single entry point for dispatching commands, queries, streaming queries, and domain events:
 
+<!-- verify -->
 ```csharp
 public interface IMediator
 {

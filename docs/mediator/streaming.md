@@ -223,7 +223,7 @@ Use `IQuery<T>` when the result set fits comfortably in memory and you want the 
 
 ## Handler Auto-Discovery
 
-Like all other handler types, streaming query handlers are auto-discovered by Scrutor when you call `AddModulusMediator(assemblies)`. You do not need to register them manually.
+Like all other handler types, streaming query handlers are auto-registered by the source-generated `AddModulusHandlers()` extension method. You do not need to register them manually.
 
 ## See Also
 

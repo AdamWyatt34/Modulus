@@ -8,8 +8,10 @@ Pipeline behaviors wrap command and query handlers with cross-cutting concerns l
 
 Every pipeline behavior implements `IPipelineBehavior<TRequest, TResponse>`:
 
+<!-- verify -->
 ```csharp
-public interface IPipelineBehavior<TRequest, TResponse>
+public interface IPipelineBehavior<in TRequest, TResponse>
+    where TRequest : notnull
 {
     Task<TResponse> Handle(
         TRequest request,
@@ -24,6 +26,7 @@ public interface IPipelineBehavior<TRequest, TResponse>
 
 ### RequestHandlerDelegate
 
+<!-- verify -->
 ```csharp
 public delegate Task<TResponse> RequestHandlerDelegate<TResponse>();
 ```
@@ -171,7 +174,7 @@ public sealed class CreateProductCommandValidator
 ```
 
 ::: info Validators are auto-discovered
-When you call `AddModulusMediator(assemblies)`, all `AbstractValidator<T>` implementations in those assemblies are registered automatically. You do not need to register them manually.
+The source-generated `AddModulusHandlers()` extension registers all `AbstractValidator<T>` implementations in the module automatically. You do not need to register them manually.
 :::
 
 ### 4. MetricsBehavior
@@ -193,6 +196,7 @@ services.AddPipelineBehavior(typeof(MetricsBehavior<,>));
 
 ## Recommended Registration Order
 
+<!-- verify -->
 ```csharp
 // Program.cs or module registration
 services.AddPipelineBehavior(typeof(UnhandledExceptionBehavior<,>));  // Outermost: catch all exceptions
@@ -257,7 +261,11 @@ Notice the `where TRequest : ICommand` constraint. This ensures the behavior onl
 
 ### Example: Caching Behavior (Queries Only)
 
+<!-- verify -->
 ```csharp
+using System.Text.Json;
+using Microsoft.Extensions.Caching.Distributed;
+
 public interface ICacheable
 {
     string CacheKey { get; }

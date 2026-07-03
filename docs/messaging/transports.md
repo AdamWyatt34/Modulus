@@ -43,6 +43,7 @@ The recommended setup binds the `Messaging` section from `appsettings.json` -- t
 
 The RabbitMQ connection string format is `amqp://user:pass@host:5672/vhost` (for local development against the Docker default broker: `amqp://guest:guest@localhost:5672`). Keep real credentials out of `appsettings.json` -- supply them via user secrets or environment variables, e.g. `Messaging__ConnectionString`.
 
+<!-- verify -->
 ```csharp
 builder.Services.AddModulusRabbitMqTransport();
 builder.Services.AddModulusMessaging(builder.Configuration, options =>
@@ -57,6 +58,7 @@ Everything can also be configured imperatively:
 
 :::code-group
 
+<!-- verify -->
 ```csharp [InMemory]
 builder.Services.AddModulusMessaging(options =>
 {
@@ -66,6 +68,7 @@ builder.Services.AddModulusMessaging(options =>
 });
 ```
 
+<!-- verify -->
 ```csharp [RabbitMQ]
 builder.Services.AddModulusRabbitMqTransport();
 builder.Services.AddModulusMessaging(options =>
@@ -76,6 +79,7 @@ builder.Services.AddModulusMessaging(options =>
 });
 ```
 
+<!-- verify -->
 ```csharp [Azure Service Bus]
 builder.Services.AddModulusAzureServiceBusTransport();
 builder.Services.AddModulusMessaging(options =>
@@ -131,6 +135,7 @@ The InMemory transport is built on `System.Threading.Channels` and runs entirely
 - Dead-lettering is **log + drop**: when consumer retries are exhausted the failure is logged and the message is discarded (there is no DLQ)
 - Messages are not persisted -- if the process restarts, unprocessed messages are lost
 
+<!-- verify -->
 ```csharp
 builder.Services.AddModulusMessaging(options =>
 {

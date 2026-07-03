@@ -18,8 +18,8 @@ public class Result
     public static Result Success();
     public static Result Failure(params Error[] errors);
 
-    // Pattern matching
-    public T Match<T>(Func<T> onSuccess, Func<IReadOnlyList<Error>, T> onFailure);
+    // Pattern matching (onFailure receives the failed Result; read its Errors)
+    public T Match<T>(Func<T> onSuccess, Func<Result, T> onFailure);
 }
 ```
 
@@ -71,8 +71,8 @@ public class Result<TValue> : Result
     public static Result<TValue> Success(TValue value);
     public new static Result<TValue> Failure(params Error[] errors);
 
-    // Pattern matching
-    public T Match<T>(Func<TValue, T> onSuccess, Func<IReadOnlyList<Error>, T> onFailure);
+    // Pattern matching (onFailure receives the failed Result; read its Errors)
+    public T Match<T>(Func<TValue, T> onSuccess, Func<Result<TValue>, T> onFailure);
 }
 ```
 
@@ -134,6 +134,7 @@ Error.Forbidden("Auth.InsufficientRole", "You do not have permission to perform 
 
 The `ErrorType` enum classifies errors into categories that map cleanly to HTTP status codes:
 
+<!-- verify -->
 ```csharp
 public enum ErrorType
 {
@@ -277,17 +278,17 @@ public static async Task<IResult> HandleCreateProduct(
 
     return result.Match(
         onSuccess: id => Results.Created($"/products/{id}", new { id }),
-        onFailure: errors =>
+        onFailure: failure =>
         {
-            var firstError = errors[0];
+            var firstError = failure.Errors[0];
 
             return firstError.Type switch
             {
-                ErrorType.Validation => Results.BadRequest(errors),
+                ErrorType.Validation => Results.BadRequest(failure.Errors),
                 ErrorType.Unauthorized => Results.Unauthorized(),
                 ErrorType.Forbidden => Results.Forbid(),
-                ErrorType.NotFound => Results.NotFound(errors),
-                ErrorType.Conflict => Results.Conflict(errors),
+                ErrorType.NotFound => Results.NotFound(failure.Errors),
+                ErrorType.Conflict => Results.Conflict(failure.Errors),
                 _ => Results.StatusCode(500)
             };
         });
