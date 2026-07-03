@@ -14,6 +14,12 @@
     <NoWarn>RS2008</NoWarn>
     <MinVerTagPrefix>generators-v</MinVerTagPrefix>
     <MinVerDefaultPreReleaseIdentifiers>alpha.0</MinVerDefaultPreReleaseIdentifiers>
+    <!-- Inject the analyzer asset during pack (after build). A plain <None Include> of the
+         output DLL is evaluated before the build produces it, so packing a clean tree
+         yielded an empty package (NU5017). -->
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);_AddAnalyzerAssetsToPackage</TargetsForTfmSpecificContentInPackage>
+    <!-- No build output in the package means no symbols package either (its NU5017). -->
+    <IncludeSymbols>false</IncludeSymbols>
   </PropertyGroup>
 
   <ItemGroup>
@@ -22,11 +28,10 @@
     <PackageReference Include="MinVer" PrivateAssets="all" />
   </ItemGroup>
 
-  <ItemGroup>
-    <None Include="$(OutputPath)\$(AssemblyName).dll"
-          Pack="true"
-          PackagePath="analyzers/dotnet/cs"
-          Visible="false" />
-  </ItemGroup>
+  <Target Name="_AddAnalyzerAssetsToPackage">
+    <ItemGroup>
+      <TfmSpecificPackageFile Include="$(OutputPath)\$(AssemblyName).dll" PackagePath="analyzers/dotnet/cs" />
+    </ItemGroup>
+  </Target>
 
 </Project>
