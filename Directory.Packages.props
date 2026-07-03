@@ -49,6 +49,7 @@
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Analyzer.Testing" Version="1.1.3" />
     <!-- Broker integration tests (Category=Integration, requires Docker) -->
     <PackageVersion Include="Testcontainers.RabbitMq" Version="4.13.0" />
+    <PackageVersion Include="Testcontainers.ServiceBus" Version="4.13.0" />
   </ItemGroup>
 
 </Project>

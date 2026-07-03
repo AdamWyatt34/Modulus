@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Modulus.Messaging.Tests" />
+    <InternalsVisibleTo Include="Modulus.Messaging.AzureServiceBus.IntegrationTests" />
   </ItemGroup>
 
   <ItemGroup>
