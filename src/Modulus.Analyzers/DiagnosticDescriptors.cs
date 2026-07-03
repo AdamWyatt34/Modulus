@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 
 namespace Modulus.Analyzers;
+
 internal static class DiagnosticDescriptors
 {
     public static readonly DiagnosticDescriptor ModuleBoundaryViolation = new(

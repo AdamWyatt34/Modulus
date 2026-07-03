@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 
 namespace Modulus.Generators;
+
 internal static class DiagnosticDescriptors
 {
     public static readonly DiagnosticDescriptor NonPartialStruct = new(

@@ -12,16 +12,16 @@ public class EndpointGeneratorTests
         string? commandName = null,
         string? queryName = null,
         string? resultType = null) => new()
-    {
-        EndpointName = "GetProductById",
-        ModuleName = "Catalog",
-        SolutionName = "EShop",
-        HttpMethod = httpMethod,
-        Route = route,
-        CommandName = commandName,
-        QueryName = queryName,
-        ResultType = resultType,
-    };
+        {
+            EndpointName = "GetProductById",
+            ModuleName = "Catalog",
+            SolutionName = "EShop",
+            HttpMethod = httpMethod,
+            Route = route,
+            CommandName = commandName,
+            QueryName = queryName,
+            ResultType = resultType,
+        };
 
     [Fact]
     public void Generate_ReturnsSingleOutputAtEndpointsPath()

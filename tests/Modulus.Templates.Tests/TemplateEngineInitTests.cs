@@ -11,12 +11,12 @@ public class TemplateEngineInitTests
         bool includeAspire = false,
         string transport = "inmemory",
         string modulusKitVersion = "1.2.3") => new()
-    {
-        SolutionName = "EShop",
-        IncludeAspire = includeAspire,
-        Transport = transport,
-        ModulusKitVersion = modulusKitVersion,
-    };
+        {
+            SolutionName = "EShop",
+            IncludeAspire = includeAspire,
+            Transport = transport,
+            ModulusKitVersion = modulusKitVersion,
+        };
 
     [Fact]
     public void GenerateInit_HostProgram_ImportsGeneratedExtensionsNamespace()

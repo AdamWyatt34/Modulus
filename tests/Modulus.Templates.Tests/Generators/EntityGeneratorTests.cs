@@ -12,14 +12,14 @@ public class EntityGeneratorTests
         bool isAggregate = false,
         string idType = "Guid",
         IReadOnlyList<EntityProperty>? properties = null) => new()
-    {
-        EntityName = "Product",
-        ModuleName = "Catalog",
-        SolutionName = "EShop",
-        IsAggregate = isAggregate,
-        IdType = idType,
-        Properties = properties ?? [],
-    };
+        {
+            EntityName = "Product",
+            ModuleName = "Catalog",
+            SolutionName = "EShop",
+            IsAggregate = isAggregate,
+            IdType = idType,
+            Properties = properties ?? [],
+        };
 
     [Fact]
     public void Generate_DefaultOptions_ProducesFiveOutputs()
