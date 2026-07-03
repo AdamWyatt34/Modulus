@@ -97,11 +97,6 @@ public sealed class EntityGenerator
         var sb = new StringBuilder();
         var ns = $"{o.SolutionName}.{o.ModuleName}.Domain.Repositories";
 
-        if (o.IsAggregate)
-        {
-            sb.AppendLine($"using {o.SolutionName}.BuildingBlocks.Application.Persistence;");
-        }
-
         sb.AppendLine($"using {o.SolutionName}.{o.ModuleName}.Domain.Entities;");
 
         if (IsCustomStronglyTypedId(o.IdType))
@@ -113,27 +108,22 @@ public sealed class EntityGenerator
         sb.AppendLine($"namespace {ns};");
         sb.AppendLine();
 
-        if (o.IsAggregate)
-        {
-            sb.AppendLine($"public interface I{o.EntityName}Repository : IRepository<{o.EntityName}, {o.IdType}>");
-            sb.AppendLine("{");
-            sb.AppendLine("}");
-        }
-        else
-        {
-            sb.AppendLine($"public interface I{o.EntityName}Repository");
-            sb.AppendLine("{");
-            sb.AppendLine($"    Task<{o.EntityName}?> GetByIdAsync({o.IdType} id, CancellationToken cancellationToken = default);");
-            sb.AppendLine();
-            sb.AppendLine($"    Task<IReadOnlyList<{o.EntityName}>> ListAllAsync(CancellationToken cancellationToken = default);");
-            sb.AppendLine();
-            sb.AppendLine($"    Task AddAsync({o.EntityName} entity, CancellationToken cancellationToken = default);");
-            sb.AppendLine();
-            sb.AppendLine($"    void Update({o.EntityName} entity);");
-            sb.AppendLine();
-            sb.AppendLine($"    void Remove({o.EntityName} entity);");
-            sb.AppendLine("}");
-        }
+        // Deliberately self-contained (no IRepository<,> base): the shared abstraction lives in
+        // BuildingBlocks.Application, and the Domain project must not depend outward. The
+        // aggregate's EF implementation still inherits EfRepository<,>, whose members satisfy
+        // this interface by signature.
+        sb.AppendLine($"public interface I{o.EntityName}Repository");
+        sb.AppendLine("{");
+        sb.AppendLine($"    Task<{o.EntityName}?> GetByIdAsync({o.IdType} id, CancellationToken cancellationToken = default);");
+        sb.AppendLine();
+        sb.AppendLine($"    Task<IReadOnlyList<{o.EntityName}>> ListAllAsync(CancellationToken cancellationToken = default);");
+        sb.AppendLine();
+        sb.AppendLine($"    Task AddAsync({o.EntityName} entity, CancellationToken cancellationToken = default);");
+        sb.AppendLine();
+        sb.AppendLine($"    void Update({o.EntityName} entity);");
+        sb.AppendLine();
+        sb.AppendLine($"    void Remove({o.EntityName} entity);");
+        sb.AppendLine("}");
 
         var path = $"src/{o.ModuleName}.Domain/Repositories/I{o.EntityName}Repository.cs";
         return new TemplateOutput(path, sb.ToString());
@@ -300,6 +290,8 @@ public sealed class EntityGenerator
             sb.AppendLine("    [Fact]");
             sb.AppendLine("    public void Create_should_set_properties()");
             sb.AppendLine("    {");
+            sb.AppendLine($"        var id = {idExpr};");
+            sb.AppendLine();
             sb.AppendLine($"        var entity = {o.EntityName}.Create({string.Join(", ", args)});");
             sb.AppendLine();
 

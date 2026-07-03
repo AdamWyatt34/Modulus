@@ -58,7 +58,11 @@ public class EntityGeneratorTests
         entity.Content.ShouldContain("public class Product : AggregateRoot<Guid>");
 
         var repository = outputs.Single(o => o.RelativePath.EndsWith("IProductRepository.cs"));
-        repository.Content.ShouldContain("public interface IProductRepository : IRepository<Product, Guid>");
+        // Self-contained: no IRepository<,> base — Domain must not reference BuildingBlocks.Application.
+        repository.Content.ShouldContain("public interface IProductRepository");
+        repository.Content.ShouldNotContain("IRepository<Product, Guid>");
+        repository.Content.ShouldNotContain("BuildingBlocks.Application");
+        repository.Content.ShouldContain("Task<Product?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);");
     }
 
     [Fact]
