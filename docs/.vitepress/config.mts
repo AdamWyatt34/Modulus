@@ -141,6 +141,7 @@ export default withMermaid(
               { text: 'modulus add-consumer', link: '/cli/add-consumer' },
               { text: 'modulus remove-module', link: '/cli/remove-module' },
               { text: 'modulus doctor', link: '/cli/doctor' },
+              { text: 'modulus upgrade', link: '/cli/upgrade' },
               { text: 'modulus version', link: '/cli/version' },
               { text: 'Shell completion', link: '/cli/completions' },
             ]

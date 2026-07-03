@@ -10,6 +10,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Modulus.Templates.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <EmbeddedResource Include="templates\**\*" />
     <EmbeddedResource Update="templates\**\*.cs.template" WithCulture="false" />
   </ItemGroup>

@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **CLI `modulus upgrade`**: bumps all `ModulusKit.*` pins in `Directory.Packages.props` to a target version (default: the CLI's own version) with `--dry-run` support, preserving file formatting.
+- **Scaffolding**: Aspire templates moved to Aspire 13.4.6 with the correct AppHost shape (`Aspire.AppHost.Sdk` + `Aspire.Hosting.AppHost`; the previously referenced `Aspire.Hosting.Defaults` package does not exist on nuget.org, so `--aspire` scaffolds could not restore). ServiceDefaults package pins refreshed.
 - **Messaging metrics**: new `Modulus.Messaging` meter — outbox dispatch counter (outcome-tagged), consumer handler duration histogram, inbox dedup counter, consumer retry and dead-letter counters. Subscribe with `AddMeter("Modulus.Messaging")`; works without metrics DI.
 - **Messaging health checks**: `AddHealthChecks().AddModulusMessaging()` registers a broker connectivity check (via the new optional `ITransportHealthProbe` on `IMessageTransport` implementations) and an outbox backlog-depth check with configurable degraded/unhealthy thresholds, both tagged `ready`/`messaging`. `IOutboxStore` gains `CountPending` (breaking for custom implementations); `ModulusKit.Messaging` now depends on `Microsoft.Extensions.Diagnostics.HealthChecks`. Scaffolded hosts filter `/readyz` on the `ready` tag.
 - `IOutboxDispatcher` extraction from `OutboxProcessor` (single synchronous dispatch pass, used by tests and tooling).

@@ -1,5 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <Sdk Name="Aspire.AppHost.Sdk" Version="{{AspireVersion}}" />
+
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <IsAspireHost>true</IsAspireHost>
@@ -10,7 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Aspire.Hosting.Defaults" Version="9.2.0" />
+    <PackageReference Include="Aspire.Hosting.AppHost" Version="{{AspireVersion}}" />
   </ItemGroup>
 
 </Project>

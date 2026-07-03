@@ -111,7 +111,29 @@ public class TemplateEngineInitTests
         program.Content.ShouldContain("builder.AddRabbitMQ(\"messaging\")");
 
         var csproj = outputs.Single(o => o.RelativePath == "aspire/EShop.AppHost/EShop.AppHost.csproj");
-        csproj.Content.ShouldContain("Aspire.Hosting.RabbitMQ");
+        csproj.Content.ShouldContain(
+            $"<PackageReference Include=\"Aspire.Hosting.RabbitMQ\" Version=\"{TemplateEngine.AspireVersion}\" />");
+    }
+
+    [Fact]
+    public void GenerateInit_Aspire_PinsAppHostToAspireVersionConstant()
+    {
+        var engine = new TemplateEngine();
+
+        var outputs = engine.GenerateInit(CreateOptions(includeAspire: true));
+
+        // Aspire.Hosting.Defaults does not exist on nuget.org — the AppHost must use the
+        // Aspire.AppHost.Sdk MSBuild SDK + Aspire.Hosting.AppHost, both pinned to the constant.
+        var csproj = outputs.Single(o => o.RelativePath == "aspire/EShop.AppHost/EShop.AppHost.csproj");
+        csproj.Content.ShouldContain(
+            $"<Sdk Name=\"Aspire.AppHost.Sdk\" Version=\"{TemplateEngine.AspireVersion}\" />");
+        csproj.Content.ShouldContain(
+            $"<PackageReference Include=\"Aspire.Hosting.AppHost\" Version=\"{TemplateEngine.AspireVersion}\" />");
+        csproj.Content.ShouldNotContain("Aspire.Hosting.Defaults");
+
+        var serviceDefaults = outputs.Single(
+            o => o.RelativePath == "aspire/EShop.ServiceDefaults/EShop.ServiceDefaults.csproj");
+        serviceDefaults.Content.ShouldNotContain("Aspire.Hosting.Defaults");
     }
 
     [Fact]

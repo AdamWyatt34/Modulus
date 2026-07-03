@@ -29,6 +29,7 @@ dotnet tool update --global ModulusKit.Cli
 | [`modulus add-consumer`](./add-consumer) | Scaffold an integration event handler and wire the cross-module reference |
 | [`modulus remove-module`](./remove-module) | Remove a module (dry-run by default) |
 | [`modulus doctor`](./doctor) | Validate the health of a scaffolded solution |
+| [`modulus upgrade`](./upgrade) | Bump all ModulusKit.* package pins to a target version |
 | [`modulus version`](./version) | Display the installed CLI version |
 
 See also: [shell tab completion](./completions).

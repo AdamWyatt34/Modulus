@@ -8,6 +8,14 @@ namespace Modulus.Templates;
 /// </summary>
 public sealed class TemplateEngine
 {
+    /// <summary>
+    /// The Aspire version pinned into scaffolded AppHost csproj files (the
+    /// <c>Aspire.AppHost.Sdk</c> MSBuild SDK, <c>Aspire.Hosting.AppHost</c>, and the RabbitMQ
+    /// hosting integration injected for <c>--transport rabbitmq</c>), via the
+    /// <c>{{AspireVersion}}</c> token. One constant so a version bump is a single edit.
+    /// </summary>
+    internal const string AspireVersion = "13.4.6";
+
     private static readonly Assembly ResourceAssembly = typeof(TemplateEngine).Assembly;
 
     /// <summary>
@@ -21,6 +29,7 @@ public sealed class TemplateEngine
             ["{{SolutionNameLower}}"] = options.SolutionName.ToLowerInvariant(),
             ["{{RootNamespace}}"] = options.SolutionName,
             ["{{ModulusKitVersion}}"] = options.ModulusKitVersion,
+            ["{{AspireVersion}}"] = AspireVersion,
         };
 
         var outputs = new List<TemplateOutput>();
@@ -199,9 +208,9 @@ public sealed class TemplateEngine
         {
             var csproj = outputs[csprojIndex];
             var content = csproj.Content.Replace(
-                "<PackageReference Include=\"Aspire.Hosting.Defaults\" Version=\"9.2.0\" />",
-                "<PackageReference Include=\"Aspire.Hosting.Defaults\" Version=\"9.2.0\" />\n" +
-                "    <PackageReference Include=\"Aspire.Hosting.RabbitMQ\" Version=\"9.2.0\" />");
+                $"<PackageReference Include=\"Aspire.Hosting.AppHost\" Version=\"{AspireVersion}\" />",
+                $"<PackageReference Include=\"Aspire.Hosting.AppHost\" Version=\"{AspireVersion}\" />\n" +
+                $"    <PackageReference Include=\"Aspire.Hosting.RabbitMQ\" Version=\"{AspireVersion}\" />");
 
             outputs[csprojIndex] = csproj with { Content = content };
         }

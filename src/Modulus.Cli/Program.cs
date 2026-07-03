@@ -20,6 +20,7 @@ rootCommand.Subcommands.Add(AddConsumerCommand.Create(fileSystem, consoleOutput)
 rootCommand.Subcommands.Add(ListModulesCommand.Create(fileSystem, consoleOutput));
 rootCommand.Subcommands.Add(OutboxCommand.Create(fileSystem, consoleOutput));
 rootCommand.Subcommands.Add(DoctorCommand.Create(fileSystem, consoleOutput));
+rootCommand.Subcommands.Add(UpgradeCommand.Create(fileSystem, consoleOutput));
 rootCommand.Subcommands.Add(VersionCommand.Create(consoleOutput));
 
 return await rootCommand.Parse(args).InvokeAsync();
