@@ -18,6 +18,9 @@ rootCommand.Subcommands.Add(AddEndpointCommand.Create(fileSystem, consoleOutput)
 rootCommand.Subcommands.Add(AddEventCommand.Create(fileSystem, consoleOutput));
 rootCommand.Subcommands.Add(AddConsumerCommand.Create(fileSystem, consoleOutput));
 rootCommand.Subcommands.Add(ListModulesCommand.Create(fileSystem, consoleOutput));
+rootCommand.Subcommands.Add(ListArtifactsCommands.CreateListEvents(fileSystem, consoleOutput));
+rootCommand.Subcommands.Add(ListArtifactsCommands.CreateListConsumers(fileSystem, consoleOutput));
+rootCommand.Subcommands.Add(ListArtifactsCommands.CreateListEntities(fileSystem, consoleOutput));
 rootCommand.Subcommands.Add(OutboxCommand.Create(fileSystem, consoleOutput));
 rootCommand.Subcommands.Add(DlqCommand.Create(fileSystem, consoleOutput));
 rootCommand.Subcommands.Add(DoctorCommand.Create(fileSystem, consoleOutput));

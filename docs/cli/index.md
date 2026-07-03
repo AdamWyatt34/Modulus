@@ -21,6 +21,9 @@ dotnet tool update --global ModulusKit.Cli
 | [`modulus init`](./init) | Create a new modular monolith solution |
 | [`modulus add-module`](./add-module) | Add a feature module to an existing solution |
 | [`modulus list-modules`](./list-modules) | List all modules in the current solution |
+| [`modulus list-events`](./list-events) | List integration events across modules |
+| [`modulus list-consumers`](./list-consumers) | List integration event handlers across modules |
+| [`modulus list-entities`](./list-entities) | List domain entities across modules |
 | [`modulus add-entity`](./add-entity) | Scaffold a domain entity or aggregate root |
 | [`modulus add-command`](./add-command) | Scaffold a command, handler, and validator |
 | [`modulus add-query`](./add-query) | Scaffold a query and handler |

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Modulus.Cli.Infrastructure;
 
 namespace Modulus.Cli.Handlers;
@@ -7,7 +8,7 @@ public sealed class ListModulesHandler(
     IConsoleOutput console,
     SolutionFinder solutionFinder)
 {
-    public int Execute()
+    public int Execute(bool json = false)
     {
         var slnxPath = solutionFinder.FindSolutionFile(fileSystem.GetCurrentDirectory());
         if (slnxPath is null)
@@ -19,13 +20,22 @@ public sealed class ListModulesHandler(
         var solutionRoot = fileSystem.GetDirectoryName(fileSystem.GetFullPath(slnxPath))!;
         var modulesDir = Path.Combine(solutionRoot, "src", "Modules");
 
-        if (!fileSystem.DirectoryExists(modulesDir))
+        var modules = fileSystem.DirectoryExists(modulesDir)
+            ? fileSystem.GetDirectories(modulesDir)
+                .Select(moduleDir => new
+                {
+                    name = fileSystem.GetFileName(moduleDir),
+                    projects = fileSystem.GetFiles(moduleDir, "*.csproj", SearchOption.AllDirectories).Count,
+                })
+                .ToList()
+            : [];
+
+        if (json)
         {
-            console.WriteLine("No modules found.");
+            console.WriteLine(JsonSerializer.Serialize(modules, new JsonSerializerOptions { WriteIndented = true }));
             return 0;
         }
 
-        var modules = fileSystem.GetDirectories(modulesDir);
         if (modules.Count == 0)
         {
             console.WriteLine("No modules found.");
@@ -33,11 +43,9 @@ public sealed class ListModulesHandler(
         }
 
         console.WriteLine("Modules:");
-        foreach (var moduleDir in modules)
+        foreach (var module in modules)
         {
-            var moduleName = fileSystem.GetFileName(moduleDir);
-            var csprojCount = fileSystem.GetFiles(moduleDir, "*.csproj", SearchOption.AllDirectories).Count;
-            console.WriteLine($"  {moduleName} ({csprojCount} projects)");
+            console.WriteLine($"  {module.name} ({module.projects} projects)");
         }
 
         return 0;
