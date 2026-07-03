@@ -5,7 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [2.0.0] - 2026-07-03
+
+Coordinated release of all nine packages at 2.0.0 — the scaffolded `Directory.Packages.props` pins every `ModulusKit.*` package to one version, so the set moves together. First release under the per-package tag scheme, and the first release of the two transport packages.
 
 ### Removed
 
@@ -24,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Mediator**: opt-in `TracingBehavior` (ActivitySource `Modulus.Mediator` with request/outcome/error tags) alongside the existing `MetricsBehavior`; library-provided `UnitOfWorkBehavior` + `IUnitOfWork` (commit-on-successful-command via `SaveChangesAsync`, no-op when unregistered).
+- **CLI `modulus doctor`**: six solution-health checks with `--json`/`--strict` and exit codes 0/1/2.
+- **CLI `modulus remove-module`**: dry-run by default, `--confirm` to apply, `--force` to override cross-module reference blocking.
+- **CLI `modulus add-event` / `add-consumer`**: integration event and handler scaffolding with cross-module Integration-only reference auto-wiring.
 - **CLI `list-events` / `list-consumers` / `list-entities`**: convention-scan listings of scaffolded artifacts per module; all four list commands (including `list-modules`) support `--json`.
 - **CLI `modulus dlq list|replay`**: inspect and replay broker dead-letter queues for RabbitMQ (`{endpoint}.dead-letter`, confirm-then-ack replay) and Azure Service Bus (subscription DLQ, clone-and-resend). Replayed messages keep their EventId, so the inbox re-runs only handlers that never succeeded. `RabbitMqTopology` and `AzureServiceBusTopology` are now public for tooling.
 - **CLI `modulus upgrade`**: bumps all `ModulusKit.*` pins in `Directory.Packages.props` to a target version (default: the CLI's own version) with `--dry-run` support, preserving file formatting.
@@ -95,5 +101,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   - Entity Framework Core outbox implementation (`EfOutboxStore`)
   - Automatic handler discovery and consumer adapter registration
 
+[2.0.0]: https://github.com/adamwyatt34/Modulus/compare/v1.1.0...messaging-v2.0.0
 [1.1.0]: https://github.com/adamwyatt34/Modulus/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/adamwyatt34/Modulus/releases/tag/v1.0.0
