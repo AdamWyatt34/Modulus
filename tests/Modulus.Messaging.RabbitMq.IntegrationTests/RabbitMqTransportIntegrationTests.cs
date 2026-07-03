@@ -3,9 +3,12 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Modulus.Messaging.Abstractions;
+using Modulus.Messaging.Dispatch;
 using Modulus.Messaging.Inbox;
 using Modulus.Messaging.Outbox;
 using Modulus.Messaging.RabbitMq.IntegrationTests.Fixtures;
+using Modulus.Messaging.Serialization;
+using Modulus.Messaging.Transports;
 using RabbitMQ.Client;
 using Shouldly;
 using Xunit;
@@ -171,5 +174,132 @@ public sealed class RabbitMqTransportIntegrationTests(RabbitMqContainerFixture r
         // Give the duplicate time to arrive and be deduplicated, then assert exactly once.
         await Task.Delay(2000);
         InboxDedupHandler.Handled.Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Publish_UnknownMessageType_IsAcknowledgedWithoutDeadLetter()
+    {
+        const string endpointName = "it-unknown-type";
+        await using var host = await StartHost(BuildServices(endpointName));
+
+        // Publish directly to the exchange this endpoint's queue is already bound to (via its
+        // RoundTripEvent subscription), but with a Type property naming an event the
+        // MessageTypeRegistry has never heard of. This proves the *consumer* pipeline — not the
+        // outbox allowlist — is what acknowledges rather than dead-letters unknown types.
+        var exchange = RabbitMqTopology.ExchangeName(MessageTypeRegistry.GetStableName(typeof(RoundTripEvent)));
+
+        var factory = new ConnectionFactory { Uri = new Uri(rabbitMq.ConnectionString) };
+        await using (var connection = await factory.CreateConnectionAsync())
+        await using (var channel = await connection.CreateChannelAsync())
+        {
+            var properties = new BasicProperties
+            {
+                Persistent = true,
+                MessageId = Guid.NewGuid().ToString(),
+                Type = "Unregistered.Ghost.EventType",
+                ContentType = "application/json",
+            };
+
+            await channel.BasicPublishAsync(
+                exchange,
+                routingKey: string.Empty,
+                mandatory: false,
+                basicProperties: properties,
+                body: "{}"u8.ToArray());
+        }
+
+        await using var probeConnection = await factory.CreateConnectionAsync();
+        await using var probeChannel = await probeConnection.CreateChannelAsync();
+
+        // The queue must drain: no message should ever appear in the dead-letter queue for an
+        // unknown type, because ConsumerDispatcher acknowledges (not dead-letters) unknown types.
+        await WaitFor(
+            () => GetMessageCount(probeChannel, RabbitMqTopology.QueueName(endpointName)) == 0,
+            "the queue should drain: an unknown message type is acknowledged, not dead-lettered");
+
+        (await probeChannel.BasicGetAsync(RabbitMqTopology.DeadLetterQueueName(endpointName), autoAck: true))
+            .ShouldBeNull();
+    }
+
+    private static long GetMessageCount(IChannel channel, string queue)
+        => channel.QueueDeclarePassiveAsync(queue).GetAwaiter().GetResult().MessageCount;
+
+    [Fact]
+    public async Task StopThenStartConsuming_MessagesPublishedAfterRestart_AreDelivered()
+    {
+        RestartCycleHandler.Handled.Clear();
+        const string endpointName = "it-restart-cycle";
+        var services = BuildServices(endpointName);
+        var provider = services.BuildServiceProvider();
+
+        using var scope = provider.CreateScope();
+        var transport = scope.ServiceProvider.GetRequiredService<IMessageTransport>();
+        var catalog = provider.GetRequiredService<TransportSubscriptionCatalog>();
+        var dispatcher = provider.GetRequiredService<ConsumerDispatcher>();
+
+        await transport.StartConsumingAsync(catalog.Subscriptions, dispatcher.DispatchAsync);
+        await transport.StopConsumingAsync();
+
+        // Restart: consuming resumes on the same queue/topology.
+        await transport.StartConsumingAsync(catalog.Subscriptions, dispatcher.DispatchAsync);
+
+        var messageBus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
+        await messageBus.Publish(new RestartCycleEvent { Value = 55 });
+
+        await WaitFor(
+            () => !RestartCycleHandler.Handled.IsEmpty,
+            "a message published after restarting consumption should still be delivered");
+
+        RestartCycleHandler.Handled.TryPeek(out var received).ShouldBeTrue();
+        received!.Value.ShouldBe(55);
+
+        await transport.StopConsumingAsync();
+        await provider.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task AutoProvisionDisabled_PreDeclaredTopology_RoundTripsSuccessfully()
+    {
+        PreDeclaredTopologyHandler.Handled.Clear();
+        const string endpointName = "it-predeclared";
+        var eventTypeName = MessageTypeRegistry.GetStableName(typeof(PreDeclaredTopologyEvent));
+        var exchange = RabbitMqTopology.ExchangeName(eventTypeName);
+        var queue = RabbitMqTopology.QueueName(endpointName);
+        var deadLetterExchange = RabbitMqTopology.DeadLetterExchangeName(endpointName);
+        var deadLetterQueue = RabbitMqTopology.DeadLetterQueueName(endpointName);
+
+        // Declare the full topology by hand using the same naming conventions the transport
+        // would use under AutoProvision, simulating a least-privilege deployment where topology
+        // is created out-of-band (e.g. via infrastructure-as-code).
+        var factory = new ConnectionFactory { Uri = new Uri(rabbitMq.ConnectionString) };
+        await using (var connection = await factory.CreateConnectionAsync())
+        await using (var channel = await connection.CreateChannelAsync())
+        {
+            await channel.ExchangeDeclareAsync(exchange, ExchangeType.Fanout, durable: true, autoDelete: false);
+            await channel.ExchangeDeclareAsync(deadLetterExchange, ExchangeType.Fanout, durable: true, autoDelete: false);
+            await channel.QueueDeclareAsync(deadLetterQueue, durable: true, exclusive: false, autoDelete: false);
+            await channel.QueueBindAsync(deadLetterQueue, deadLetterExchange, routingKey: string.Empty);
+            await channel.QueueDeclareAsync(
+                queue,
+                durable: true,
+                exclusive: false,
+                autoDelete: false,
+                arguments: new Dictionary<string, object?> { ["x-dead-letter-exchange"] = deadLetterExchange });
+            await channel.QueueBindAsync(queue, exchange, routingKey: string.Empty);
+        }
+
+        await using var host = await StartHost(BuildServices(endpointName, options => options.AutoProvision = false));
+
+        using var scope = host.Provider.CreateScope();
+        var messageBus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
+
+        await messageBus.Publish(new PreDeclaredTopologyEvent { Value = 21 });
+
+        await WaitFor(
+            () => !PreDeclaredTopologyHandler.Handled.IsEmpty,
+            "a message should round-trip through pre-declared topology with AutoProvision disabled");
+
+        PreDeclaredTopologyHandler.Handled.TryPeek(out var received).ShouldBeTrue();
+        received!.Value.ShouldBe(21);
     }
 }

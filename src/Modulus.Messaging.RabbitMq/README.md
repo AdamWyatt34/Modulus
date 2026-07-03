@@ -33,6 +33,12 @@ builder.Services.AddModulusRabbitMqTransport();
 
 Publisher confirmations are enabled: a failed confirm surfaces as an exception the outbox retries. Topology is declared automatically on startup and first publish; set `Messaging:AutoProvision` to `false` for least-privilege deployments with pre-created entities.
 
+## Testing
+
+`RabbitMqTopology` (naming) and `RabbitMqEnvelopeMapper` (envelope/property mapping) are pure and unit-tested in `Modulus.Messaging.Tests/RabbitMq`. `tests/Modulus.Messaging.RabbitMq.IntegrationTests` runs the transport against a real broker via Testcontainers (`Category=Integration`), covering: publish/consume roundtrip, dead-lettering after retry exhaustion, inbox deduplication of redelivered messages, acknowledgement (not dead-lettering) of an unknown message type, a stop/start consume cycle, and `AutoProvision=false` against topology declared out-of-band.
+
+**Explicitly untested**: forced publisher-confirm failure (the broker rejecting/returning a confirm) and connection-recovery chaos (broker restart/network partition mid-operation, exercising `RabbitMQ.Client`'s `AutomaticRecoveryEnabled`/`TopologyRecoveryEnabled`). Both require fault injection against the broker connection that Testcontainers' black-box container model does not give an easy hook for; a toxiproxy-style fault-injecting proxy in front of the container would be needed to cover them.
+
 ## License
 
 MIT — part of the [Modulus](https://github.com/adamwyatt34/Modulus) project.

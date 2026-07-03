@@ -60,3 +60,35 @@ public class InboxDedupHandler : IIntegrationEventHandler<InboxDedupEvent>
         return Task.CompletedTask;
     }
 }
+
+public record RestartCycleEvent : IntegrationEvent
+{
+    public required int Value { get; init; }
+}
+
+public class RestartCycleHandler : IIntegrationEventHandler<RestartCycleEvent>
+{
+    public static ConcurrentQueue<RestartCycleEvent> Handled { get; } = [];
+
+    public Task Handle(RestartCycleEvent @event, CancellationToken cancellationToken = default)
+    {
+        Handled.Enqueue(@event);
+        return Task.CompletedTask;
+    }
+}
+
+public record PreDeclaredTopologyEvent : IntegrationEvent
+{
+    public required int Value { get; init; }
+}
+
+public class PreDeclaredTopologyHandler : IIntegrationEventHandler<PreDeclaredTopologyEvent>
+{
+    public static ConcurrentQueue<PreDeclaredTopologyEvent> Handled { get; } = [];
+
+    public Task Handle(PreDeclaredTopologyEvent @event, CancellationToken cancellationToken = default)
+    {
+        Handled.Enqueue(@event);
+        return Task.CompletedTask;
+    }
+}
