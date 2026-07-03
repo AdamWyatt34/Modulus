@@ -38,10 +38,8 @@ public class MassTransitMessageBusTests
 
             await messageBus.Publish(@event);
 
-            // Allow time for in-memory delivery
-            await Task.Delay(1000);
+            await TestWait.WaitForConditionAsync(() => handler.HandledEvents.Count == 1);
 
-            handler.HandledEvents.Count.ShouldBe(1);
             handler.HandledEvents[0].OrderId.ShouldBe(42);
             handler.HandledEvents[0].CustomerName.ShouldBe("Test Customer");
         }

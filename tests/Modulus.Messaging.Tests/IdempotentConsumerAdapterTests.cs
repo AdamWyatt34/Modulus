@@ -39,9 +39,8 @@ public class IdempotentConsumerAdapterTests
                 CustomerName = "NoInbox"
             });
 
-            await Task.Delay(1000);
+            await TestWait.WaitForConditionAsync(() => handler.HandledEvents.Count == 1);
 
-            handler.HandledEvents.Count.ShouldBe(1);
             handler.HandledEvents[0].OrderId.ShouldBe(1);
         }
         finally
@@ -75,9 +74,7 @@ public class IdempotentConsumerAdapterTests
             await messageBus.Publish(new TestOrderCreatedEvent { OrderId = 1, CustomerName = "A" });
             await messageBus.Publish(new TestOrderCreatedEvent { OrderId = 2, CustomerName = "B" });
 
-            await Task.Delay(1000);
-
-            handler.HandledEvents.Count.ShouldBe(2);
+            await TestWait.WaitForConditionAsync(() => handler.HandledEvents.Count == 2);
         }
         finally
         {

@@ -36,9 +36,8 @@ public class ConsumerAdapterTests
                 CustomerName = "Adapter Test"
             });
 
-            await Task.Delay(1000);
+            await TestWait.WaitForConditionAsync(() => handler.HandledEvents.Count == 1);
 
-            handler.HandledEvents.Count.ShouldBe(1);
             handler.HandledEvents[0].OrderId.ShouldBe(99);
             handler.HandledEvents[0].CustomerName.ShouldBe("Adapter Test");
         }
@@ -79,9 +78,8 @@ public class ConsumerAdapterTests
                 CorrelationId = "corr-123"
             });
 
-            await Task.Delay(1000);
+            await TestWait.WaitForConditionAsync(() => handler.HandledEvents.Count == 1);
 
-            handler.HandledEvents.Count.ShouldBe(1);
             handler.HandledEvents[0].EventId.ShouldBe(eventId);
             handler.HandledEvents[0].CorrelationId.ShouldBe("corr-123");
         }
