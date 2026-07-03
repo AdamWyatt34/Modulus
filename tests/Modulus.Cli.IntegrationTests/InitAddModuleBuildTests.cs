@@ -20,6 +20,7 @@ public class InitAddModuleBuildTests
 
         const string solutionName = "Sample";
         const string moduleName = "Catalog";
+        var packageVersion = E2EPackageFeed.Configure(temp.Path);
 
         var initHandler = new InitHandler(fileSystem, processRunner, console);
         var initExit = await initHandler.ExecuteAsync(
@@ -27,7 +28,8 @@ public class InitAddModuleBuildTests
             outputDirectory: temp.Path,
             includeAspire: false,
             transport: "inmemory",
-            noGit: true);
+            noGit: true,
+            modulusKitVersion: packageVersion);
 
         initExit.ShouldBe(0, "modulus init should succeed against a real filesystem");
 
@@ -64,6 +66,7 @@ public class InitAddModuleBuildTests
         var console = new ConsoleOutput();
 
         const string solutionName = "Sample";
+        var packageVersion = E2EPackageFeed.Configure(temp.Path);
 
         var initHandler = new InitHandler(fileSystem, processRunner, console);
         var initExit = await initHandler.ExecuteAsync(
@@ -71,7 +74,8 @@ public class InitAddModuleBuildTests
             outputDirectory: temp.Path,
             includeAspire: true,
             transport: "rabbitmq",
-            noGit: true);
+            noGit: true,
+            modulusKitVersion: packageVersion);
         initExit.ShouldBe(0, "modulus init --aspire --transport rabbitmq should succeed");
 
         var solutionRoot = Path.Combine(temp.Path, solutionName);
@@ -101,6 +105,7 @@ public class InitAddModuleBuildTests
         const string solutionName = "Sample";
         const string sourceModule = "Orders";
         const string consumingModule = "Shipping";
+        var packageVersion = E2EPackageFeed.Configure(temp.Path);
 
         var initHandler = new InitHandler(fileSystem, processRunner, console);
         var initExit = await initHandler.ExecuteAsync(
@@ -108,7 +113,8 @@ public class InitAddModuleBuildTests
             outputDirectory: temp.Path,
             includeAspire: false,
             transport: "inmemory",
-            noGit: true);
+            noGit: true,
+            modulusKitVersion: packageVersion);
         initExit.ShouldBe(0, "modulus init should succeed");
 
         var solutionRoot = Path.Combine(temp.Path, solutionName);

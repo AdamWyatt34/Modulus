@@ -122,8 +122,18 @@ jobs:
       - name: Build
         run: dotnet build --no-restore --configuration Release
 
+      # E2E scaffolds restore ModulusKit.* from this HEAD-packed feed instead of nuget.org,
+      # so template<->library drift fails here rather than after publish. The fixed version
+      # is safe on ephemeral runners; if a NuGet cache action is ever added to this job,
+      # switch to a run-unique version to avoid cache poisoning.
+      - name: Pack HEAD packages for E2E feed
+        run: dotnet pack --configuration Release /p:MinVerVersionOverride=99.0.0-e2e --output ./e2e-feed
+
       - name: Test (E2E)
         run: dotnet test --no-build --configuration Release --verbosity normal --filter "Category=E2E"
+        env:
+          MODULUS_E2E_FEED: ${{ github.workspace }}/e2e-feed
+          MODULUS_E2E_PACKAGE_VERSION: 99.0.0-e2e
 
   docs-snippets:
     # Compiles the <!-- verify -->-marked C# snippets in docs/ against the current source,
@@ -163,8 +173,23 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Restore sample
+        run: dotnet restore samples/SampleApp/SampleApp.slnx
+
+      # The sample keeps its own Directory.Packages.props (with advisory pins) that the
+      # root scan never restores — scan it explicitly.
+      - name: Check sample for vulnerable packages
+        shell: pwsh
+        run: |
+          $output = dotnet list samples/SampleApp/SampleApp.slnx package --vulnerable --include-transitive 2>&1 | Out-String
+          Write-Host $output
+          if ($output -match 'High|Critical') {
+            Write-Error "Vulnerable packages detected in SampleApp. Fail."
+            exit 1
+          }
+
       - name: Build sample
-        run: dotnet build samples/SampleApp/SampleApp.slnx --configuration Release
+        run: dotnet build samples/SampleApp/SampleApp.slnx --configuration Release --no-restore
 
   publish:
     needs: [build, e2e]

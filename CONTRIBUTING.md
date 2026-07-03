@@ -10,10 +10,14 @@ dotnet test Modulus.slnx --filter "Category!=E2E"
 To run the end-to-end CLI integration test (slow — scaffolds a solution and runs `dotnet build` against it):
 
 ```powershell
+# Pack HEAD into a local feed first, otherwise the scaffold pins the CLI's unpublished
+# MinVer version and restore fails at an untagged HEAD. The script sets
+# MODULUS_E2E_FEED and MODULUS_E2E_PACKAGE_VERSION for the current session.
+pwsh scripts/New-E2EFeed.ps1
 dotnet test Modulus.slnx --filter "Category=E2E"
 ```
 
-The E2E job runs in CI on both Ubuntu and Windows.
+With those environment variables unset, the E2E tests scaffold against nuget.org using the CLI's own version — the post-publish smoke path. The E2E job runs in CI on both Ubuntu and Windows against a HEAD-packed feed.
 
 ## Releasing a package
 
