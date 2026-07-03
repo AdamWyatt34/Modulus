@@ -33,9 +33,16 @@ sequenceDiagram
             Dispatcher->>Dispatcher: Skip handler
         else Not yet processed
             Inbox-->>Dispatcher: false
-            Dispatcher->>Handler: Handle(event)
-            Handler-->>Dispatcher: Completed
-            Dispatcher->>Inbox: RecordConsumer(eventId, handlerName)
+            Dispatcher->>Inbox: TryReserve(eventId, handlerName)
+            alt Reservation won
+                Inbox-->>Dispatcher: true
+                Dispatcher->>Handler: Handle(event)
+                Handler-->>Dispatcher: Completed
+                Dispatcher->>Inbox: MarkConsumerProcessed(eventId, handlerName)
+            else Held by another delivery
+                Inbox-->>Dispatcher: false
+                Dispatcher->>Dispatcher: Retry with backoff
+            end
         end
     end
     Dispatcher-->>Bus: Acknowledge
@@ -48,13 +55,23 @@ The `ConsumerDispatcher` follows this logic for each incoming message:
 1. **No inbox registered:** If no `IInboxStore` is registered in the DI container, the dispatcher falls through to direct handler execution. The inbox is entirely optional.
 2. **Inbox registered:**
    1. **Save the event** to the inbox store (records that this message arrived; the save itself is idempotent).
-   2. For **each registered handler**, check `HasBeenProcessed(eventId, handlerName)` -- has this specific handler already processed this specific event?
+   2. For **each registered handler**, check `HasBeenProcessed(eventId, handlerName)` -- has this specific handler already completed this specific event?
    3. If **already processed** -- skip that handler.
-   4. If **not yet processed** -- invoke the handler, then call `RecordConsumer(eventId, handlerName)` to mark it as processed.
-3. The message is acknowledged only after all handlers succeed. If any handler throws, the dispatcher retries in-process per `ConsumerRetry`; on redelivery, only the handlers that have not recorded success re-run.
+   4. If **not yet processed** -- **reserve** the `(eventId, handlerName)` pair with `TryReserve`. The reservation is an atomic database claim: under concurrent duplicate deliveries, exactly one delivery wins it.
+   5. On winning the reservation -- invoke the handler, then call `MarkConsumerProcessed(eventId, handlerName)`.
+   6. On losing it -- if the pair completed in the meantime, skip; otherwise the dispatch **retries with backoff** rather than acknowledging past a live reservation (acknowledging would lose the message if the reservation's owner crashed).
+3. The message is acknowledged only after all handlers succeed. If any handler throws, the dispatcher retries in-process per `ConsumerRetry`; on redelivery, only the handlers that have not completed re-run.
 
 ::: info Per-handler deduplication
 The inbox tracks processing at the `(eventId, handlerName)` level. If an event has three handlers, each handler is independently tracked. Handler A being marked as processed does not affect whether Handler B or Handler C runs.
+:::
+
+### Crash Recovery: Stale Reservations
+
+A reservation is normally short-lived: claim, run the handler, mark processed. If the owning process crashes mid-handler, its reservation is left behind unprocessed. Such a reservation goes **stale** after `MessagingOptions.ConsumerReservationTimeout` (default 5 minutes) and is atomically taken over by whichever delivery encounters it next -- the broker's redelivery or a dead-letter replay. This preserves at-least-once semantics: a crash can never silently drop a handler execution.
+
+::: warning Size the timeout to your slowest handler
+`ConsumerReservationTimeout` must exceed the worst-case handler execution time. If a handler legitimately runs longer than the timeout, a concurrent delivery can treat its reservation as abandoned and execute the handler a second time.
 :::
 
 ## IInboxStore Interface
@@ -73,7 +90,9 @@ public interface IInboxStore
 
     Task<bool> HasBeenProcessed(Guid messageId, string handlerName, CancellationToken cancellationToken = default);
 
-    Task RecordConsumer(Guid messageId, string handlerName, CancellationToken cancellationToken = default);
+    Task<bool> TryReserve(Guid messageId, string handlerName, TimeSpan staleAfter, CancellationToken cancellationToken = default);
+
+    Task MarkConsumerProcessed(Guid messageId, string handlerName, CancellationToken cancellationToken = default);
 }
 ```
 
@@ -82,8 +101,9 @@ public interface IInboxStore
 | `Save` | Persists the incoming event as an `InboxMessage`. |
 | `GetPending` | Retrieves unprocessed inbox messages (used for reprocessing scenarios). |
 | `MarkAsProcessed` | Marks inbox messages as fully processed. |
-| `HasBeenProcessed` | Checks if a specific handler has already processed a specific message. |
-| `RecordConsumer` | Records that a specific handler has processed a specific message. |
+| `HasBeenProcessed` | Checks if a specific handler has already **completed** a specific message (a live reservation does not count). |
+| `TryReserve` | Atomically claims the `(messageId, handlerName)` pair before execution. Returns `false` when already processed or when another delivery holds a reservation younger than `staleAfter`; takes over older unprocessed reservations. |
+| `MarkConsumerProcessed` | Marks a reserved pair as successfully processed. |
 
 ## InboxMessage Model
 
@@ -119,6 +139,8 @@ public sealed class InboxMessageConsumer
 {
     public required Guid InboxMessageId { get; init; }
     public required string Name { get; init; }
+    public DateTime ReservedOnUtc { get; set; }
+    public DateTime? ProcessedOnUtc { get; set; }
 }
 ```
 
@@ -126,8 +148,10 @@ public sealed class InboxMessageConsumer
 |---|---|---|
 | `InboxMessageId` | `Guid` | Foreign key to the `InboxMessage`. |
 | `Name` | `string` | The fully qualified name of the handler type. |
+| `ReservedOnUtc` | `DateTime` | When the pair was claimed. A reservation older than `ConsumerReservationTimeout` with no `ProcessedOnUtc` is considered abandoned. |
+| `ProcessedOnUtc` | `DateTime?` | When the handler completed. `null` while the reservation is live (or abandoned). |
 
-The composite key `(InboxMessageId, Name)` ensures that each handler is recorded exactly once per message. If two threads attempt to record the same consumer simultaneously, the database constraint prevents duplicates.
+The composite key `(InboxMessageId, Name)` makes the reservation insert an atomic claim: when two deliveries race for the same pair, the database constraint lets exactly one win.
 
 ## ConsumerDispatcher
 
@@ -154,14 +178,18 @@ await inboxStore.Save(@event, cancellationToken);
 
 foreach (var handler in handlers)
 {
-    // Skip handlers that already processed this event
+    // Skip handlers that already completed this event
     if (await inboxStore.HasBeenProcessed(@event.EventId, handler.Name, cancellationToken))
         continue;
 
+    // Claim the pair; losing to a live reservation triggers a retry, not an acknowledge
+    if (!await inboxStore.TryReserve(@event.EventId, handler.Name, reservationTimeout, cancellationToken))
+        throw new InboxReservationPendingException(...);
+
     await handler.Handle(@event, cancellationToken);
 
-    // Record that this handler has processed this event
-    await inboxStore.RecordConsumer(@event.EventId, handler.Name, cancellationToken);
+    // Mark the reserved pair as completed
+    await inboxStore.MarkConsumerProcessed(@event.EventId, handler.Name, cancellationToken);
 }
 ```
 
@@ -173,17 +201,16 @@ If you do not register an `IInboxStore` in the DI container, the dispatcher dele
 
 The `EfInboxStore` is the built-in Entity Framework Core implementation of `IInboxStore`. It handles concurrent insert race conditions gracefully -- if two threads attempt to save the same inbox message simultaneously, the second insert is caught and ignored rather than throwing an exception.
 
-### Handling Concurrent Inserts
+### Handling Concurrent Deliveries
 
-When the same message arrives on two threads simultaneously:
+When the same message arrives on two threads (or two replicas) simultaneously:
 
-1. Thread A calls `Save(@event)` -- inserts successfully.
-2. Thread B calls `Save(@event)` -- catches the duplicate key violation and ignores it.
-3. Both threads call `HasBeenProcessed` -- only one returns `false` first.
-4. The winning thread processes the event and calls `RecordConsumer`.
-5. The losing thread sees `HasBeenProcessed` return `true` and skips.
+1. Both call `Save(@event)` -- one inserts, the other catches the duplicate key violation and ignores it.
+2. Both call `TryReserve` for the same handler -- the composite primary key lets exactly one insert the reservation row. That delivery runs the handler.
+3. The loser backs off and retries. Once the winner calls `MarkConsumerProcessed`, the loser's next attempt sees `HasBeenProcessed` return `true` and acknowledges without executing.
+4. If the winner **crashes** instead, its reservation goes stale after `ConsumerReservationTimeout`, and the loser (or a later redelivery/replay) takes it over and executes the handler.
 
-This race-safe behavior ensures correctness without requiring distributed locks.
+This gives exactly-once execution per handler under concurrent duplicates while preserving at-least-once delivery under crashes -- no distributed locks required. `EfInboxStore` requires a relational provider (the takeover path uses `ExecuteUpdateAsync` and the claim relies on the enforced primary key); the EF InMemory provider is not supported.
 
 ## Usage Example
 

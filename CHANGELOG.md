@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **BREAKING — Messaging inbox**: consumption is now reservation-based. `IInboxStore` replaces `RecordConsumer` with `TryReserve`/`MarkConsumerProcessed`, and `InboxMessageConsumers` gains `ReservedOnUtc` and `ProcessedOnUtc` columns (schema change — update your migrations). Concurrent duplicate deliveries now execute each handler exactly once; a crashed consumer's reservation goes stale after `MessagingOptions.ConsumerReservationTimeout` (default 5 minutes) and is taken over by a redelivery or dead-letter replay. `EfInboxStore` requires a relational EF Core provider.
 - **BREAKING — Messaging (`Modulus.Messaging`)**: MassTransit has been replaced with an in-house transport layer to remove the last commercially licensed dependency.
   - New packages: `ModulusKit.Messaging.RabbitMq` (RabbitMQ.Client) and `ModulusKit.Messaging.AzureServiceBus` (Azure.Messaging.ServiceBus). Broker transports need one extra registration: `AddModulusRabbitMqTransport()` / `AddModulusAzureServiceBusTransport()`. The in-memory transport remains built into `ModulusKit.Messaging`.
   - Wire format and topology names are **not** MassTransit-compatible — drain queues before upgrading and delete old MassTransit exchanges/queues/topics afterwards. See `docs/messaging/migrating-from-masstransit.md`.

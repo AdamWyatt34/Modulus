@@ -67,20 +67,65 @@ internal sealed class EfInboxStore(InboxDbContext dbContext) : IInboxStore
     {
         return await dbContext.InboxMessageConsumers
             .AsNoTracking()
-            .AnyAsync(c => c.InboxMessageId == messageId && c.Name == handlerName, cancellationToken).ConfigureAwait(false);
+            .AnyAsync(
+                c => c.InboxMessageId == messageId && c.Name == handlerName && c.ProcessedOnUtc != null,
+                cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task RecordConsumer(
+    public async Task<bool> TryReserve(
+        Guid messageId,
+        string handlerName,
+        TimeSpan staleAfter,
+        CancellationToken cancellationToken = default)
+    {
+        var reservation = new InboxMessageConsumer
+        {
+            InboxMessageId = messageId,
+            Name = handlerName,
+            ReservedOnUtc = DateTime.UtcNow,
+        };
+        dbContext.InboxMessageConsumers.Add(reservation);
+
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+            // Detach so a later claim through this same context reaches the database's PK
+            // instead of tripping over the change tracker's identity map.
+            dbContext.Entry(reservation).State = EntityState.Detached;
+            return true;
+        }
+        catch (DbUpdateException)
+        {
+            // The composite PK claimed the pair for someone else — fall through to takeover.
+            dbContext.ChangeTracker.Clear();
+        }
+
+        // The row exists: processed, freshly reserved, or abandoned. The predicate makes
+        // takeover of an abandoned reservation single-winner — a concurrent takeover moves
+        // ReservedOnUtc past the cutoff, so the loser's update matches zero rows.
+        var cutoff = DateTime.UtcNow - staleAfter;
+        var takenOver = await dbContext.InboxMessageConsumers
+            .Where(c => c.InboxMessageId == messageId
+                && c.Name == handlerName
+                && c.ProcessedOnUtc == null
+                && c.ReservedOnUtc < cutoff)
+            .ExecuteUpdateAsync(
+                s => s.SetProperty(c => c.ReservedOnUtc, DateTime.UtcNow),
+                cancellationToken).ConfigureAwait(false);
+
+        return takenOver == 1;
+    }
+
+    public async Task MarkConsumerProcessed(
         Guid messageId,
         string handlerName,
         CancellationToken cancellationToken = default)
     {
-        dbContext.InboxMessageConsumers.Add(new InboxMessageConsumer
-        {
-            InboxMessageId = messageId,
-            Name = handlerName,
-        });
-
-        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await dbContext.InboxMessageConsumers
+            .Where(c => c.InboxMessageId == messageId && c.Name == handlerName)
+            .ExecuteUpdateAsync(
+                s => s.SetProperty(c => c.ProcessedOnUtc, DateTime.UtcNow),
+                cancellationToken).ConfigureAwait(false);
     }
 }

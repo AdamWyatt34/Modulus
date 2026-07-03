@@ -68,6 +68,14 @@ public sealed class MessagingOptions
     /// message is dead-lettered on the transport.
     /// </summary>
     public RetryPolicyOptions ConsumerRetry { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets how long an inbox consumer reservation may sit unprocessed before another
+    /// delivery may take it over (e.g. after the owning process crashed mid-handler). Must
+    /// exceed the worst-case handler execution time, or a slow handler and a concurrent
+    /// delivery can both execute. Defaults to 5 minutes.
+    /// </summary>
+    public TimeSpan ConsumerReservationTimeout { get; set; } = TimeSpan.FromMinutes(5);
 }
 
 /// <summary>

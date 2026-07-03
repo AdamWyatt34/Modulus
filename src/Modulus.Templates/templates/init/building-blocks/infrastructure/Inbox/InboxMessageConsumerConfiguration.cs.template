@@ -10,5 +10,7 @@ public class InboxMessageConsumerConfiguration : IEntityTypeConfiguration<InboxM
     {
         builder.HasKey(e => new { e.InboxMessageId, e.Name });
         builder.Property(e => e.Name).IsRequired().HasMaxLength(500);
+        builder.Property(e => e.ReservedOnUtc).IsRequired();
+        builder.Property(e => e.ProcessedOnUtc);
     }
 }

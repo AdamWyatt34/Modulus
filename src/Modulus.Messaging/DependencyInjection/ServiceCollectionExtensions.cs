@@ -89,6 +89,10 @@ public static class ServiceCollectionExtensions
             throw new ArgumentOutOfRangeException(nameof(options), options.PrefetchCount,
                 "PrefetchCount must be between 1 and 1000.");
 
+        if (options.ConsumerReservationTimeout <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(options), options.ConsumerReservationTimeout,
+                "ConsumerReservationTimeout must be positive and exceed the worst-case handler execution time.");
+
         ValidateRetryPolicy(options.RetryPolicy, nameof(MessagingOptions.RetryPolicy));
         ValidateRetryPolicy(options.ConsumerRetry, nameof(MessagingOptions.ConsumerRetry));
         ValidateTransportConfiguration(options);

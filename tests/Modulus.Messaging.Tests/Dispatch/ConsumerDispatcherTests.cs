@@ -121,8 +121,8 @@ public class ConsumerDispatcherTests
         (await dispatcher.DispatchAsync(envelope, CancellationToken.None)).ShouldBe(MessageDispatchResult.Acknowledge);
 
         handler.HandledEvents.Count.ShouldBe(1);
-        inbox.RecordedConsumers.Count.ShouldBe(1);
-        inbox.RecordedConsumers[0].HandlerName.ShouldBe(nameof(TestOrderCreatedHandler));
+        inbox.ProcessedConsumers.Count.ShouldBe(1);
+        inbox.ProcessedConsumers[0].HandlerName.ShouldBe(nameof(TestOrderCreatedHandler));
     }
 
     [Fact]
@@ -179,7 +179,85 @@ public class ConsumerDispatcherTests
         result.ShouldBe(MessageDispatchResult.Acknowledge);
         succeeding.HandledEvents.Count.ShouldBe(1);
         flaky.HandledEvents.Count.ShouldBe(1);
-        inbox.RecordedConsumers.Count.ShouldBe(2);
+        inbox.ProcessedConsumers.Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task Dispatch_ConcurrentDuplicateDeliveries_HandlerExecutesExactlyOnce()
+    {
+        // Two dispatches of the same envelope race: the reservation makes one the owner;
+        // the other backs off until it sees the pair processed, then acknowledges.
+        var handler = new SlowOrderCreatedHandler(TimeSpan.FromMilliseconds(150));
+        var inbox = new FakeInboxStore();
+        var services = new ServiceCollection();
+        services.AddSingleton<IIntegrationEventHandler<TestOrderCreatedEvent>>(handler);
+        services.AddSingleton<IInboxStore>(inbox);
+        var dispatcher = BuildDispatcher(services, new MessagingOptions
+        {
+            ConsumerRetry = new RetryPolicyOptions
+            {
+                MaxAttempts = 20,
+                InitialInterval = TimeSpan.FromMilliseconds(50),
+                MaxInterval = TimeSpan.FromMilliseconds(50),
+                IntervalIncrement = TimeSpan.Zero,
+            },
+        });
+
+        var envelope = EnvelopeFor(new TestOrderCreatedEvent { OrderId = 7, CustomerName = "Race" });
+
+        var results = await Task.WhenAll(
+            dispatcher.DispatchAsync(envelope, CancellationToken.None),
+            dispatcher.DispatchAsync(envelope, CancellationToken.None));
+
+        results.ShouldAllBe(r => r == MessageDispatchResult.Acknowledge);
+        handler.HandledEvents.Count.ShouldBe(1);
+        inbox.ProcessedConsumers.Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Dispatch_StaleReservation_IsTakenOverAndReExecuted()
+    {
+        // Simulates a crashed owner: the reservation exists but never completed. Once it
+        // ages past the timeout, a redelivery takes it over and runs the handler.
+        var handler = new TestOrderCreatedHandler();
+        var inbox = new FakeInboxStore();
+        var services = new ServiceCollection();
+        services.AddSingleton<IIntegrationEventHandler<TestOrderCreatedEvent>>(handler);
+        services.AddSingleton<IInboxStore>(inbox);
+        var dispatcher = BuildDispatcher(services);
+
+        var @event = new TestOrderCreatedEvent { OrderId = 8, CustomerName = "Crashed" };
+        (await inbox.TryReserve(@event.EventId, nameof(TestOrderCreatedHandler), TimeSpan.FromMinutes(5)))
+            .ShouldBeTrue();
+        inbox.AgeReservation(@event.EventId, nameof(TestOrderCreatedHandler), TimeSpan.FromMinutes(10));
+
+        var result = await dispatcher.DispatchAsync(EnvelopeFor(@event), CancellationToken.None);
+
+        result.ShouldBe(MessageDispatchResult.Acknowledge);
+        handler.HandledEvents.Count.ShouldBe(1);
+        inbox.ProcessedConsumers.Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Dispatch_LiveForeignReservation_RetriesThenDeadLetters()
+    {
+        // A live reservation held by another delivery must not be acknowledged past — the
+        // dispatch retries and, if the owner never completes, dead-letters (replayable).
+        var handler = new TestOrderCreatedHandler();
+        var inbox = new FakeInboxStore();
+        var services = new ServiceCollection();
+        services.AddSingleton<IIntegrationEventHandler<TestOrderCreatedEvent>>(handler);
+        services.AddSingleton<IInboxStore>(inbox);
+        var dispatcher = BuildDispatcher(services, FastRetryOptions(maxAttempts: 3));
+
+        var @event = new TestOrderCreatedEvent { OrderId = 9, CustomerName = "Contended" };
+        (await inbox.TryReserve(@event.EventId, nameof(TestOrderCreatedHandler), TimeSpan.FromMinutes(5)))
+            .ShouldBeTrue();
+
+        var result = await dispatcher.DispatchAsync(EnvelopeFor(@event), CancellationToken.None);
+
+        result.ShouldBe(MessageDispatchResult.DeadLetter);
+        handler.HandledEvents.ShouldBeEmpty();
     }
 
     [Fact]

@@ -1,3 +1,4 @@
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Modulus.Messaging.Abstractions;
 using Modulus.Messaging.Inbox;
@@ -6,22 +7,41 @@ using Xunit;
 
 namespace Modulus.Messaging.Tests.Inbox;
 
+// Sqlite in-memory rather than the EF InMemory provider: the reservation contract depends
+// on the composite primary key actually being enforced and on ExecuteUpdateAsync.
 public sealed class EfInboxStoreTests : IDisposable
 {
+    private readonly SqliteConnection _connection;
     private readonly InboxDbContext _dbContext;
     private readonly EfInboxStore _store;
 
     public EfInboxStoreTests()
     {
+        _connection = new SqliteConnection("DataSource=:memory:");
+        _connection.Open();
+
         var options = new DbContextOptionsBuilder<InboxDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .UseSqlite(_connection)
             .Options;
 
         _dbContext = new InboxDbContext(options);
+        _dbContext.Database.EnsureCreated();
         _store = new EfInboxStore(_dbContext);
     }
 
-    public void Dispose() => _dbContext.Dispose();
+    public void Dispose()
+    {
+        _dbContext.Dispose();
+        _connection.Dispose();
+    }
+
+    private InboxDbContext CreateSecondContext()
+    {
+        var options = new DbContextOptionsBuilder<InboxDbContext>()
+            .UseSqlite(_connection)
+            .Options;
+        return new InboxDbContext(options);
+    }
 
     [Fact]
     public async Task Save_ValidMessage_PersistsToDatabase()
@@ -33,7 +53,7 @@ public sealed class EfInboxStoreTests : IDisposable
         await _store.Save(@event);
 
         // Assert
-        var messages = await _dbContext.InboxMessages.ToListAsync();
+        var messages = await _dbContext.InboxMessages.AsNoTracking().ToListAsync();
         messages.Count.ShouldBe(1);
         messages[0].Id.ShouldBe(@event.EventId);
         messages[0].Type.ShouldContain(nameof(TestIntegrationEvent));
@@ -81,12 +101,7 @@ public sealed class EfInboxStoreTests : IDisposable
         // Arrange
         var @event = new TestIntegrationEvent();
         await _store.Save(@event);
-
-        // Mark as processed directly via DbContext since ExecuteUpdateAsync
-        // is not supported by the EF Core InMemory provider
-        var message = await _dbContext.InboxMessages.FindAsync(@event.EventId);
-        message!.ProcessedOnUtc = DateTime.UtcNow;
-        await _dbContext.SaveChangesAsync();
+        await _store.MarkAsProcessed([@event.EventId]);
 
         // Act
         var pending = await _store.GetPending(10);
@@ -96,18 +111,18 @@ public sealed class EfInboxStoreTests : IDisposable
     }
 
     [Fact]
-    public async Task HasBeenProcessed_ReturnsTrueForProcessedMessage()
+    public async Task HasBeenProcessed_ReturnsTrueOnlyAfterMarkConsumerProcessed()
     {
         // Arrange
         var messageId = Guid.NewGuid();
         const string handlerName = "OrderProcessedHandler";
 
-        // Act
-        await _store.RecordConsumer(messageId, handlerName);
-        var result = await _store.HasBeenProcessed(messageId, handlerName);
+        // Act + Assert — a live reservation does not count as processed
+        (await _store.TryReserve(messageId, handlerName, TimeSpan.FromMinutes(5))).ShouldBeTrue();
+        (await _store.HasBeenProcessed(messageId, handlerName)).ShouldBeFalse();
 
-        // Assert
-        result.ShouldBeTrue();
+        await _store.MarkConsumerProcessed(messageId, handlerName);
+        (await _store.HasBeenProcessed(messageId, handlerName)).ShouldBeTrue();
     }
 
     [Fact]
@@ -124,20 +139,82 @@ public sealed class EfInboxStoreTests : IDisposable
     }
 
     [Fact]
-    public async Task RecordConsumer_PersistsConsumerRecord()
+    public async Task TryReserve_DuplicateClaim_SecondCallerLoses()
     {
         // Arrange
         var messageId = Guid.NewGuid();
         const string handlerName = "InvoiceCreatedHandler";
 
-        // Act
-        await _store.RecordConsumer(messageId, handlerName);
+        // Act — a second store (fresh DbContext, same database) races for the same pair
+        (await _store.TryReserve(messageId, handlerName, TimeSpan.FromMinutes(5))).ShouldBeTrue();
 
-        // Assert — EF InMemory does not enforce FK constraints, assert state directly
-        var consumers = await _dbContext.InboxMessageConsumers.ToListAsync();
-        consumers.Count.ShouldBe(1);
-        consumers[0].InboxMessageId.ShouldBe(messageId);
-        consumers[0].Name.ShouldBe(handlerName);
+        using var secondContext = CreateSecondContext();
+        var secondStore = new EfInboxStore(secondContext);
+
+        // Assert — the composite PK makes the second claim fail
+        (await secondStore.TryReserve(messageId, handlerName, TimeSpan.FromMinutes(5))).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task TryReserve_ProcessedPair_ReturnsFalseEvenWhenStale()
+    {
+        // Arrange
+        var messageId = Guid.NewGuid();
+        const string handlerName = "Handler";
+        (await _store.TryReserve(messageId, handlerName, TimeSpan.FromMinutes(5))).ShouldBeTrue();
+        await _store.MarkConsumerProcessed(messageId, handlerName);
+
+        // Act — even with a zero timeout (everything stale), a processed pair is never reclaimed
+        var result = await _store.TryReserve(messageId, handlerName, TimeSpan.Zero);
+
+        // Assert
+        result.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task TryReserve_StaleUnprocessedReservation_IsTakenOver()
+    {
+        // Arrange — a reservation whose owner "crashed" (backdated past the timeout)
+        var messageId = Guid.NewGuid();
+        const string handlerName = "Handler";
+        (await _store.TryReserve(messageId, handlerName, TimeSpan.FromMinutes(5))).ShouldBeTrue();
+
+        await _dbContext.InboxMessageConsumers
+            .Where(c => c.InboxMessageId == messageId && c.Name == handlerName)
+            .ExecuteUpdateAsync(s => s.SetProperty(c => c.ReservedOnUtc, DateTime.UtcNow.AddMinutes(-10)));
+
+        // Act
+        using var secondContext = CreateSecondContext();
+        var secondStore = new EfInboxStore(secondContext);
+        var takenOver = await secondStore.TryReserve(messageId, handlerName, TimeSpan.FromMinutes(5));
+
+        // Assert — takeover succeeded and refreshed the reservation, so a third claim loses
+        takenOver.ShouldBeTrue();
+        (await _store.TryReserve(messageId, handlerName, TimeSpan.FromMinutes(5))).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task TryReserve_ConcurrentTakeoverOfStaleReservation_SingleWinner()
+    {
+        // Arrange — one stale reservation, two takeover attempts
+        var messageId = Guid.NewGuid();
+        const string handlerName = "Handler";
+        (await _store.TryReserve(messageId, handlerName, TimeSpan.FromMinutes(5))).ShouldBeTrue();
+
+        await _dbContext.InboxMessageConsumers
+            .Where(c => c.InboxMessageId == messageId && c.Name == handlerName)
+            .ExecuteUpdateAsync(s => s.SetProperty(c => c.ReservedOnUtc, DateTime.UtcNow.AddMinutes(-10)));
+
+        // Act — sequential here (Sqlite serializes writes anyway); the winner's update moves
+        // ReservedOnUtc past the cutoff, so the second predicate matches zero rows.
+        using var contextA = CreateSecondContext();
+        using var contextB = CreateSecondContext();
+        var first = await new EfInboxStore(contextA).TryReserve(messageId, handlerName, TimeSpan.FromMinutes(5));
+        var second = await new EfInboxStore(contextB).TryReserve(messageId, handlerName, TimeSpan.FromMinutes(5));
+
+        // Assert
+        first.ShouldBeTrue();
+        second.ShouldBeFalse();
     }
 
     private sealed record TestIntegrationEvent : IIntegrationEvent

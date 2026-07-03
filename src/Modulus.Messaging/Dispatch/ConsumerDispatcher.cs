@@ -10,8 +10,12 @@ namespace Modulus.Messaging.Dispatch;
 /// <summary>
 /// The transport-agnostic consumer pipeline: resolves the event type, deserializes,
 /// and invokes every registered handler inside a DI scope, wrapped with inbox
-/// idempotency (at most once per <c>(EventId, handlerName)</c>) and in-process
-/// exponential retry per <see cref="MessagingOptions.ConsumerRetry"/>. Only after all
+/// idempotency and in-process exponential retry per <see cref="MessagingOptions.ConsumerRetry"/>.
+/// Idempotency is reservation-based: each <c>(EventId, handlerName)</c> pair is claimed in the
+/// inbox before the handler runs, so concurrent duplicate deliveries execute a handler exactly
+/// once, and a crashed owner's reservation goes stale
+/// (<see cref="MessagingOptions.ConsumerReservationTimeout"/>) and is taken over by a
+/// redelivery or dead-letter replay — preserving at-least-once delivery. Only after all
 /// retries are exhausted does it hand the message back to the transport for dead-lettering.
 /// </summary>
 internal sealed class ConsumerDispatcher(
@@ -60,11 +64,15 @@ internal sealed class ConsumerDispatcher(
 
         var maxAttempts = Math.Max(1, options.ConsumerRetry.MaxAttempts);
 
+        // Handlers whose reservation this dispatch already holds: a retry attempt must
+        // re-execute them rather than see its own reservation as foreign and back off.
+        var reservedByThisDispatch = new HashSet<string>(StringComparer.Ordinal);
+
         for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
             try
             {
-                await HandleOnce(eventType, integrationEvent, cancellationToken).ConfigureAwait(false);
+                await HandleOnce(eventType, integrationEvent, reservedByThisDispatch, cancellationToken).ConfigureAwait(false);
                 return MessageDispatchResult.Acknowledge;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -104,6 +112,7 @@ internal sealed class ConsumerDispatcher(
     private async Task HandleOnce(
         Type eventType,
         IIntegrationEvent @event,
+        HashSet<string> reservedByThisDispatch,
         CancellationToken cancellationToken)
     {
         using var scope = scopeFactory.CreateScope();
@@ -122,20 +131,42 @@ internal sealed class ConsumerDispatcher(
             return;
         }
 
-        // Save is idempotent; re-delivery re-runs only the handlers that have not recorded success.
+        // Save is idempotent; re-delivery re-runs only the handlers that have not completed.
         await inboxStore.Save(@event, cancellationToken).ConfigureAwait(false);
 
         foreach (var handler in handlers)
         {
-            var alreadyProcessed = await inboxStore
-                .HasBeenProcessed(@event.EventId, handler.Name, cancellationToken)
-                .ConfigureAwait(false);
+            if (!reservedByThisDispatch.Contains(handler.Name))
+            {
+                var alreadyProcessed = await inboxStore
+                    .HasBeenProcessed(@event.EventId, handler.Name, cancellationToken)
+                    .ConfigureAwait(false);
 
-            if (alreadyProcessed)
-                continue;
+                if (alreadyProcessed)
+                    continue;
+
+                var reserved = await inboxStore
+                    .TryReserve(@event.EventId, handler.Name, options.ConsumerReservationTimeout, cancellationToken)
+                    .ConfigureAwait(false);
+
+                if (!reserved)
+                {
+                    // The pair may have completed between the check and the reserve.
+                    if (await inboxStore.HasBeenProcessed(@event.EventId, handler.Name, cancellationToken).ConfigureAwait(false))
+                        continue;
+
+                    throw new InboxReservationPendingException(@event.EventId, handler.Name);
+                }
+
+                reservedByThisDispatch.Add(handler.Name);
+            }
 
             await handler.Handle(@event, cancellationToken).ConfigureAwait(false);
-            await inboxStore.RecordConsumer(@event.EventId, handler.Name, cancellationToken).ConfigureAwait(false);
+            await inboxStore.MarkConsumerProcessed(@event.EventId, handler.Name, cancellationToken).ConfigureAwait(false);
+
+            // Completed pairs are covered by the HasBeenProcessed fast path from here on;
+            // dropping them keeps a later retry from re-executing a succeeded handler.
+            reservedByThisDispatch.Remove(handler.Name);
         }
     }
 }

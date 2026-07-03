@@ -30,6 +30,8 @@ public sealed class InboxDbContext : DbContext
         {
             entity.HasKey(e => new { e.InboxMessageId, e.Name });
             entity.Property(e => e.Name).IsRequired().HasMaxLength(500);
+            entity.Property(e => e.ReservedOnUtc).IsRequired();
+            entity.Property(e => e.ProcessedOnUtc);
         });
     }
 }
