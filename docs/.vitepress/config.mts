@@ -113,6 +113,7 @@ export default withMermaid(
               { text: 'Transports', link: '/messaging/transports' },
               { text: 'Outbox Pattern', link: '/messaging/outbox-pattern' },
               { text: 'Inbox Pattern', link: '/messaging/inbox-pattern' },
+              { text: 'Migrating from MassTransit', link: '/messaging/migrating-from-masstransit' },
             ]
           }
         ],

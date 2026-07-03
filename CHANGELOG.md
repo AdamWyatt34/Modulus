@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **BREAKING — Messaging (`Modulus.Messaging`)**: MassTransit has been replaced with an in-house transport layer to remove the last commercially licensed dependency.
+  - New packages: `ModulusKit.Messaging.RabbitMq` (RabbitMQ.Client) and `ModulusKit.Messaging.AzureServiceBus` (Azure.Messaging.ServiceBus). Broker transports need one extra registration: `AddModulusRabbitMqTransport()` / `AddModulusAzureServiceBusTransport()`. The in-memory transport remains built into `ModulusKit.Messaging`.
+  - Wire format and topology names are **not** MassTransit-compatible — drain queues before upgrading and delete old MassTransit exchanges/queues/topics afterwards. See `docs/messaging/migrating-from-masstransit.md`.
+  - All registered handlers for an event are now invoked (previously only the last-registered handler ran).
+  - New `MessagingOptions`: `EndpointName`, `PrefetchCount`, `AutoProvision`.
+  - Consumer retry is in-process exponential backoff followed by transport dead-lettering; the delay curve approximates (is not identical to) MassTransit's `Exponential`.
+  - The transitive `Newtonsoft.Json` pin is gone; serialization is System.Text.Json end to end.
+
+### Added
+
+- `IOutboxDispatcher` extraction from `OutboxProcessor` (single synchronous dispatch pass, used by tests and tooling).
+- RabbitMQ Testcontainers integration test suite (`Category=Integration`) and a non-blocking CI job for it.
+
 ## [1.1.0] - 2026-03-05
 
 ### Added

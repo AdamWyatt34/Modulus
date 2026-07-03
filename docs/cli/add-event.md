@@ -1,6 +1,6 @@
 # modulus add-event
 
-Scaffolds an integration event inside a module's `Integration` project. Integration events are the contract for cross-module and cross-process communication: they are published through `IMessageBus`, stored in the transactional outbox, and delivered to consumers via MassTransit. They derive from the `IntegrationEvent` base record, which supplies `EventId`, `OccurredOn`, and `CorrelationId`.
+Scaffolds an integration event inside a module's `Integration` project. Integration events are the contract for cross-module and cross-process communication: they are published through `IMessageBus`, stored in the transactional outbox, and delivered to consumers via the configured transport (InMemory, RabbitMQ, or Azure Service Bus). They derive from the `IntegrationEvent` base record, which supplies `EventId`, `OccurredOn`, and `CorrelationId`.
 
 ## Synopsis
 
@@ -72,4 +72,4 @@ With the outbox configured, the event is persisted in the same transaction as yo
 
 - [modulus add-consumer](./add-consumer) -- Scaffold a handler for an integration event
 - [modulus add-command](./add-command) -- Scaffold a command that may publish events
-- [Messaging & Outbox](/messaging/) -- How integration events flow through the outbox and MassTransit
+- [Messaging & Outbox](/messaging/) -- How integration events flow through the outbox and transport layer

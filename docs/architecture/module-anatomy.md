@@ -85,7 +85,7 @@ Infrastructure depends on Application (which transitively includes Domain). Infr
 
 ### Domain
 
-The Domain layer is the core of the module. It contains the business rules, entities, and domain events. It has **zero** framework dependencies -- no EF Core, no ASP.NET, no MassTransit.
+The Domain layer is the core of the module. It contains the business rules, entities, and domain events. It has **zero** framework dependencies -- no EF Core, no ASP.NET, no messaging or broker libraries.
 
 **Contains:**
 

@@ -27,7 +27,7 @@ sequenceDiagram
     participant Handler as Command Handler
     participant DB as Database
     participant Outbox as OutboxProcessor
-    participant Bus as MassTransit
+    participant Bus as Transport
     participant Consumer as Consumer
 
     Handler->>DB: BEGIN TRANSACTION
@@ -47,7 +47,7 @@ sequenceDiagram
 1. **Command handler** saves the domain entity and an `OutboxMessage` in the **same database transaction**.
 2. The transaction commits atomically -- either both the entity and the outbox message are saved, or neither is.
 3. **OutboxProcessor** (a `BackgroundService`) polls the database on a configurable interval for pending outbox messages.
-4. For each batch, it deserializes the events and publishes them through MassTransit.
+4. For each batch, it deserializes the events and publishes them through the configured transport.
 5. After successful publishing, the messages are marked as processed.
 
 ## IOutboxStore Interface
@@ -107,14 +107,14 @@ Because `EfOutboxStore` operates on the same `DbContext` as your repositories, c
 
 ## OutboxProcessor
 
-The `OutboxProcessor` is a `BackgroundService` that runs continuously in your application. It polls the outbox store at a configurable interval, deserializes pending events, publishes them through MassTransit, and marks them as processed.
+The `OutboxProcessor` is a `BackgroundService` that runs continuously in your application. It polls the outbox store at a configurable interval, deserializes pending events, publishes them through the configured transport, and marks them as processed.
 
 **Processing flow:**
 
 1. Wait for `OutboxPollInterval` (default: 5 seconds).
 2. Call `IOutboxStore.GetPending(batchSize)` to retrieve up to `OutboxBatchSize` (default: 100) pending messages.
 3. For each message, deserialize the `Payload` using the `EventType` to resolve the concrete type.
-4. Publish each deserialized event through MassTransit.
+4. Publish each deserialized event through the configured transport. On RabbitMQ, publisher confirmations are enabled, so a publish only counts as successful once the broker confirms it.
 5. Call `IOutboxStore.MarkAsProcessed(ids)` for all successfully published messages.
 6. Repeat.
 
@@ -123,10 +123,11 @@ The `OutboxProcessor` is a `BackgroundService` that runs continuously in your ap
 Control the polling interval and batch size through `MessagingOptions`:
 
 ```csharp
+builder.Services.AddModulusRabbitMqTransport();
 builder.Services.AddModulusMessaging(options =>
 {
     options.Transport = Transport.RabbitMq;
-    options.ConnectionString = "amqp://guest:guest@localhost:5672";
+    options.ConnectionString = builder.Configuration.GetConnectionString("RabbitMq");
     options.Assemblies.Add(typeof(Program).Assembly);
 
     // Outbox configuration
@@ -207,7 +208,7 @@ flowchart TD
     A[OutboxProcessor polls] --> B{Pending messages?}
     B -->|No| A
     B -->|Yes| C[Deserialize events]
-    C --> D[Publish via MassTransit]
+    C --> D[Publish via transport]
     D --> E{Publish succeeded?}
     E -->|Yes| F[Mark as processed]
     F --> A

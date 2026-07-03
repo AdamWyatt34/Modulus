@@ -9,7 +9,7 @@ Recipes are self-contained guides that show how to add specific capabilities to 
 | [Authentication](./authentication) | Secure module endpoints with JWT bearer authentication and authorization pipeline behaviors |
 | [Caching](./caching) | Reduce database load with a distributed caching pipeline behavior for queries |
 | [Strongly Typed IDs](./strongly-typed-ids) | Eliminate primitive obsession by wrapping entity IDs in type-safe wrappers |
-| [Sagas](./sagas) | Coordinate multi-step workflows across modules using MassTransit state machines |
+| [Sagas](./sagas) | Coordinate multi-step workflows across modules with a hand-rolled process manager over integration events and the outbox |
 | [API Versioning](./api-versioning) | Evolve your API endpoints without breaking existing clients |
 | [Health Checks](./health-checks) | Monitor module health in production with built-in and custom health check endpoints |
 | [Custom Source Generators](./custom-generators) | Create an incremental source generator for your domain-specific boilerplate |

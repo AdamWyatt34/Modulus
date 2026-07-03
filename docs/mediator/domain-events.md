@@ -265,7 +265,7 @@ Modulus distinguishes between domain events and integration events:
 | Aspect | Domain Events | Integration Events |
 |---|---|---|
 | **Scope** | In-process, within a single module or across modules in the same process | Cross-module, potentially cross-service via a message bus |
-| **Transport** | `IMediator.Publish()` -- direct in-memory dispatch | MassTransit message bus (InMemory, RabbitMQ, Azure Service Bus) |
+| **Transport** | `IMediator.Publish()` -- direct in-memory dispatch | `IMessageBus` over the transport layer (InMemory, RabbitMQ, Azure Service Bus) |
 | **Delivery** | Synchronous (awaited), same transaction scope | Asynchronous, eventual consistency |
 | **Contract** | `IDomainEvent` | `IIntegrationEvent` |
 | **Coupling** | Handlers reference domain types directly | Handlers reference shared integration contracts |

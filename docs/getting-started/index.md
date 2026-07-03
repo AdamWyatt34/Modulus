@@ -76,7 +76,9 @@ Modulus ships as a CLI tool plus a set of companion library packages. The CLI au
 | [`ModulusKit.Cli`](https://www.nuget.org/packages/ModulusKit.Cli) | CLI tool for scaffolding modular monolith solutions |
 | [`ModulusKit.Mediator`](https://www.nuget.org/packages/ModulusKit.Mediator) | CQRS mediator with pipeline behaviors and Result pattern |
 | [`ModulusKit.Mediator.Abstractions`](https://www.nuget.org/packages/ModulusKit.Mediator.Abstractions) | Mediator interfaces, Result types, and pipeline contracts |
-| [`ModulusKit.Messaging`](https://www.nuget.org/packages/ModulusKit.Messaging) | MassTransit messaging with multi-transport and outbox support |
+| [`ModulusKit.Messaging`](https://www.nuget.org/packages/ModulusKit.Messaging) | Messaging core with in-memory transport, transactional outbox, and inbox |
+| [`ModulusKit.Messaging.RabbitMq`](https://www.nuget.org/packages/ModulusKit.Messaging.RabbitMq) | RabbitMQ transport for ModulusKit.Messaging |
+| [`ModulusKit.Messaging.AzureServiceBus`](https://www.nuget.org/packages/ModulusKit.Messaging.AzureServiceBus) | Azure Service Bus transport for ModulusKit.Messaging |
 | [`ModulusKit.Messaging.Abstractions`](https://www.nuget.org/packages/ModulusKit.Messaging.Abstractions) | Messaging interfaces and integration event contracts |
 
 ::: tip Abstractions packages

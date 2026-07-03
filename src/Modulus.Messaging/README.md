@@ -1,12 +1,19 @@
 # Modulus.Messaging
 
-Messaging library for .NET modular monoliths with MassTransit integration, supporting RabbitMQ, Azure Service Bus, and in-memory transports with a transactional outbox.
+Messaging library for .NET modular monoliths: integration events over an in-house transport layer with a transactional outbox and inbox. This core package includes the **in-memory transport**; RabbitMQ and Azure Service Bus ship as separate transport packages.
 
 ## Installation
 
 ```bash
 dotnet add package ModulusKit.Messaging
 ```
+
+For a broker transport, add the matching package and register it with one line:
+
+| Transport | Package | Registration |
+|---|---|---|
+| RabbitMQ | `ModulusKit.Messaging.RabbitMq` | `services.AddModulusRabbitMqTransport();` |
+| Azure Service Bus | `ModulusKit.Messaging.AzureServiceBus` | `services.AddModulusAzureServiceBusTransport();` |
 
 ## Setup
 
@@ -32,61 +39,46 @@ services.AddModulusMessaging(builder.Configuration, options =>
 
 The callback runs after binding, so it can also override any bound value. Prefer this overload so
 transport, connection string, and outbox/retry settings live in configuration. You can also
-configure everything imperatively in code:
-
-```csharp
-services.AddModulusMessaging(options =>
-{
-    options.Transport = Transport.InMemory;
-    options.Assemblies.Add(typeof(Program).Assembly);
-});
-```
+configure everything imperatively via `AddModulusMessaging(Action<MessagingOptions>)`.
 
 ### Transport Configuration
 
-Set these via the `Messaging` section in `appsettings.json`:
+Select the transport via the `Messaging` section — `"InMemory"`, `"RabbitMq"`, or `"AzureServiceBus"`:
 
 ```json
 {
   "Messaging": {
     "Transport": "RabbitMq",
-    "ConnectionString": "amqp://guest:guest@localhost:5672"
+    "ConnectionString": "...",
+    "EndpointName": "orders-service",
+    "PrefetchCount": 10,
+    "AutoProvision": true
   }
 }
 ```
 
-Or imperatively:
-
 ```csharp
-// RabbitMQ
-services.AddModulusMessaging(options =>
+services.AddModulusRabbitMqTransport(); // from ModulusKit.Messaging.RabbitMq
+services.AddModulusMessaging(builder.Configuration, options =>
 {
-    options.Transport = Transport.RabbitMq;
-    options.ConnectionString = "amqp://guest:guest@localhost:5672";
-    options.Assemblies.Add(typeof(Program).Assembly);
-});
-
-// Azure Service Bus
-services.AddModulusMessaging(options =>
-{
-    options.Transport = Transport.AzureServiceBus;
-    options.ConnectionString = "Endpoint=sb://...";
     options.Assemblies.Add(typeof(Program).Assembly);
 });
 ```
 
-### Outbox Options
+The RabbitMQ connection string format is `amqp://user:pass@host:5672/vhost`; Azure Service Bus takes
+either an `Endpoint=sb://...` connection string or `FullyQualifiedNamespace` plus a `TokenCredential`
+set in the callback (managed identity). Keep credentials in user secrets or environment variables.
 
-```csharp
-services.AddModulusMessaging(options =>
-{
-    options.Transport = Transport.RabbitMq;
-    options.ConnectionString = "amqp://...";
-    options.OutboxPollInterval = TimeSpan.FromSeconds(5); // default
-    options.OutboxBatchSize = 100;                        // default
-    options.Assemblies.Add(typeof(Program).Assembly);
-});
-```
+If configuration selects a broker transport whose package is not registered, the host fails at
+startup with guidance on which package to install.
+
+Key options (all bindable from the `Messaging` section):
+
+- `EndpointName` — queue/subscription identity of this host; defaults to the sanitized entry assembly name. Replicas sharing it compete for messages.
+- `PrefetchCount` — messages delivered ahead of acknowledgement (default 10, range 1–1000).
+- `AutoProvision` — declare topology automatically (default `true`); set `false` with pre-created entities for least privilege.
+- `OutboxPollInterval` / `OutboxBatchSize` — outbox processor cadence (defaults: 5 seconds / 100).
+- `RetryPolicy:*` (outbox dispatch) and `ConsumerRetry:*` (in-process consumer retry) — independent exponential-backoff policies.
 
 ## Publishing Events
 
@@ -101,7 +93,7 @@ await messageBus.Publish(new OrderShipped(orderId, DateTime.UtcNow));
 await outboxStore.Save(new OrderShipped(orderId, DateTime.UtcNow));
 ```
 
-When using the outbox, events are stored in your database within the same transaction as your business data. A background `OutboxProcessor` polls for pending messages and publishes them via MassTransit.
+When using the outbox, events are stored in your database within the same transaction as your business data. A background `OutboxProcessor` polls for pending messages and publishes them through the configured transport, retrying per `RetryPolicy` before dead-lettering.
 
 ## Handling Events
 
@@ -115,7 +107,7 @@ public class OrderShippedHandler : IIntegrationEventHandler<OrderShipped>
 }
 ```
 
-Handlers are auto-discovered from the assemblies you provide in `MessagingOptions.Assemblies` and registered as scoped services.
+Handlers are auto-discovered from the assemblies you provide in `MessagingOptions.Assemblies` and registered as scoped services. All registered handlers for an event type are invoked; with the inbox registered, each handler runs at most once per event.
 
 ## Database setup
 
@@ -134,8 +126,8 @@ app.Run();
 
 ## Switching Transports
 
-To switch from in-memory to RabbitMQ or Azure Service Bus, change the `Transport` property and provide a connection string. No code changes are needed in your handlers or publishers — the transport is fully abstracted.
+Switching between in-memory, RabbitMQ, and Azure Service Bus is a configuration change — flip the `Messaging` section's `Transport` value and supply the matching connection settings (with the transport package registered). No code changes are needed in your handlers or publishers.
 
 ## Learn More
 
-See the [Modulus repository](https://github.com/adamwyatt34/Modulus) for full documentation.
+See the [Modulus documentation](https://adamwyatt34.github.io/Modulus/messaging/) for the full messaging reference, including per-transport topology and the MassTransit migration guide.

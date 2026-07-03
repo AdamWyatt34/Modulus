@@ -29,7 +29,7 @@ features:
     linkText: Mediator Docs
   - icon: "<< >>"
     title: Messaging & Outbox
-    details: Integration events over MassTransit with InMemory, RabbitMQ, and Azure Service Bus transports. Transactional outbox included.
+    details: Integration events over an in-house transport layer with InMemory, RabbitMQ, and Azure Service Bus transports. Transactional outbox included.
     link: /messaging/
     linkText: Messaging Docs
   - icon: "\U0001F3D7"

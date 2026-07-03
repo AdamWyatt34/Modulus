@@ -33,7 +33,9 @@ Modulus/
 │   ├── Modulus.Templates/                 # Solution and module templates
 │   ├── Modulus.Mediator/                  # Mediator implementation
 │   ├── Modulus.Mediator.Abstractions/     # Mediator interfaces and contracts
-│   ├── Modulus.Messaging/                 # Messaging implementation (MassTransit)
+│   ├── Modulus.Messaging/                 # Messaging core + in-memory transport
+│   ├── Modulus.Messaging.RabbitMq/        # RabbitMQ transport
+│   ├── Modulus.Messaging.AzureServiceBus/ # Azure Service Bus transport
 │   └── Modulus.Messaging.Abstractions/    # Messaging interfaces and contracts
 ├── tests/
 │   ├── Modulus.Cli.Tests/                 # CLI integration tests
@@ -49,7 +51,9 @@ Modulus/
 | `Modulus.Templates` | Scriban templates used by the CLI to generate solution and module files. |
 | `Modulus.Mediator` | The CQRS mediator implementation: dispatcher, pipeline behaviors, and handler resolution. |
 | `Modulus.Mediator.Abstractions` | Public interfaces: `IMediator`, `ICommand`, `IQuery`, `Result`, `Error`, and pipeline contracts. Zero external dependencies. |
-| `Modulus.Messaging` | MassTransit integration: transport configuration, outbox/inbox, and integration event dispatch. |
+| `Modulus.Messaging` | Messaging core: transport abstraction, in-memory transport, outbox/inbox, and the consumer pipeline. |
+| `Modulus.Messaging.RabbitMq` | RabbitMQ transport built on `RabbitMQ.Client`. |
+| `Modulus.Messaging.AzureServiceBus` | Azure Service Bus transport built on `Azure.Messaging.ServiceBus`. |
 | `Modulus.Messaging.Abstractions` | Public interfaces: `IMessageBus`, `IIntegrationEvent`, and consumer contracts. Zero external dependencies. |
 
 ## Running Tests

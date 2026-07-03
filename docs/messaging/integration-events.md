@@ -92,7 +92,7 @@ public interface IIntegrationEventHandler<in TEvent> where TEvent : IIntegration
 }
 ```
 
-A single integration event can have multiple handlers. Each handler is invoked independently by MassTransit.
+A single integration event can have multiple handlers. The consumer pipeline invokes **every** registered handler independently, and the inbox tracks each one separately.
 
 ## Writing Handlers
 
@@ -164,12 +164,12 @@ public sealed class NotifyCustomerOnPaymentProcessedHandler
 
 When you call `AddModulusMessaging(options)`, the library scans the assemblies specified in `options.Assemblies` for all types that implement `IIntegrationEventHandler<TEvent>`. Each discovered handler is:
 
-1. Wrapped with `IdempotentConsumerAdapter<TEvent>` (for inbox-based deduplication).
-2. Registered as a MassTransit consumer.
-3. Resolved from the DI container with a **scoped** lifetime.
+1. Registered in the DI container with a **scoped** lifetime.
+2. Subscribed on the transport for its event type (RabbitMQ exchange binding / Azure Service Bus subscription).
+3. Invoked by the `ConsumerDispatcher`, which applies inbox-based deduplication and in-process retry.
 
 ::: info No manual registration needed
-You do not need to register handlers individually or configure MassTransit consumers. Just ensure the assembly containing your handlers is included in `options.Assemblies`. The framework discovers and registers them automatically.
+You do not need to register handlers or consumers individually. Just ensure the assembly containing your handlers is included in `options.Assemblies`. The framework discovers and registers them automatically.
 :::
 
 ## Domain Events vs Integration Events

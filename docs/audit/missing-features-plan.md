@@ -208,7 +208,7 @@ PR21+ Optional polish, observability, governance, benchmarks
 
 ## What's deliberately not on this list
 
-- **MassTransit v8 upgrade** — out of scope. v8 moved to a paid commercial license; project decision is to stay on v7 with CVE monitoring.
+- **MassTransit v8 upgrade** — resolved differently: MassTransit was removed entirely in favor of an in-house transport layer (see `docs/messaging/migrating-from-masstransit.md`). The v7-pin-with-CVE-monitoring trade no longer exists.
 - **`ModulusKit.Messaging.RabbitMq` / `ModulusKit.Messaging.AzureServiceBus` package split** — listed in [`code-review.md`](code-review.md) as [HIGH] but only matters once Modulus has enough consumers that transitive-dep weight becomes a complaint. Defer until requested.
 - **Provider-specific bundled EF migrations** — Modulus should stay provider-agnostic. Improve templates/docs/tooling around consumer-owned migrations instead.
 - **MediatR migration** — Modulus deliberately ships its own mediator. Not a missing feature.

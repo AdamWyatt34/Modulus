@@ -256,48 +256,44 @@ The EF Core in-memory provider does not support transactions, raw SQL, database-
 
 ## Testing with InMemory Messaging
 
-When your module publishes or consumes integration events, configure the InMemory transport for tests so messages are dispatched without a real broker:
+When your module publishes or consumes integration events, select the InMemory transport for tests so messages are dispatched without a real broker. Because the transport is chosen by the `Messaging` configuration section, the test factory only needs to override one setting:
 
 ```csharp
 protected override void ConfigureWebHost(IWebHostBuilder builder)
 {
-    builder.ConfigureServices(services =>
-    {
-        // Replace the production message bus with InMemory
-        services.AddModulusMessaging(config =>
-        {
-            config.UseInMemoryTransport();
-        });
-    });
+    // Config-driven transport switching: force InMemory for tests
+    builder.UseSetting("Messaging:Transport", "InMemory");
 }
 ```
 
-You can then verify that integration events were published by consuming them in the test:
+Handlers, publishers, and the outbox/inbox pipeline all run exactly as in production -- only the broker is replaced. Delivery on the InMemory transport is immediate, so no fixed delays are needed in tests.
+
+To verify that an integration event was published, assert against the outbox -- the event is stored there in the same transaction as the business data, which is the actual production guarantee:
 
 ```csharp
 [Fact]
-public async Task CreateProduct_PublishesCatalogItemCreatedEvent()
+public async Task CreateProduct_WritesCatalogItemCreatedEventToOutbox()
 {
     // Arrange
-    var harness = Factory.Services.GetRequiredService<ITestHarness>();
-    await harness.Start();
-
     var request = new { Name = "Widget", Price = 9.99m, Sku = "WDG-EVT" };
 
     // Act
     await Client.PostAsJsonAsync("/catalog", request);
 
-    // Assert
-    (await harness.Published
-        .Any<CatalogItemCreatedEvent>())
-        .ShouldBeTrue();
+    // Assert -- the event was saved to the outbox atomically with the product
+    using var scope = Factory.Services.CreateScope();
+    var outbox = scope.ServiceProvider.GetRequiredService<OutboxDbContext>();
 
-    await harness.Stop();
+    (await outbox.OutboxMessages
+        .AnyAsync(m => m.EventType.Contains(nameof(CatalogItemCreatedEvent))))
+        .ShouldBeTrue();
 }
 ```
 
-::: info MassTransit Test Harness
-The `ITestHarness` interface comes from the MassTransit testing package. It intercepts all published and consumed messages, making it straightforward to verify messaging behavior without a real broker.
+To verify end-to-end consumption, register a recording `IIntegrationEventHandler<T>` in an assembly included in `MessagingOptions.Assemblies` and assert it was invoked.
+
+::: info Broker-level integration tests
+The InMemory transport covers the consumer pipeline (deserialization, inbox idempotency, retry) but not broker topology. For tests against a real broker, spin up RabbitMQ with Testcontainers -- this is how the Modulus library itself tests its RabbitMQ transport (tests marked `Category=Integration`).
 :::
 
 ## Accessing Services in Tests

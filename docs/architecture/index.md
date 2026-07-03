@@ -70,7 +70,7 @@ graph TB
     end
     subgraph Libraries["Modulus Libraries"]
         MED[Modulus.Mediator - CQRS + Pipeline]
-        MSG[Modulus.Messaging - MassTransit + Outbox]
+        MSG[Modulus.Messaging - Transport Layer + Outbox]
         GEN[Modulus.Generators - Source Generators]
         ANZ[Modulus.Analyzers - Compile-time Analysis]
     end
@@ -92,7 +92,7 @@ graph TB
 - **Single host** -- `EShop.WebApi` is the only runnable project. It discovers and registers all modules at startup through the `IModuleRegistration` interface.
 - **Five layers per module** -- Domain, Application, Infrastructure, Api, and Integration. Each layer has strict dependency rules enforced by architecture tests.
 - **Building blocks** -- Shared base classes (`Entity<TId>`, `AggregateRoot<TId>`, `ValueObject`, `BaseDbContext`, etc.) live in a `BuildingBlocks` folder and are referenced by all modules.
-- **Modulus libraries** -- `Modulus.Mediator` provides in-process CQRS dispatch. `Modulus.Messaging` provides integration event publishing and consumption via MassTransit. `Modulus.Generators` provides compile-time source generators for handler registration, module discovery, and strongly typed IDs. `Modulus.Analyzers` enforces architectural conventions directly in the IDE.
+- **Modulus libraries** -- `Modulus.Mediator` provides in-process CQRS dispatch. `Modulus.Messaging` provides integration event publishing and consumption over its in-house transport layer (InMemory, RabbitMQ, Azure Service Bus). `Modulus.Generators` provides compile-time source generators for handler registration, module discovery, and strongly typed IDs. `Modulus.Analyzers` enforces architectural conventions directly in the IDE.
 
 ## How Modules Stay Isolated
 

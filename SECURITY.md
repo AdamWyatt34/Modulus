@@ -25,4 +25,4 @@ Only the latest published `ModulusKit.*` release line receives security updates.
 
 - All dependencies are pinned via `Directory.Packages.props`.
 - CI runs `dotnet list package --vulnerable --include-transitive` on every push and weekly on a schedule; High or Critical advisories fail the build.
-- MassTransit is intentionally pinned to 7.3.1 (v8 moved to a paid commercial license). If a High/Critical advisory lands on v7 with no transitive mitigation available, we will revisit the licensing trade.
+- Messaging depends only on actively maintained OSS broker clients (`RabbitMQ.Client`, `Azure.Messaging.ServiceBus`); the previously pinned, end-of-life MassTransit 7.x dependency has been removed in favor of an in-house transport layer.

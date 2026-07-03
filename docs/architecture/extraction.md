@@ -92,7 +92,11 @@ catalogModule.ConfigureServices(builder.Services, builder.Configuration);
 
 // Register mediator, messaging, etc.
 builder.Services.AddModulusMediator(typeof(CatalogModuleRegistration).Assembly);
-builder.Services.AddModulusMessaging(builder.Configuration);
+builder.Services.AddModulusRabbitMqTransport(); // from ModulusKit.Messaging.RabbitMq
+builder.Services.AddModulusMessaging(builder.Configuration, options =>
+{
+    options.Assemblies.Add(typeof(CatalogModuleRegistration).Assembly);
+});
 
 var app = builder.Build();
 
@@ -131,17 +135,16 @@ EShop.Catalog/                           # New solution
 
 In both solutions, update the messaging configuration to use a real message broker instead of the in-memory transport.
 
+Both hosts also need the transport package (`ModulusKit.Messaging.RabbitMq`) and its `AddModulusRabbitMqTransport()` registration.
+
 **Catalog Service** (`appsettings.json`):
 
 ```json
 {
   "Messaging": {
     "Transport": "RabbitMq",
-    "RabbitMq": {
-      "Host": "rabbitmq://localhost",
-      "Username": "guest",
-      "Password": "guest"
-    }
+    "ConnectionString": "amqp://guest:guest@localhost:5672",
+    "EndpointName": "catalog-service"
   }
 }
 ```
@@ -152,17 +155,18 @@ In both solutions, update the messaging configuration to use a real message brok
 {
   "Messaging": {
     "Transport": "RabbitMq",
-    "RabbitMq": {
-      "Host": "rabbitmq://localhost",
-      "Username": "guest",
-      "Password": "guest"
-    }
+    "ConnectionString": "amqp://guest:guest@localhost:5672",
+    "EndpointName": "eshop-monolith"
   }
 }
 ```
 
+::: warning Distinct endpoint names
+Give each host its own `EndpointName`. The endpoint name is the broker queue identity -- hosts sharing a name **compete** for messages instead of each receiving every event. Distinct names give the extracted service and the monolith their own queues.
+:::
+
 ::: info Azure Service Bus
-If your environment uses Azure, set `"Transport": "AzureServiceBus"` and provide the connection string instead. The business logic and event contracts remain identical regardless of the transport.
+If your environment uses Azure, install `ModulusKit.Messaging.AzureServiceBus`, call `AddModulusAzureServiceBusTransport()`, and set `"Transport": "AzureServiceBus"` with its connection string (or managed identity). The business logic and event contracts remain identical regardless of the transport.
 :::
 
 ### 4. Update the Outbox

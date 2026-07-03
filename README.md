@@ -16,7 +16,7 @@ Modulus provides:
 
 - **A CLI tool** that scaffolds solutions, adds modules, and wires everything together
 - **A lightweight CQRS mediator** with pipeline behaviors and a Result pattern (no MediatR dependency)
-- **A messaging abstraction** over MassTransit with RabbitMQ, Azure Service Bus, and in-memory transports
+- **An in-house messaging layer** with RabbitMQ, Azure Service Bus, and in-memory transports — no commercial messaging-framework dependencies
 - **A transactional outbox** for reliable cross-module event publishing
 - **Optional Aspire integration** for local development orchestration
 
@@ -102,7 +102,7 @@ graph TB
 
     subgraph Libraries["Modulus Libraries"]
         MED[Modulus.Mediator<br/>CQRS + Pipeline]
-        MSG[Modulus.Messaging<br/>MassTransit + Outbox]
+        MSG[Modulus.Messaging<br/>Transports + Outbox]
         GEN[Modulus.Generators<br/>Source Generators]
         ANZ[Modulus.Analyzers<br/>Compile-time Analysis]
     end
@@ -257,7 +257,7 @@ Result → HTTP Response
 
 ## Messaging
 
-Modulus provides a messaging abstraction over MassTransit for cross-module communication with pluggable transports.
+Modulus ships its own messaging layer for cross-module communication with pluggable transports: in-memory (built in), RabbitMQ ([`ModulusKit.Messaging.RabbitMq`](https://www.nuget.org/packages/ModulusKit.Messaging.RabbitMq)), and Azure Service Bus ([`ModulusKit.Messaging.AzureServiceBus`](https://www.nuget.org/packages/ModulusKit.Messaging.AzureServiceBus)). Broker transports are one registration call (`AddModulusRabbitMqTransport()` / `AddModulusAzureServiceBusTransport()`) alongside `AddModulusMessaging`.
 
 ### Publishing Integration Events
 
@@ -305,7 +305,7 @@ The outbox pattern ensures events are published reliably even if the message bro
 
 1. Handler saves business data + outbox event in one transaction
 2. `OutboxProcessor` polls for pending events (default: every 5 seconds)
-3. Events are published via MassTransit and marked as processed
+3. Events are published through the configured transport and marked as processed
 
 ## Aspire Integration
 
@@ -427,8 +427,10 @@ No handler or business logic changes are needed — the mediator and messaging a
 | [`ModulusKit.Cli`](https://www.nuget.org/packages/ModulusKit.Cli) | CLI tool for scaffolding modular monolith solutions |
 | [`ModulusKit.Mediator`](https://www.nuget.org/packages/ModulusKit.Mediator) | CQRS mediator with pipeline behaviors and Result pattern |
 | [`ModulusKit.Mediator.Abstractions`](https://www.nuget.org/packages/ModulusKit.Mediator.Abstractions) | Mediator interfaces, Result types, and pipeline contracts |
-| [`ModulusKit.Messaging`](https://www.nuget.org/packages/ModulusKit.Messaging) | MassTransit messaging with multi-transport and outbox support |
+| [`ModulusKit.Messaging`](https://www.nuget.org/packages/ModulusKit.Messaging) | Messaging core with transactional outbox/inbox and in-memory transport |
 | [`ModulusKit.Messaging.Abstractions`](https://www.nuget.org/packages/ModulusKit.Messaging.Abstractions) | Messaging interfaces and integration event contracts |
+| [`ModulusKit.Messaging.RabbitMq`](https://www.nuget.org/packages/ModulusKit.Messaging.RabbitMq) | RabbitMQ transport built on RabbitMQ.Client |
+| [`ModulusKit.Messaging.AzureServiceBus`](https://www.nuget.org/packages/ModulusKit.Messaging.AzureServiceBus) | Azure Service Bus transport built on Azure.Messaging.ServiceBus |
 | [`ModulusKit.Generators`](https://www.nuget.org/packages/ModulusKit.Generators) | Source generators for strongly typed IDs, handler registration, and module discovery |
 | [`ModulusKit.Analyzers`](https://www.nuget.org/packages/ModulusKit.Analyzers) | Roslyn analyzers enforcing modular architecture conventions |
 

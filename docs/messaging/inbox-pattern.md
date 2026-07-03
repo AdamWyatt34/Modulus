@@ -1,6 +1,6 @@
 # Inbox Pattern
 
-The inbox pattern ensures **idempotent message consumption** -- even if the same message is delivered more than once, your handlers process it only once. Modulus provides a built-in inbox implementation that automatically wraps every `IIntegrationEventHandler<T>` with deduplication logic.
+The inbox pattern ensures **idempotent message consumption** -- even if the same message is delivered more than once, your handlers process it only once. Modulus provides a built-in inbox implementation that the consumer pipeline applies to every `IIntegrationEventHandler<T>` automatically.
 
 ## The Problem
 
@@ -15,40 +15,43 @@ Without deduplication, a handler that processes a payment, sends an email, or up
 
 ## How It Works
 
-Modulus solves this with the `IdempotentConsumerAdapter<TEvent>`, which transparently wraps every integration event handler. The adapter checks an inbox store to determine whether a message has already been processed before invoking the handler.
+Modulus solves this in the `ConsumerDispatcher`, the transport-agnostic consumer pipeline that dispatches every delivered message. Before invoking each handler, it checks an inbox store to determine whether that handler has already processed the message.
 
 ```mermaid
 sequenceDiagram
-    participant Bus as MassTransit
-    participant Adapter as IdempotentConsumerAdapter
+    participant Bus as Transport
+    participant Dispatcher as ConsumerDispatcher
     participant Inbox as IInboxStore
     participant Handler as IIntegrationEventHandler
 
-    Bus->>Adapter: Deliver message
-    Adapter->>Inbox: HasBeenProcessed(eventId, handlerName)?
-    alt Already processed
-        Inbox-->>Adapter: true
-        Adapter-->>Bus: Skip (acknowledge)
-    else Not yet processed
-        Inbox-->>Adapter: false
-        Adapter->>Inbox: Save(event)
-        Adapter->>Handler: Handle(event)
-        Handler-->>Adapter: Completed
-        Adapter->>Inbox: RecordConsumer(eventId, handlerName)
-        Adapter-->>Bus: Acknowledge
+    Bus->>Dispatcher: Deliver message
+    Dispatcher->>Inbox: Save(event)
+    loop Every registered handler
+        Dispatcher->>Inbox: HasBeenProcessed(eventId, handlerName)?
+        alt Already processed
+            Inbox-->>Dispatcher: true
+            Dispatcher->>Dispatcher: Skip handler
+        else Not yet processed
+            Inbox-->>Dispatcher: false
+            Dispatcher->>Handler: Handle(event)
+            Handler-->>Dispatcher: Completed
+            Dispatcher->>Inbox: RecordConsumer(eventId, handlerName)
+        end
     end
+    Dispatcher-->>Bus: Acknowledge
 ```
 
 ### Processing Flow
 
-The `IdempotentConsumerAdapter<TEvent>` follows this logic for each incoming message:
+The `ConsumerDispatcher` follows this logic for each incoming message:
 
-1. **No inbox registered:** If no `IInboxStore` is registered in the DI container, the adapter falls through to direct handler execution. The inbox is entirely optional.
+1. **No inbox registered:** If no `IInboxStore` is registered in the DI container, the dispatcher falls through to direct handler execution. The inbox is entirely optional.
 2. **Inbox registered:**
-   1. **Save the event** to the inbox store (records that this message arrived).
-   2. **Check `HasBeenProcessed(eventId, handlerName)`** -- has this specific handler already processed this specific event?
-   3. If **already processed** -- skip the handler and acknowledge the message.
+   1. **Save the event** to the inbox store (records that this message arrived; the save itself is idempotent).
+   2. For **each registered handler**, check `HasBeenProcessed(eventId, handlerName)` -- has this specific handler already processed this specific event?
+   3. If **already processed** -- skip that handler.
    4. If **not yet processed** -- invoke the handler, then call `RecordConsumer(eventId, handlerName)` to mark it as processed.
+3. The message is acknowledged only after all handlers succeed. If any handler throws, the dispatcher retries in-process per `ConsumerRetry`; on redelivery, only the handlers that have not recorded success re-run.
 
 ::: info Per-handler deduplication
 The inbox tracks processing at the `(eventId, handlerName)` level. If an event has three handlers, each handler is independently tracked. Handler A being marked as processed does not affect whether Handler B or Handler C runs.
@@ -61,15 +64,15 @@ The `IInboxStore` interface defines the contract for inbox persistence:
 ```csharp
 public interface IInboxStore
 {
-    Task Save(IIntegrationEvent @event);
+    Task Save(IIntegrationEvent @event, CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<InboxMessage>> GetPending(int batchSize);
+    Task<IReadOnlyList<InboxMessage>> GetPending(int batchSize, CancellationToken cancellationToken = default);
 
-    Task MarkAsProcessed(IEnumerable<Guid> ids);
+    Task MarkAsProcessed(IEnumerable<Guid> ids, CancellationToken cancellationToken = default);
 
-    Task<bool> HasBeenProcessed(Guid messageId, string handlerName);
+    Task<bool> HasBeenProcessed(Guid messageId, string handlerName, CancellationToken cancellationToken = default);
 
-    Task RecordConsumer(Guid messageId, string handlerName);
+    Task RecordConsumer(Guid messageId, string handlerName, CancellationToken cancellationToken = default);
 }
 ```
 
@@ -123,47 +126,44 @@ public class InboxMessageConsumer
 
 The composite key `(InboxMessageId, Name)` ensures that each handler is recorded exactly once per message. If two threads attempt to record the same consumer simultaneously, the database constraint prevents duplicates.
 
-## IdempotentConsumerAdapter
+## ConsumerDispatcher
 
-The `IdempotentConsumerAdapter<TEvent>` is a MassTransit `IConsumer<TEvent>` wrapper that Modulus registers automatically for every `IIntegrationEventHandler<TEvent>` discovered during assembly scanning.
+The `ConsumerDispatcher` is the consumer pipeline that every transport hands delivered messages to. It resolves the event type, deserializes the body, and invokes **all** registered `IIntegrationEventHandler<TEvent>` implementations inside a DI scope, each wrapped with the inbox check.
 
-**You do not need to create or register this adapter.** It is applied transparently by `AddModulusMessaging`.
+**You do not need to create or register anything.** The pipeline is wired by `AddModulusMessaging`.
 
 ### Behavior Summary
 
 ```csharp
-// Simplified pseudocode of IdempotentConsumerAdapter<TEvent>
-public async Task Consume(ConsumeContext<TEvent> context)
+// Simplified pseudocode of the ConsumerDispatcher's per-message handling
+var handlers = ResolveHandlers(eventType);
+
+// No inbox? Fall through to direct execution
+if (inboxStore is null)
 {
-    var @event = context.Message;
+    foreach (var handler in handlers)
+        await handler.Handle(@event, cancellationToken);
+    return;
+}
 
-    // No inbox? Fall through to direct execution
-    if (_inboxStore is null)
-    {
-        await _handler.Handle(@event, context.CancellationToken);
-        return;
-    }
+// Save the event to the inbox (idempotent)
+await inboxStore.Save(@event, cancellationToken);
 
-    // Save the event to the inbox
-    await _inboxStore.Save(@event);
+foreach (var handler in handlers)
+{
+    // Skip handlers that already processed this event
+    if (await inboxStore.HasBeenProcessed(@event.EventId, handler.Name, cancellationToken))
+        continue;
 
-    // Check if this handler already processed this event
-    if (await _inboxStore.HasBeenProcessed(@event.EventId, _handlerName))
-    {
-        // Already processed -- skip
-        return;
-    }
-
-    // Process the event
-    await _handler.Handle(@event, context.CancellationToken);
+    await handler.Handle(@event, cancellationToken);
 
     // Record that this handler has processed this event
-    await _inboxStore.RecordConsumer(@event.EventId, _handlerName);
+    await inboxStore.RecordConsumer(@event.EventId, handler.Name, cancellationToken);
 }
 ```
 
 ::: tip The inbox is optional
-If you do not register an `IInboxStore` in the DI container, the `IdempotentConsumerAdapter` simply delegates to the handler directly. No deduplication occurs. This lets you opt in to the inbox pattern only when you need it.
+If you do not register an `IInboxStore` in the DI container, the dispatcher delegates to the handlers directly. No deduplication occurs. This lets you opt in to the inbox pattern only when you need it.
 :::
 
 ## EfInboxStore
@@ -184,14 +184,14 @@ This race-safe behavior ensures correctness without requiring distributed locks.
 
 ## Usage Example
 
-To enable the inbox pattern, register an `IInboxStore` implementation in your DI container:
+To enable the inbox pattern, register the inbox database context and store:
 
 ```csharp
-// Register the EF Core inbox store
-builder.Services.AddScoped<IInboxStore, EfInboxStore>();
+// Registers InboxDbContext and the EF Core inbox store
+builder.Services.AddModulusInbox(o => o.UseSqlServer(connectionString));
 ```
 
-That is all. The `IdempotentConsumerAdapter` detects the registered `IInboxStore` and activates deduplication for all handlers automatically.
+That is all. The `ConsumerDispatcher` detects the registered `IInboxStore` and activates deduplication for all handlers automatically.
 
 Your handler code does not change at all:
 
@@ -220,8 +220,8 @@ public sealed class ReserveInventoryHandler
 }
 ```
 
-::: warning Ensure your DbContext includes inbox entities
-Your `DbContext` must include `DbSet<InboxMessage>` and `DbSet<InboxMessageConsumer>` entity configurations for the `EfInboxStore` to function. Ensure the corresponding tables exist in your database via EF Core migrations.
+::: warning Ensure the inbox tables exist
+The `InboxMessage` and `InboxMessageConsumer` tables live in the `InboxDbContext` that ships with the package. Ensure the corresponding tables exist in your database via EF Core migrations (`app.UseModulusMessagingMigrationsAsync()` applies them at startup).
 :::
 
 ## Outbox + Inbox: End-to-End Reliability
@@ -234,7 +234,7 @@ flowchart LR
     A -->|Same TX| C[Outbox Store]
     C -->|Poll & Publish| D[OutboxProcessor]
     D -->|Publish| E[Broker]
-    E -->|Deliver| F[IdempotentConsumerAdapter]
+    E -->|Deliver| F[ConsumerDispatcher]
     F -->|Check| G[Inbox Store]
     G -->|Not processed| H[Handler]
     G -->|Already processed| I[Skip]

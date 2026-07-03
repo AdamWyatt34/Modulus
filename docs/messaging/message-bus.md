@@ -1,6 +1,6 @@
 # Message Bus
 
-The `IMessageBus` interface is the single entry point for publishing integration events and sending commands through the messaging infrastructure. It abstracts away MassTransit's API, giving you a clean, transport-agnostic interface.
+The `IMessageBus` interface is the single entry point for publishing integration events and sending commands through the messaging infrastructure. It abstracts away the underlying transport (InMemory, RabbitMQ, or Azure Service Bus), giving you a clean, transport-agnostic interface.
 
 ## IMessageBus Interface
 
@@ -156,7 +156,9 @@ public sealed class ProcessPaymentCommandHandler
 ```
 
 ::: info Routing convention
-When you call `Send<TCommand>(command)` without a destination URI, MassTransit routes the command to a queue named after the command type. For example, `ChargeCustomerCommand` routes to `queue:ChargeCustomerCommand`.
+When you call `Send<TCommand>(command)` without a destination URI, the transport delivers the command to a queue named after the command type. For example, `ChargeCustomerCommand` routes to `queue:ChargeCustomerCommand`. Only `queue:{name}` destination URIs are supported.
+
+`Send` is point-to-point fire-into-a-named-queue: Modulus does not run a consuming pipeline on the receiving side. The receiving service is responsible for consuming that queue itself.
 :::
 
 ## Send with Explicit Destination

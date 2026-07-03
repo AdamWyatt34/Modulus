@@ -2,7 +2,7 @@
 
 Scaffolds an `IIntegrationEventHandler<TEvent>` that consumes an integration event, placing it in the consuming module's `Infrastructure` project. The command locates the event in its owning module's `Integration` project, generates the handler, and **automatically wires the cross-module project reference** so the scaffold compiles immediately.
 
-The generated handler is discovered and registered automatically by the Modulus source generator and MassTransit consumer wiring — no manual DI registration is required.
+The generated handler is discovered and registered automatically by the Modulus source generator and the messaging consumer pipeline — no manual DI registration is required.
 
 ## Synopsis
 
