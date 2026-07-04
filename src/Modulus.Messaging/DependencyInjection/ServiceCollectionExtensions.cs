@@ -3,6 +3,7 @@ using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Modulus.Messaging.Abstractions;
 using Modulus.Messaging.Diagnostics;
@@ -128,6 +129,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IOutboxStore, EfOutboxStore>();
         services.AddScoped<IOutboxAdminStore, EfOutboxAdminStore>();
         services.AddSingleton<IOutboxDispatcher, OutboxDispatcher>();
+        // TryAdd: a custom wake source (e.g. a database change listener package) may
+        // pre-register its own notifier decorator before calling AddModulusMessaging.
+        services.TryAddSingleton<IOutboxNotifier, OutboxNotifier>();
 
         // Consumer host first: its subscriptions must exist before the outbox processor's first
         // dispatch pass (the in-memory transport drops messages published with no subscriber).
