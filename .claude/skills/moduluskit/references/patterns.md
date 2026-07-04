@@ -5,6 +5,9 @@
 - Error types and HTTP mapping
 - Pipeline behaviors
 - Integration events and outbox pattern
+- Immediate outbox dispatch (change notification)
+- Inbox pattern (consumer idempotency)
+- Health checks and metrics
 - Source-generated handler registration
 - Roslyn analyzers (MOD001-MOD005)
 - WARNING: Anti-patterns
@@ -41,6 +44,8 @@ if (result.IsSuccess) { /* ... */ }
 if (result.IsFailure) { /* ... */ }
 
 // Pattern match (recommended for endpoints)
+// Result:     Match<TOut>(Func<TOut> onSuccess, Func<Result, TOut> onFailure)
+// Result<T>:  Match<TOut>(Func<T, TOut> onSuccess, Func<Result<T>, TOut> onFailure)
 return result.Match(
     value => Results.Ok(value),
     failure => Results.Problem(failure.Errors.First().Description));
@@ -48,14 +53,14 @@ return result.Match(
 // Access value (throws if failed)
 var value = result.Value;
 
-// Access errors
+// Access errors (IReadOnlyList<Error>)
 foreach (var error in result.Errors)
     logger.LogWarning("{Code}: {Description}", error.Code, error.Description);
 ```
 
 ### ValidationResult
 
-When `ValidationBehavior` detects validation failures, it returns a `ValidationResult` (subclass of `Result`):
+When `ValidationBehavior` detects validation failures, it returns a `ValidationResult` (subclass of `Result`; `ValidationResult<T>` for valued requests):
 
 ```csharp
 var result = await mediator.Send(command, ct);
@@ -71,8 +76,10 @@ if (result is ValidationResult validation)
 
 ## Error Types and HTTP Mapping
 
+`Error` is a `readonly record struct` with `Code`, `Description`, and `Type`:
+
 ```csharp
-// Factory methods on Error record struct
+// Factory methods — all (string code, string description)
 Error.Validation(code, description)   // → 400 Bad Request
 Error.NotFound(code, description)     // → 404 Not Found
 Error.Conflict(code, description)     // → 409 Conflict
@@ -104,20 +111,22 @@ app.MapGet("/orders/{id}", async (Guid id, IMediator mediator, CancellationToken
 
 ## Pipeline Behaviors
 
-Behaviors wrap every command and query (not streaming queries). They execute in registration order (first = outermost):
+Behaviors wrap every command and query (not streaming queries — those bypass the pipeline). `AddModulusMediator()` registers **no behaviors**; each is opt-in via `AddPipelineBehavior`, and registration order = execution order (first = outermost). Canonical order:
 
 ```
-Request → UnhandledExceptionBehavior → LoggingBehavior → ValidationBehavior → Handler → Result
+Request → UnhandledExceptionBehavior → LoggingBehavior → MetricsBehavior → ValidationBehavior → UnitOfWorkBehavior → Handler → Result
 ```
 
-### Built-in behaviors
+### Built-in behaviors (all in `ModulusKit.Mediator`, all opt-in)
 
-| Behavior | Package | Purpose |
-|----------|---------|---------|
-| `UnhandledExceptionBehavior<,>` | `ModulusKit.Mediator` | Catches unhandled exceptions, returns `Error.Failure` |
-| `LoggingBehavior<,>` | `ModulusKit.Mediator` | Logs request name, elapsed time, success/failure |
-| `ValidationBehavior<,>` | `ModulusKit.Mediator` | Runs FluentValidation validators, short-circuits on failure |
-| `MetricsBehavior<,>` | `ModulusKit.Mediator` | Records handler duration via `System.Diagnostics.Metrics` |
+| Behavior | Purpose |
+|----------|---------|
+| `UnhandledExceptionBehavior<,>` | Catches unhandled exceptions, returns generic `Error.Failure` (details logged, never exposed to callers) |
+| `LoggingBehavior<,>` | Logs request name, elapsed time, success/failure |
+| `TracingBehavior<,>` | `ActivitySource` "Modulus.Mediator" spans with request/outcome/error tags |
+| `MetricsBehavior<,>` | Records handler duration via `System.Diagnostics.Metrics` |
+| `ValidationBehavior<,>` | Runs FluentValidation validators, short-circuits with `ValidationResult` on failure |
+| `UnitOfWorkBehavior<,>` | Calls `IUnitOfWork.SaveChangesAsync` after a **successful command** (no-op for queries or when `IUnitOfWork` is unregistered) |
 
 ### Registration order matters
 
@@ -125,9 +134,9 @@ Request → UnhandledExceptionBehavior → LoggingBehavior → ValidationBehavio
 // Outermost → innermost
 builder.Services.AddPipelineBehavior(typeof(UnhandledExceptionBehavior<,>));
 builder.Services.AddPipelineBehavior(typeof(LoggingBehavior<,>));
+builder.Services.AddPipelineBehavior(typeof(MetricsBehavior<,>));      // optional
 builder.Services.AddPipelineBehavior(typeof(ValidationBehavior<,>));
-// MetricsBehavior is optional
-builder.Services.AddPipelineBehavior(typeof(MetricsBehavior<,>));
+builder.Services.AddPipelineBehavior(typeof(UnitOfWorkBehavior<,>));   // innermost — commits closest to the handler
 ```
 
 ### Custom pipeline behavior
@@ -159,10 +168,10 @@ public sealed class AuthorizationBehavior<TRequest, TResponse>(ICurrentUser user
 
 ```
 Handler writes to DB + Outbox (same transaction)
-    → OutboxProcessor polls for pending messages
-    → Publishes to broker (RabbitMQ / Azure Service Bus / InMemory)
-    → Consumer receives and checks Inbox for idempotency
-    → Handler processes the event
+    → commit wakes the OutboxProcessor immediately (poll interval = fallback sweep)
+    → publishes to broker (RabbitMQ / Azure Service Bus / InMemory)
+    → consumer receives; inbox reserves per (event, handler) pair for idempotency
+    → handler processes the event exactly once
 ```
 
 ### Defining events — always use the record base class
@@ -178,27 +187,39 @@ public sealed record OrderShippedEvent(...) : IIntegrationEvent { ... }
 
 ### Transport configuration
 
+Broker transports live in separate packages and need one registration call each; the in-memory transport is built into `ModulusKit.Messaging`.
+
 ```csharp
-builder.Services.AddModulusMessaging(options =>
+// RabbitMQ (package: ModulusKit.Messaging.RabbitMq)
+builder.Services.AddModulusRabbitMqTransport();
+
+// Azure Service Bus (package: ModulusKit.Messaging.AzureServiceBus)
+builder.Services.AddModulusAzureServiceBusTransport();
+
+builder.Services.AddModulusMessaging(builder.Configuration, options =>  // binds "Messaging" config section, then callback
 {
-    // Development
-    options.Transport = Transport.InMemory;
-
-    // Production — RabbitMQ
-    options.Transport = Transport.RabbitMq;
-    options.ConnectionString = "amqp://guest:guest@localhost:5672";
-
-    // Production — Azure Service Bus
-    options.Transport = Transport.AzureServiceBus;
-    options.ConnectionString = "Endpoint=sb://...";
+    options.Transport = Transport.RabbitMq;   // InMemory | RabbitMq | AzureServiceBus
+    options.ConnectionString ??= builder.Configuration.GetConnectionString("RabbitMq");
+    // Azure managed identity alternative: options.FullyQualifiedNamespace + options.Credential
 
     // Assembly scanning — add all assemblies containing events and handlers
     options.Assemblies.Add(typeof(OrderPlacedEvent).Assembly);
 
-    // Tuning (optional)
-    options.OutboxBatchSize = 100;         // 1-1000, default 100
-    options.OutboxPollInterval = TimeSpan.FromSeconds(5);  // min 1s, default 5s
+    // Endpoint identity + broker tuning (optional)
+    options.EndpointName = "orders-service";  // queue/subscription name; replicas sharing it compete
+    options.PrefetchCount = 10;               // 1-1000
+    options.AutoProvision = true;             // false for least-privilege, pre-declared topology
+
+    // Outbox tuning (optional)
+    options.OutboxBatchSize = 100;                          // 1-1000, default 100
+    options.OutboxPollInterval = TimeSpan.FromSeconds(30);  // FALLBACK sweep — signaled rows dispatch immediately
+
+    // Retries: RetryPolicy (outbox dispatch) and ConsumerRetry (handler execution), both default 5 attempts
 });
+
+// Persistence — required for outbox publishing and inbox idempotency respectively
+builder.Services.AddModulusOutbox(o => o.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
+builder.Services.AddModulusInbox(o => o.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
 ```
 
 ### Outbox — atomic with business data
@@ -226,10 +247,58 @@ public sealed class PlaceOrderHandler(AppDbContext db, IOutboxStore outbox)
 | | Domain Events | Integration Events |
 |---|---|---|
 | Scope | In-process, within a module | Cross-module, cross-process |
-| Interface | `IDomainEvent` | `IIntegrationEvent` |
+| Interface | `IDomainEvent` | `IntegrationEvent` base record (`IIntegrationEvent`) |
 | Dispatch | `IMediator.Publish()` (synchronous) | `IOutboxStore.Save()` → broker |
 | Delivery | Immediate, same transaction | Eventually consistent, guaranteed |
 | Use for | Side effects within the same module | Notifying other modules |
+
+---
+
+## Immediate Outbox Dispatch (Change Notification)
+
+New outbox rows wake the `OutboxProcessor` the moment they commit — dispatch latency is milliseconds, not the poll interval. Polling survives only as the fallback sweep (crash recovery, other replicas, external writers).
+
+- `AddModulusOutbox` auto-attaches the notifying interceptor to the library's `OutboxDbContext` — nothing to do.
+- CLI-scaffolded module DbContexts come pre-wired.
+- For your own DbContext that maps the outbox table:
+
+```csharp
+services.AddDbContext<AppDbContext>((sp, options) =>
+{
+    options.UseSqlServer(configuration.GetConnectionString("Default"));
+    options.AddInterceptors(sp.GetRequiredService<OutboxNotifyingInterceptor>());
+});
+```
+
+- Inside EF-managed transactions the signal fires at **commit time** (rollback never signals). Ambient `TransactionScope` and externally-owned transactions fall back to the poll sweep.
+- `IOutboxNotifier` (singleton; `Notify()` / `WaitAsync`) is the extension point for external CDC listeners — e.g. a PostgreSQL `LISTEN/NOTIFY` hosted service calls `Notify()`.
+- Because signaled rows dispatch immediately, treat `OutboxPollInterval` as a fallback knob — raising it to ~30s cuts idle DB load without adding latency.
+- The `modulus.messaging.outbox.wakeups` counter (tag `reason`: `signal`/`poll`/`backlog`) shows whether signals actually arrive in a deployment.
+
+---
+
+## Inbox Pattern (Consumer Idempotency)
+
+Register with `AddModulusInbox(...)`. Consumption is **reservation-based**: each (event, handler) pair is atomically reserved before execution and marked processed after, so concurrent duplicate deliveries execute each handler exactly once. A crashed consumer's reservation goes stale after `MessagingOptions.ConsumerReservationTimeout` (default 5 minutes) and is taken over on redelivery — at-least-once delivery is preserved, and `modulus dlq replay` re-runs only handlers that never succeeded. Without `AddModulusInbox`, handlers run with no deduplication. There is no inbox polling loop — dedup happens inline at transport-delivery time.
+
+---
+
+## Health Checks and Metrics
+
+```csharp
+// Broker connectivity + outbox backlog depth, tagged ["ready", "messaging"]
+builder.Services.AddHealthChecks().AddModulusMessaging();
+
+// Gate readiness on them
+app.MapHealthChecks("/readyz", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready")
+});
+```
+
+Checks: `modulus_messaging_transport` (via optional `ITransportHealthProbe`) and `modulus_messaging_outbox` (Degraded/Unhealthy thresholds configurable via `ModulusMessagingHealthCheckOptions`).
+
+Metrics: subscribe with `AddMeter("Modulus.Messaging")` — outbox dispatch outcomes, outbox wakeups, consumer handler duration, inbox dedup, retries, dead-letters. The mediator side has `MetricsBehavior` + `TracingBehavior` (ActivitySource `Modulus.Mediator`).
 
 ---
 
@@ -241,19 +310,10 @@ The `ModulusKit.Generators` package scans your assembly at compile time and gene
 // Auto-generated — never write this manually
 public static IServiceCollection AddModulusHandlers(this IServiceCollection services)
 {
-    // Commands
     services.AddScoped<ICommandHandler<PlaceOrderCommand>, PlaceOrderHandler>();
-    services.AddScoped<ICommandHandler<CreateProductCommand, Guid>, CreateProductHandler>();
-
-    // Queries
     services.AddScoped<IQueryHandler<GetOrderQuery, OrderDto>, GetOrderHandler>();
-
-    // Validators
     services.AddScoped<IValidator<PlaceOrderCommand>, PlaceOrderValidator>();
-
-    // Domain Events
-    services.AddScoped<IDomainEventHandler<OrderPlacedDomainEvent>, AuditLogHandler>();
-
+    // ... every handler and validator discovered
     return services;
 }
 ```
@@ -266,19 +326,21 @@ It discovers:
 - `IIntegrationEventHandler<T>`
 - `AbstractValidator<T>` (FluentValidation)
 
+It also generates module discovery: `AddAllModules(IServiceCollection, IConfiguration)` and `MapAllModuleEndpoints(WebApplication)` from `IModuleRegistration` implementations; control initialization order with `[ModuleOrder(int)]`.
+
 ---
 
 ## Roslyn Analyzers (MOD001-MOD005)
 
 Install `ModulusKit.Analyzers` for compile-time enforcement:
 
-| Rule | Severity | What It Catches |
-|------|----------|-----------------|
-| MOD001 | Error | Cross-module reference to non-Integration project |
-| MOD002 | Warning | Handler not returning `Result` or `Result<T>` |
-| MOD003 | Warning | Throwing exceptions for expected errors (has code fix) |
-| MOD004 | Warning | Infrastructure attributes (`[Column]`, `[JsonProperty]`) in Domain layer |
-| MOD005 | Info | Public setter on entity property (has code fix) |
+| Rule | Severity | What It Catches | Code Fix |
+|------|----------|-----------------|----------|
+| MOD001 | Error | Cross-module reference to non-Integration project | No |
+| MOD002 | Warning | Handler not returning `Result` or `Result<T>` | No |
+| MOD003 | Warning | Throwing exceptions for expected errors | Yes (`throw` → `return Error`) |
+| MOD004 | Warning | Infrastructure attributes (`[Column]`, `[JsonProperty]`) in Domain layer | Yes |
+| MOD005 | Info | Public setter on entity property | Yes (adds `private`) |
 
 Suppress with `#pragma warning disable MOD001` or `.editorconfig`:
 
@@ -355,4 +417,15 @@ public async Task<Result<Order>> Handle(GetOrderQuery query, CancellationToken c
 {
     return await repo.FindAsync(query.Id, ct);  // ✅ implicit TValue → Result<TValue>
 }
+```
+
+### WARNING: Registering a broker transport without its package call
+
+```csharp
+// BAD — Transport.RabbitMq with no transport registration throws at resolution time
+builder.Services.AddModulusMessaging(o => o.Transport = Transport.RabbitMq);
+
+// GOOD — one registration per broker package
+builder.Services.AddModulusRabbitMqTransport();
+builder.Services.AddModulusMessaging(o => { o.Transport = Transport.RabbitMq; /* ... */ });
 ```

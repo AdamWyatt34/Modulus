@@ -1,49 +1,66 @@
 # ModulusKit Workflows Reference
 
 ## Contents
-- Scaffolding a new solution with the CLI
+- CLI command reference
 - Adding a command end-to-end
 - Adding a query end-to-end
 - Adding an integration event end-to-end
-- Adding a custom pipeline behavior
-- Adding a FluentValidation validator
 - DI registration checklist
 - Testing with ModulusKit
+- Troubleshooting
 
 ---
 
-## Scaffolding a New Solution with the CLI
+## CLI Command Reference
 
 ```powershell
 # Install the CLI tool
 dotnet tool install -g ModulusKit.Cli
+```
 
-# Scaffold a new solution
-modulus init MyApp
+### Scaffolding
 
-# Scaffold with Aspire orchestration
-modulus init MyApp --aspire
+```powershell
+modulus init MyApp                                   # new solution
+modulus init MyApp --aspire                          # with Aspire orchestration
+modulus init MyApp --transport rabbitmq              # inmemory | rabbitmq | azureservicebus
+modulus init MyApp --output ./src --no-git
 
-# Scaffold with RabbitMQ transport
-modulus init MyApp --transport rabbitmq
-
-# Add a module to the solution
-modulus add-module Orders
-
-# Add a module without API endpoints
+modulus add-module Orders                            # full module (Domain/Application/Infrastructure/Integration/Api)
 modulus add-module SharedKernel --no-endpoints
 
-# Add a command to a module
-modulus add-command CreateOrder --module Orders
-
-# Add a query to a module
-modulus add-query GetOrders --module Orders
-
-# Add an entity to a module
 modulus add-entity Order --module Orders --properties "CustomerId:Guid,Status:string,Total:decimal"
+modulus add-entity Order --module Orders --aggregate --id-type guid
 
-# Add an endpoint to a module
-modulus add-endpoint Orders --module Orders --method post --route "/orders"
+modulus add-command CreateOrder --module Orders --result-type Guid
+modulus add-query GetOrders --module Orders --result-type "List<OrderDto>"
+modulus add-endpoint CreateOrder --module Orders --method POST --route "/orders" --command CreateOrderCommand
+
+modulus add-event OrderPlaced --module Orders --properties "OrderId:Guid,Total:decimal"
+modulus add-consumer OrderPlaced --module Loyalty --event-module Orders   # handler in Loyalty for Orders' event
+
+modulus remove-module Orders                         # dry-run by default; --confirm to apply, --force to override blocks
+```
+
+### Inspection and operations
+
+```powershell
+modulus list-modules --json                          # all list commands support --json
+modulus list-events
+modulus list-consumers
+modulus list-entities
+
+modulus doctor                                       # six solution-health checks; --json, --strict (warnings fail)
+
+modulus outbox list-failed                           # dead-lettered outbox rows
+modulus outbox retry --message-id <guid>             # options: --connection-string, --config, --provider, --max-attempts
+
+modulus dlq list --transport rabbitmq                # peek broker dead-letter queue
+modulus dlq replay --transport rabbitmq --message-id <guid>   # or --all; ASB also needs --event
+                                                     # options: --connection-string, --config, --endpoint, --max
+
+modulus upgrade                                      # bump all ModulusKit.* pins to the CLI's version
+modulus upgrade --version 2.1.0 --dry-run            # preview a specific version
 ```
 
 ---
@@ -57,6 +74,8 @@ Copy this checklist:
 - [ ] Step 3: Add a FluentValidation validator (optional)
 - [ ] Step 4: Wire the endpoint
 - [ ] Step 5: Verify `AddModulusHandlers()` discovers it (rebuild)
+
+Or scaffold steps 1–2 with `modulus add-command CreateOrder --module Orders --result-type Guid`.
 
 ### Step 1 — Command record
 
@@ -99,6 +118,8 @@ public sealed class CreateOrderCommandHandler(
 }
 ```
 
+With `UnitOfWorkBehavior<,>` registered, the explicit `uow.SaveChangesAsync(ct)` call can be omitted — the behavior commits after the handler returns success.
+
 ### Step 3 — Validator (optional)
 
 ```csharp
@@ -124,13 +145,15 @@ The source generator discovers `AbstractValidator<T>` automatically — no manua
 
 ### Step 4 — Endpoint
 
-```csharp
-// Presentation/Endpoints/CreateOrderEndpoint.cs
-namespace MyApp.Orders.Presentation.Endpoints;
+Scaffolded solutions use the `IEndpoint` pattern — implementations are assembly-scanned and mapped by the generated `Map{Module}Endpoints()`:
 
-public static class CreateOrderEndpoint
+```csharp
+// Api/Endpoints/CreateOrderEndpoint.cs
+namespace MyApp.Orders.Api.Endpoints;
+
+public sealed class CreateOrderEndpoint : IEndpoint
 {
-    public static void Map(WebApplication app)
+    public void MapEndpoint(IEndpointRouteBuilder app)
     {
         app.MapPost("/api/orders", async (
             CreateOrderCommand command,
@@ -149,6 +172,8 @@ public static class CreateOrderEndpoint
     }
 }
 ```
+
+(Or scaffold it: `modulus add-endpoint CreateOrder --module Orders --method POST --route "/orders" --command CreateOrderCommand`.)
 
 ### Step 5 — Verify discovery
 
@@ -232,16 +257,18 @@ await foreach (var order in mediator.Stream(new StreamOrdersQuery(customerId), c
 
 ## Adding an Integration Event End-to-End
 
-- [ ] Step 1: Define the event record in a shared/integration project
+- [ ] Step 1: Define the event record in the module's Integration project
 - [ ] Step 2: Publish via `IOutboxStore` in the source module
 - [ ] Step 3: Handle in the consuming module
 - [ ] Step 4: Add consuming module's assembly to `MessagingOptions.Assemblies`
 - [ ] Step 5: Verify consumer is discovered
 
+Or scaffold steps 1 and 3: `modulus add-event OrderCreated --module Orders --properties "OrderId:Guid,CustomerId:Guid"` then `modulus add-consumer OrderCreated --module Notifications --event-module Orders` (cross-module Integration-only references are wired automatically).
+
 ### Step 1 — Event
 
 ```csharp
-// MyApp.Orders.IntegrationEvents/OrderCreatedEvent.cs
+// MyApp.Orders.Integration/IntegrationEvents/OrderCreatedEvent.cs
 namespace MyApp.Orders.IntegrationEvents;
 
 public sealed record OrderCreatedEvent(Guid OrderId, Guid CustomerId)
@@ -253,7 +280,7 @@ public sealed record OrderCreatedEvent(Guid OrderId, Guid CustomerId)
 ```csharp
 // Inside a command handler in the Orders module
 await outbox.Save(new OrderCreatedEvent(order.Id, command.CustomerId), ct);
-await dbContext.SaveChangesAsync(ct);  // atomic commit
+await dbContext.SaveChangesAsync(ct);  // atomic commit; wakes the outbox processor immediately
 ```
 
 ### Step 3 — Handle
@@ -275,10 +302,11 @@ public sealed class OrderCreatedEventHandler(IEmailService email)
 ### Step 4 — Register assemblies
 
 ```csharp
-builder.Services.AddModulusMessaging(options =>
+builder.Services.AddModulusRabbitMqTransport();
+builder.Services.AddModulusMessaging(builder.Configuration, options =>
 {
     options.Transport = Transport.RabbitMq;
-    options.ConnectionString = "...";
+    options.ConnectionString ??= builder.Configuration.GetConnectionString("RabbitMq");
     options.Assemblies.Add(typeof(OrderCreatedEvent).Assembly);
     options.Assemblies.Add(typeof(OrderCreatedEventHandler).Assembly);
 });
@@ -292,7 +320,7 @@ builder.Services.AddModulusMessaging(options =>
 // Program.cs — complete registration
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. Mediator core
+// 1. Mediator core (registers IMediator only — behaviors are all opt-in)
 builder.Services.AddModulusMediator();
 
 // 2. Source-generated handler discovery
@@ -302,20 +330,32 @@ builder.Services.AddModulusHandlers();
 builder.Services.AddPipelineBehavior(typeof(UnhandledExceptionBehavior<,>));
 builder.Services.AddPipelineBehavior(typeof(LoggingBehavior<,>));
 builder.Services.AddPipelineBehavior(typeof(ValidationBehavior<,>));
+builder.Services.AddPipelineBehavior(typeof(UnitOfWorkBehavior<,>));
 
 // 4. Messaging (optional — only if using integration events)
-builder.Services.AddModulusMessaging(options =>
+builder.Services.AddModulusMessaging(builder.Configuration, options =>
 {
-    options.Transport = Transport.InMemory;
+    options.Transport = Transport.InMemory;   // broker transports need their package's Add*Transport() call
     options.Assemblies.Add(typeof(Program).Assembly);
 });
+builder.Services.AddModulusOutbox(o => o.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
+builder.Services.AddModulusInbox(o => o.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
 
-// 5. Your DbContext (ModulusKit does NOT register this — you do)
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
+// 5. Messaging health checks (optional; tagged "ready" for /readyz gating)
+builder.Services.AddHealthChecks().AddModulusMessaging();
+
+// 6. Your DbContext (ModulusKit does NOT register this — you do). Attach the outbox
+//    interceptor if this context maps the outbox table, so committed rows dispatch immediately.
+builder.Services.AddDbContext<AppDbContext>((sp, options) =>
+{
+    options.UseSqlServer(builder.Configuration.GetConnectionString("Default"));
+    options.AddInterceptors(sp.GetRequiredService<OutboxNotifyingInterceptor>());
+});
 
 var app = builder.Build();
 ```
+
+In a scaffolded solution, module registration is source-generated instead: `builder.Services.AddAllModules(builder.Configuration)` + `app.MapAllModuleEndpoints()`.
 
 ---
 
@@ -438,10 +478,21 @@ public sealed class OrderCreatedEventHandlerTests
 ### "Integration event handler never called"
 - Ensure the handler's assembly is in `MessagingOptions.Assemblies`
 - Ensure you called `await outbox.Save(...)` + `await dbContext.SaveChangesAsync()`
-- Ensure `OutboxProcessor` is running (registered via `AddModulusMessaging`)
+- Ensure `OutboxProcessor` is running (registered via `AddModulusMessaging`) and `AddModulusOutbox` is registered
+- For broker transports, ensure the transport package's `Add*Transport()` call is present
 - Check logs for `OutboxProcessor` warnings about unresolvable types
+- Run `modulus outbox list-failed` to see dead-lettered outbox rows, and `modulus dlq list` for broker dead-letters
+
+### "Events sit in the outbox for seconds before publishing"
+- Committed rows should dispatch immediately via the wake signal; if latency equals `OutboxPollInterval`, the writing DbContext is missing `OutboxNotifyingInterceptor` (or the writer is a different process — expected fallback)
+- Check the `modulus.messaging.outbox.wakeups` metric: only `poll` reasons means no signals arrive
 
 ### "MOD001 false positive on shared types"
 - MOD001 allows references to `*.Integration` projects
-- Put shared DTOs and event contracts in a `MyModule.IntegrationEvents` project
+- Put shared DTOs and event contracts in the module's `Integration` project
 - Suppress with `#pragma warning disable MOD001` if truly intentional
+
+### "Package version skew after upgrading"
+- All nine ModulusKit.* packages ship at one aligned version
+- Run `modulus upgrade` to bump every pin in `Directory.Packages.props`, then `dotnet restore`
+- Run `modulus doctor` — it warns when pins don't match the CLI version
