@@ -18,6 +18,7 @@ Registered automatically by `AddModulusMessaging(...)`; works with or without me
 | Instrument | Type | Tags | Meaning |
 |---|---|---|---|
 | `modulus.messaging.outbox.messages` | Counter | `outcome` (`published` / `skipped_unknown_type` / `deserialize_failed` / `retry_pending` / `dead_lettered`) | Outbox dispatch attempts by outcome |
+| `modulus.messaging.outbox.wakeups` | Counter | `reason` (`signal` / `poll` / `backlog`) | Outbox processor wake-ups. A deployment showing only `poll` is not receiving change notifications (e.g. dedicated-worker topology) and runs at poll-interval latency |
 | `modulus.messaging.consumer.handler.duration` | Histogram (ms) | `handler`, `outcome` (`success` / `failure`) | Integration event handler execution time |
 | `modulus.messaging.inbox.deduplicated` | Counter | `handler` | Handler executions skipped by inbox idempotency |
 | `modulus.messaging.consumer.retries` | Counter | `message_type` | In-process consumer retry attempts |

@@ -53,7 +53,13 @@ public sealed class MessagingOptions
     /// </summary>
     public bool AutoProvision { get; set; } = true;
 
-    /// <summary>Gets or sets how frequently the outbox processor polls for pending messages. Defaults to 5 seconds.</summary>
+    /// <summary>
+    /// Gets or sets the outbox processor's fallback sweep interval. Defaults to 5 seconds.
+    /// Rows saved through <see cref="Abstractions.IOutboxStore"/> or a context with
+    /// <see cref="Outbox.OutboxNotifyingInterceptor"/> attached are dispatched immediately via
+    /// the wake signal; this interval only bounds latency for rows the signal cannot see
+    /// (other process instances, external writers, transactions EF Core does not observe).
+    /// </summary>
     public TimeSpan OutboxPollInterval { get; set; } = TimeSpan.FromSeconds(5);
 
     /// <summary>Gets or sets the maximum number of outbox messages to process per poll cycle. Defaults to 100.</summary>

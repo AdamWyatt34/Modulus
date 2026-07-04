@@ -6,7 +6,7 @@ What happens to in-flight messages when a Modulus messaging host stops, and how 
 
 .NET stops hosted services in **reverse registration order**. `AddModulusMessaging` registers the consumer host before the outbox processor, so shutdown proceeds:
 
-1. **`OutboxProcessor` stops first** — the poll loop observes cancellation and stops fetching new batches. A dispatch pass that is mid-flight finishes its current message; unpublished rows simply stay in the outbox table and are dispatched after the next start. **Nothing is lost**: the outbox is durable by design.
+1. **`OutboxProcessor` stops first** — the dispatch loop observes cancellation (whether idle in its signal-or-poll wait or between batches) and stops fetching new batches. A dispatch pass that is mid-flight finishes its current message; unpublished rows simply stay in the outbox table and are dispatched after the next start. **Nothing is lost**: the outbox is durable by design.
 2. **`TransportConsumerHost` stops second** — it calls the transport's `StopConsumingAsync`, which cancels the broker subscription and drains in-flight handler work.
 3. **The transport disposes last** — connections close after consumers have stopped.
 

@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Messaging — immediate outbox dispatch (change notification)**: new outbox rows now wake the `OutboxProcessor` the moment they commit instead of waiting out `OutboxPollInterval`, cutting dispatch latency from seconds to milliseconds with no new infrastructure. Polling remains as the fallback sweep, so delivery guarantees are unchanged in every topology.
+  - New public `IOutboxNotifier` singleton (`Notify()` / `WaitAsync`) — coalescing auto-reset wake signal; also the extension point for external change-data-capture listeners (e.g. a PostgreSQL `LISTEN/NOTIFY` hosted service calling `Notify()`).
+  - New public `OutboxNotifyingInterceptor` (EF Core `ISaveChangesInterceptor` + `IDbTransactionInterceptor`): detects `OutboxMessage` inserts and signals when they become visible — at commit time inside EF-managed transactions (rollback never signals). Auto-attached to `OutboxDbContext` by `AddModulusOutbox`; attach to your own outbox-mapping context with `options.AddInterceptors(sp.GetRequiredService<OutboxNotifyingInterceptor>())`.
+  - `IOutboxStore.Save` (EF implementation) signals directly when saving outside a transaction.
+  - `OutboxProcessor` loop is now drain-then-wait: a full fetched batch re-dispatches immediately (backlog draining); otherwise it waits for a signal with `OutboxPollInterval` as the timeout. `OutboxPollInterval` is therefore a fallback knob — raising it (e.g. to 30s) cuts idle database queries without adding latency for signaled rows.
+  - New `modulus.messaging.outbox.wakeups` counter (tag `reason`: `signal`/`poll`/`backlog`) shows whether a deployment actually receives change notifications or is running poll-only.
+  - Scaffolded module DbContexts come pre-wired with the interceptor (no-op until messaging is registered).
+  - The in-process signal wakes the instance that wrote the row; replicas, dedicated-worker topologies, external writers, and transactions EF Core does not observe (ambient `TransactionScope`, externally-owned `UseTransaction`) fall back to the poll sweep.
+
 ## [2.0.0] - 2026-07-03
 
 Coordinated release of all nine packages at 2.0.0 — the scaffolded `Directory.Packages.props` pins every `ModulusKit.*` package to one version, so the set moves together. First release under the per-package tag scheme, and the first release of the two transport packages.

@@ -95,7 +95,7 @@ builder.Services.AddModulusMessaging(options =>
 | `EndpointName` | `string` | Sanitized entry assembly name | Queue (RabbitMQ) / subscription (Azure Service Bus) identity of this host. Replicas sharing it compete for messages. |
 | `PrefetchCount` | `int` | `10` | Messages the broker delivers ahead of acknowledgement. Valid range: 1–1000. |
 | `AutoProvision` | `bool` | `true` | Whether the transport declares exchanges/queues/topics/subscriptions itself. Set `false` with pre-created entities for least privilege. |
-| `OutboxPollInterval` | `TimeSpan` | `5 seconds` | How often the `OutboxProcessor` polls for pending outbox messages. Minimum: 1 second. |
+| `OutboxPollInterval` | `TimeSpan` | `5 seconds` | Fallback sweep interval for the `OutboxProcessor`; new rows saved through wired-up contexts dispatch immediately via a wake signal (see [Outbox Pattern](./outbox-pattern#immediate-dispatch-change-notification)). Minimum: 1 second. |
 | `OutboxBatchSize` | `int` | `100` | Maximum number of outbox messages to process per polling cycle. Valid range: 1–1000. |
 | `RetryPolicy` | `RetryPolicyOptions` | 5 attempts | Outbox dispatch retry: how many times the `OutboxProcessor` re-publishes a message before dead-lettering it. |
 | `ConsumerRetry` | `RetryPolicyOptions` | 5 attempts | In-process consumer retry: how many times a handler is re-executed on failure before the message is dead-lettered on the transport. Independent of `RetryPolicy`. |

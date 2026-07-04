@@ -17,6 +17,8 @@ Without deduplication, a handler that processes a payment, sends an email, or up
 
 Modulus solves this in the `ConsumerDispatcher`, the transport-agnostic consumer pipeline that dispatches every delivered message. Before invoking each handler, it checks an inbox store to determine whether that handler has already processed the message.
 
+Unlike the outbox, the inbox has no polling loop to accelerate — dedup happens inline at transport-delivery time, which is already push-driven — so the outbox's [change notification](./outbox-pattern#immediate-dispatch-change-notification) has no inbox counterpart by design.
+
 ```mermaid
 sequenceDiagram
     participant Bus as Transport
