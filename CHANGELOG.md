@@ -5,7 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [2.1.0] - 2026-07-04
+
+Coordinated release of all nine packages at 2.1.0 (the scaffolded `Directory.Packages.props` pins every `ModulusKit.*` package to one version). Additive only — no breaking changes from 2.0.0.
 
 ### Added
 
