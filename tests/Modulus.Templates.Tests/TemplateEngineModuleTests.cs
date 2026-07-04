@@ -54,6 +54,19 @@ public class TemplateEngineModuleTests
     }
 
     [Fact]
+    public void GenerateModule_WriteDbContext_AttachesOutboxNotifyingInterceptor()
+    {
+        var engine = new TemplateEngine();
+
+        var outputs = engine.GenerateModule(CreateOptions());
+
+        var module = outputs.Single(o => o.RelativePath == "src/Catalog.Infrastructure/CatalogModule.cs");
+        module.Content.ShouldContain("using Modulus.Messaging.Outbox;");
+        module.Content.ShouldContain("sp.GetService<OutboxNotifyingInterceptor>()");
+        module.Content.ShouldContain("options.AddInterceptors(outboxInterceptor);");
+    }
+
+    [Fact]
     public void GenerateModule_ModuleNameTokenReplacedInFilePaths()
     {
         var engine = new TemplateEngine();

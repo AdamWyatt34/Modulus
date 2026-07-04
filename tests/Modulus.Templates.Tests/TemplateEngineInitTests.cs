@@ -46,6 +46,18 @@ public class TemplateEngineInitTests
     }
 
     [Fact]
+    public void GenerateInit_HostProgram_ExplainsImmediateOutboxDispatch()
+    {
+        var engine = new TemplateEngine();
+
+        var outputs = engine.GenerateInit(CreateOptions());
+
+        var program = outputs.Single(o => o.RelativePath == "src/EShop.WebApi/Program.cs");
+        program.Content.ShouldContain("New outbox rows are dispatched immediately");
+        program.Content.ShouldContain("Messaging:OutboxPollInterval setting is only a fallback sweep");
+    }
+
+    [Fact]
     public void GenerateInit_Default_ProducesKeyFiles()
     {
         var engine = new TemplateEngine();

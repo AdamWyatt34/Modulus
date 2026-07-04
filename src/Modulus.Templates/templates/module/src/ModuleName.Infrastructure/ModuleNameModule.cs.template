@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Modulus.Mediator.Abstractions;
+using Modulus.Messaging.Outbox;
 using {{RootNamespace}}.BuildingBlocks.Infrastructure.Registration;
 using {{RootNamespace}}.{{ModuleName}}.Api.Endpoints;
 using {{RootNamespace}}.{{ModuleName}}.Application.Data;
@@ -14,8 +15,17 @@ public sealed class {{ModuleName}}Module : IModuleRegistration
 {
     public static IServiceCollection ConfigureServices(IServiceCollection services, IConfiguration configuration)
     {
-        services.AddDbContext<{{ModuleName}}DbContext>(options =>
-            options.UseSqlServer(configuration.GetConnectionString("Default")));
+        services.AddDbContext<{{ModuleName}}DbContext>((sp, options) =>
+        {
+            options.UseSqlServer(configuration.GetConnectionString("Default"));
+
+            // When ModulusKit.Messaging is registered (see Program.cs), outbox rows saved
+            // through this context wake the outbox processor immediately instead of
+            // waiting for the poll interval. Resolves to null when messaging is disabled.
+            var outboxInterceptor = sp.GetService<OutboxNotifyingInterceptor>();
+            if (outboxInterceptor is not null)
+                options.AddInterceptors(outboxInterceptor);
+        });
 
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<{{ModuleName}}DbContext>());
 

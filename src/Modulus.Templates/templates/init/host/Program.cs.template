@@ -52,6 +52,11 @@ builder.Services.AddAllModules(builder.Configuration);
 //   builder.Services.AddModulusOutbox(o => o.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
 //   builder.Services.AddModulusInbox(o => o.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
 //
+// New outbox rows are dispatched immediately: AddModulusOutbox auto-attaches the change-notifying
+// interceptor, and module DbContexts are pre-wired with it (see each {Module}Module.cs). The
+// Messaging:OutboxPollInterval setting is only a fallback sweep — raising it (e.g. to 00:00:30)
+// reduces idle database queries without adding dispatch latency.
+//
 // Messaging health checks (broker connectivity + outbox backlog depth, tagged "ready" so they
 // gate /readyz below). Also add `using Modulus.Messaging.HealthChecks;` at the top:
 //
