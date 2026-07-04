@@ -15,6 +15,7 @@ internal sealed class MessagingMetrics
     public const string MeterName = "Modulus.Messaging";
 
     private readonly Counter<long> _outboxMessages;
+    private readonly Counter<long> _outboxWakeups;
     private readonly Histogram<double> _handlerDuration;
     private readonly Counter<long> _inboxDeduplicated;
     private readonly Counter<long> _consumerRetries;
@@ -33,6 +34,11 @@ internal sealed class MessagingMetrics
             "modulus.messaging.outbox.messages",
             unit: "{message}",
             description: "Outbox dispatch attempts by outcome.");
+
+        _outboxWakeups = meter.CreateCounter<long>(
+            "modulus.messaging.outbox.wakeups",
+            unit: "{wakeup}",
+            description: "Outbox processor wake-ups by reason.");
 
         _handlerDuration = meter.CreateHistogram<double>(
             "modulus.messaging.consumer.handler.duration",
@@ -58,6 +64,10 @@ internal sealed class MessagingMetrics
     /// <summary>Outcomes: published, skipped_unknown_type, deserialize_failed, retry_pending, dead_lettered.</summary>
     public void OutboxMessage(string outcome)
         => _outboxMessages.Add(1, new KeyValuePair<string, object?>("outcome", outcome));
+
+    /// <summary>Reasons: signal (woken by a notify), poll (interval elapsed), backlog (full batch — immediate re-dispatch).</summary>
+    public void OutboxWakeup(string reason)
+        => _outboxWakeups.Add(1, new KeyValuePair<string, object?>("reason", reason));
 
     public void HandlerDuration(double milliseconds, string handler, string outcome)
         => _handlerDuration.Record(

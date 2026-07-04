@@ -149,6 +149,22 @@ public class MessagingMetricsTests
     }
 
     [Fact]
+    public void WakeupCounter_TagsReason()
+    {
+        var metrics = new MessagingMetrics(meterFactory: null);
+        using var capture = new MeterCapture(metrics);
+
+        metrics.OutboxWakeup("signal");
+        metrics.OutboxWakeup("poll");
+        metrics.OutboxWakeup("backlog");
+
+        var reasons = capture.For("modulus.messaging.outbox.wakeups")
+            .Select(m => (string)m.Tags["reason"]!)
+            .ToList();
+        reasons.ShouldBe(["signal", "poll", "backlog"]);
+    }
+
+    [Fact]
     public void OutboxCounter_TagsOutcome()
     {
         var metrics = new MessagingMetrics(meterFactory: null);
