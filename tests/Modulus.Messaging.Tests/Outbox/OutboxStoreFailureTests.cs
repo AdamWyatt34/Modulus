@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Modulus.Messaging.Abstractions;
 using Modulus.Messaging.Outbox;
+using Modulus.Messaging.Tests.Fixtures;
 using Shouldly;
 using Xunit;
 
@@ -30,7 +31,7 @@ public class OutboxStoreFailureTests
         });
         await db.SaveChangesAsync();
 
-        var store = new EfOutboxStore(db);
+        var store = new EfOutboxStore(db, new FakeOutboxNotifier());
         await store.MarkAsFailed(id, "transient network blip");
 
         var reloaded = await db.OutboxMessages.AsNoTracking().FirstAsync(m => m.Id == id);
@@ -52,7 +53,7 @@ public class OutboxStoreFailureTests
         });
         await db.SaveChangesAsync();
 
-        var store = new EfOutboxStore(db);
+        var store = new EfOutboxStore(db, new FakeOutboxNotifier());
         await store.MarkAsFailed(id, "attempt 1");
         await store.MarkAsFailed(id, "attempt 2");
         await store.MarkAsFailed(id, "attempt 3");
@@ -95,7 +96,7 @@ public class OutboxStoreFailureTests
         });
         await db.SaveChangesAsync();
 
-        var store = new EfOutboxStore(db);
+        var store = new EfOutboxStore(db, new FakeOutboxNotifier());
         var pending = await store.GetPending(batchSize, maxAttempts);
 
         pending.Count.ShouldBe(1);

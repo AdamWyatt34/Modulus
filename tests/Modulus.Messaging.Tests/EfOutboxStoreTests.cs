@@ -10,11 +10,12 @@ namespace Modulus.Messaging.Tests;
 
 public class EfOutboxStoreTests
 {
-    private static ServiceProvider CreateProvider()
+    private static ServiceProvider CreateProvider(FakeOutboxNotifier? notifier = null)
     {
         var services = new ServiceCollection();
         services.AddDbContext<OutboxDbContext>(options =>
             options.UseInMemoryDatabase($"OutboxTests_{Guid.NewGuid()}"));
+        services.AddSingleton<IOutboxNotifier>(notifier ?? new FakeOutboxNotifier());
         services.AddScoped<IOutboxStore, EfOutboxStore>();
         return services.BuildServiceProvider();
     }
@@ -41,6 +42,19 @@ public class EfOutboxStoreTests
         messages[0].EventType.ShouldContain(nameof(TestOrderCreatedEvent));
         messages[0].Payload.ShouldContain("\"OrderId\"");
         messages[0].ProcessedAt.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Save_WithoutTransaction_Notifies()
+    {
+        var notifier = new FakeOutboxNotifier();
+        using var provider = CreateProvider(notifier);
+        using var scope = provider.CreateScope();
+        var store = scope.ServiceProvider.GetRequiredService<IOutboxStore>();
+
+        await store.Save(new TestOrderCreatedEvent { OrderId = 1, CustomerName = "Test" });
+
+        notifier.NotifyCount.ShouldBe(1);
     }
 
     [Fact]

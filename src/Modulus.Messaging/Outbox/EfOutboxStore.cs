@@ -1,10 +1,11 @@
 using System.Text.Json;
+using System.Transactions;
 using Microsoft.EntityFrameworkCore;
 using Modulus.Messaging.Abstractions;
 
 namespace Modulus.Messaging.Outbox;
 
-internal sealed class EfOutboxStore(OutboxDbContext dbContext) : IOutboxStore
+internal sealed class EfOutboxStore(OutboxDbContext dbContext, IOutboxNotifier notifier) : IOutboxStore
 {
     public async Task Save(IIntegrationEvent @event, CancellationToken cancellationToken = default)
     {
@@ -18,6 +19,12 @@ internal sealed class EfOutboxStore(OutboxDbContext dbContext) : IOutboxStore
 
         dbContext.OutboxMessages.Add(message);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        // Only signal when the row is already visible; inside a transaction the
+        // commit-time notify comes from OutboxNotifyingInterceptor (auto-attached by
+        // AddModulusOutbox), and coalescing absorbs the overlap when both fire.
+        if (dbContext.Database.CurrentTransaction is null && Transaction.Current is null)
+            notifier.Notify();
     }
 
     public async Task<IReadOnlyList<OutboxMessage>> GetPending(
