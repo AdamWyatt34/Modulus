@@ -6,10 +6,21 @@ namespace Modulus.Messaging.Tests.Fixtures;
 public sealed class FakeOutboxDispatcher : IOutboxDispatcher
 {
     private readonly Lock _sync = new();
+    private readonly Queue<int> _results = new();
     private int _throwCount;
     private Exception? _exception;
 
     public int CallCount { get; private set; }
+
+    /// <summary>Queues fetched-count results for upcoming calls; once drained, calls return 0.</summary>
+    public void EnqueueResults(params int[] fetchedCounts)
+    {
+        lock (_sync)
+        {
+            foreach (var count in fetchedCounts)
+                _results.Enqueue(count);
+        }
+    }
 
     /// <summary>Configures the next <paramref name="times"/> calls to throw <paramref name="exception"/> before resuming normal behavior.</summary>
     public void ThrowOnNextCall(Exception exception, int times = 1)
@@ -21,7 +32,7 @@ public sealed class FakeOutboxDispatcher : IOutboxDispatcher
         }
     }
 
-    public Task DispatchPendingAsync(CancellationToken cancellationToken = default)
+    public Task<int> DispatchPendingAsync(CancellationToken cancellationToken = default)
     {
         lock (_sync)
         {
@@ -32,8 +43,8 @@ public sealed class FakeOutboxDispatcher : IOutboxDispatcher
                 _throwCount--;
                 throw _exception!;
             }
-        }
 
-        return Task.CompletedTask;
+            return Task.FromResult(_results.Count > 0 ? _results.Dequeue() : 0);
+        }
     }
 }

@@ -50,7 +50,7 @@ internal sealed class OutboxDispatcher(
         return map;
     }
 
-    public async Task DispatchPendingAsync(CancellationToken cancellationToken = default)
+    public async Task<int> DispatchPendingAsync(CancellationToken cancellationToken = default)
     {
         using var scope = scopeFactory.CreateScope();
         var outboxStore = scope.ServiceProvider.GetRequiredService<IOutboxStore>();
@@ -61,7 +61,7 @@ internal sealed class OutboxDispatcher(
             .ConfigureAwait(false);
 
         if (pending.Count == 0)
-            return;
+            return 0;
 
         var processedIds = new List<Guid>();
 
@@ -141,5 +141,7 @@ internal sealed class OutboxDispatcher(
 
         if (processedIds.Count > 0)
             await outboxStore.MarkAsProcessed(processedIds, cancellationToken).ConfigureAwait(false);
+
+        return pending.Count;
     }
 }

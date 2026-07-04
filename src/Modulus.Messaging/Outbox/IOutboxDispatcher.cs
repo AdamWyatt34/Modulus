@@ -7,5 +7,9 @@ namespace Modulus.Messaging.Outbox;
 /// </summary>
 internal interface IOutboxDispatcher
 {
-    Task DispatchPendingAsync(CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Returns the number of messages fetched (not necessarily published) — a full batch
+    /// signals probable backlog so the caller can re-dispatch immediately instead of waiting.
+    /// </summary>
+    Task<int> DispatchPendingAsync(CancellationToken cancellationToken = default);
 }
