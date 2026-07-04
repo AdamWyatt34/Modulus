@@ -216,12 +216,15 @@ public sealed class OutboxDispatcherTests : IDisposable
         }
 
         await using var harness = await MessagingTestHarness.StartAsync(services);
+        // No manual dispatch: Save's wake signal must drive the hosted OutboxProcessor
+        // (dispatching here as well would double-publish — the processor is the single
+        // writer; a second concurrent dispatch pass violates that assumption).
         await SeedEvent(harness.Provider, orderId: 7);
 
-        var dispatcher = harness.Provider.GetRequiredService<IOutboxDispatcher>();
-        await dispatcher.DispatchPendingAsync();
-
-        await TestWait.WaitForConditionAsync(() => handler.HandledEvents.Count == 1);
+        await TestWait.WaitForConditionAsync(
+            () => handler.HandledEvents.Count >= 1,
+            timeout: TimeSpan.FromSeconds(10),
+            because: "the outbox wake signal should dispatch the row without waiting for the poll interval");
         handler.HandledEvents[0].OrderId.ShouldBe(7);
     }
 }

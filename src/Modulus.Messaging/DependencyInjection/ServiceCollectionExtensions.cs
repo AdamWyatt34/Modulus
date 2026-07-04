@@ -132,6 +132,7 @@ public static class ServiceCollectionExtensions
         // TryAdd: a custom wake source (e.g. a database change listener package) may
         // pre-register its own notifier decorator before calling AddModulusMessaging.
         services.TryAddSingleton<IOutboxNotifier, OutboxNotifier>();
+        services.TryAddSingleton<OutboxNotifyingInterceptor>();
 
         // Consumer host first: its subscriptions must exist before the outbox processor's first
         // dispatch pass (the in-memory transport drops messages published with no subscriber).
@@ -172,11 +173,27 @@ public static class ServiceCollectionExtensions
     /// Registers the <see cref="OutboxDbContext"/> with the specified configuration.
     /// Required for the outbox processor to read/write integration events.
     /// </summary>
+    /// <remarks>
+    /// When <see cref="AddModulusMessaging(IServiceCollection, Action{MessagingOptions})"/> is
+    /// also registered, <see cref="OutboxNotifyingInterceptor"/> is attached automatically so
+    /// rows saved through this context wake the outbox processor immediately. Application
+    /// contexts that map the outbox table themselves get the same behavior with
+    /// <c>options.AddInterceptors(sp.GetRequiredService&lt;OutboxNotifyingInterceptor&gt;())</c>.
+    /// </remarks>
     public static IServiceCollection AddModulusOutbox(
         this IServiceCollection services,
         Action<DbContextOptionsBuilder> configure)
     {
-        services.AddDbContext<OutboxDbContext>(configure);
+        services.AddDbContext<OutboxDbContext>((provider, optionsBuilder) =>
+        {
+            configure(optionsBuilder);
+
+            // GetService, not GetRequiredService: keeps this call order-independent and
+            // usable without AddModulusMessaging (the interceptor is registered there).
+            var interceptor = provider.GetService<OutboxNotifyingInterceptor>();
+            if (interceptor is not null)
+                optionsBuilder.AddInterceptors(interceptor);
+        });
         return services;
     }
 

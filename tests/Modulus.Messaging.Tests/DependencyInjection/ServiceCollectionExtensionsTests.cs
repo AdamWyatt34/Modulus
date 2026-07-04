@@ -1,6 +1,10 @@
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Modulus.Messaging.InMemory;
+using Modulus.Messaging.Outbox;
 using Modulus.Messaging.RabbitMq;
+using Modulus.Messaging.Tests.Fixtures;
 using Modulus.Messaging.Transports;
 using Shouldly;
 using Xunit;
@@ -103,6 +107,51 @@ public class ServiceCollectionExtensionsTests
             services.AddModulusMessaging(options => options.PrefetchCount = 0));
 
         ex.Message.ShouldContain("PrefetchCount");
+    }
+
+    [Fact]
+    public async Task OutboxNotifier_ResolvesAsSingleton()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddModulusMessaging(options => options.Transport = Transport.InMemory);
+
+        await using var provider = services.BuildServiceProvider();
+
+        var notifier = provider.GetRequiredService<IOutboxNotifier>();
+        notifier.ShouldBeSameAs(provider.GetRequiredService<IOutboxNotifier>());
+        provider.GetRequiredService<OutboxNotifyingInterceptor>().ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task AddModulusOutbox_TransactionalSave_NotifiesOnCommitViaAutoAttachedInterceptor()
+    {
+        using var connection = new SqliteConnection("DataSource=:memory:");
+        connection.Open();
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddModulusMessaging(options => options.Transport = Transport.InMemory);
+        services.AddModulusOutbox(options => options.UseSqlite(connection));
+
+        var notifier = new FakeOutboxNotifier();
+        services.AddSingleton<IOutboxNotifier>(notifier);
+
+        await using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<OutboxDbContext>();
+        await dbContext.Database.EnsureCreatedAsync();
+
+        await using (var transaction = await dbContext.Database.BeginTransactionAsync())
+        {
+            var store = scope.ServiceProvider.GetRequiredService<Abstractions.IOutboxStore>();
+            await store.Save(new TestOrderCreatedEvent { OrderId = 1, CustomerName = "Test" });
+            notifier.NotifyCount.ShouldBe(0);
+
+            await transaction.CommitAsync();
+        }
+
+        notifier.NotifyCount.ShouldBe(1);
     }
 
     [Fact]
