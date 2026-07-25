@@ -7,9 +7,11 @@ namespace {{RootNamespace}}.{{ModuleName}}.Tests.Integration;
 public class {{ModuleName}}EndpointTests : {{ModuleName}}IntegrationTestBase
 {
     [Fact]
-    public async Task Get_module_endpoint_returns_200()
+    public async Task Get_module_sample_endpoint_returns_200()
     {
-        var response = await Client.GetAsync("/api/{{ModuleNameLower}}");
+        // GetSample.cs is the only endpoint the freshly scaffolded module maps — the module
+        // group itself (/api/{{ModuleNameLower}}) has no handler, so hitting it 404s.
+        var response = await Client.GetAsync("/api/{{ModuleNameLower}}/sample");
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
     }

@@ -190,6 +190,28 @@ public class DoctorHandlerTests
         result.ShouldBe(0);
     }
 
+    [Fact]
+    public async Task Doctor_msbuild_variable_project_reference_is_not_false_flagged()
+    {
+        // "$(SolutionDir)..." can't be resolved by static text inspection — only MSBuild knows
+        // the property's value — so this must not be reported as a missing project.
+        SeedHealthySolution();
+        var appCsproj = Path.Combine(SolutionRoot, "src", "Modules", "Orders", "src", "Orders.Application", "Orders.Application.csproj");
+        var content =
+            "<Project Sdk=\"Microsoft.NET.Sdk\">\n" +
+            "  <ItemGroup>\n" +
+            "    <ProjectReference Include=\"$(SolutionDir)Shared\\Shared.csproj\" />\n" +
+            "  </ItemGroup>\n" +
+            "</Project>\n";
+        _fs.SeedFile(appCsproj, content);
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync(Slnx, json: false, strict: false);
+
+        result.ShouldBe(0);
+        _console.ErrorLines.ShouldNotContain(l => l.Contains("ProjectReferences"));
+    }
+
     // ── MessagingConfig ───────────────────────────────────────────
 
     [Fact]
@@ -255,6 +277,57 @@ public class DoctorHandlerTests
         _console.Lines.ShouldContain(l => l.Contains("MessagingConfig") && l.Contains("ConnectionString"));
     }
 
+    [Fact]
+    public async Task Doctor_messaging_rabbitmq_aspire_connection_strings_shape_does_not_warn()
+    {
+        // Under Aspire, the RabbitMQ resource injects ConnectionStrings:messaging at run time via
+        // service discovery — appsettings.json legitimately has no static ConnectionString.
+        SeedHealthySolution();
+        var csprojPath = Path.Combine(SolutionRoot, "src", "Modules", "Orders", "src", "Orders.Infrastructure", "Orders.Infrastructure.csproj");
+        _fs.SeedFile(csprojPath,
+            "<Project Sdk=\"Microsoft.NET.Sdk\">\n" +
+            "  <ItemGroup>\n" +
+            "    <PackageReference Include=\"ModulusKit.Messaging\" />\n" +
+            "  </ItemGroup>\n" +
+            "</Project>\n");
+        var appsettingsPath = Path.Combine(SolutionRoot, "src", "EShop.WebApi", "appsettings.json");
+        _fs.SeedFile(appsettingsPath,
+            "{ \"Messaging\": { \"Transport\": \"RabbitMq\" }, \"ConnectionStrings\": { \"messaging\": \"\" } }");
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync(Slnx, json: false, strict: false);
+
+        result.ShouldBe(0);
+        _console.SuccessLines.ShouldContain(l => l.Contains("MessagingConfig") && l.Contains("Aspire"));
+        _console.Lines.ShouldNotContain(l => l.Contains("MessagingConfig") && l.Contains("neither ConnectionString"));
+    }
+
+    [Fact]
+    public async Task Doctor_messaging_rabbitmq_apphost_project_shape_does_not_warn()
+    {
+        // The second Aspire signal: an AppHost project anywhere in the solution, even if
+        // appsettings.json itself carries no ConnectionStrings section at all.
+        SeedHealthySolution();
+        var csprojPath = Path.Combine(SolutionRoot, "src", "Modules", "Orders", "src", "Orders.Infrastructure", "Orders.Infrastructure.csproj");
+        _fs.SeedFile(csprojPath,
+            "<Project Sdk=\"Microsoft.NET.Sdk\">\n" +
+            "  <ItemGroup>\n" +
+            "    <PackageReference Include=\"ModulusKit.Messaging\" />\n" +
+            "  </ItemGroup>\n" +
+            "</Project>\n");
+        var appsettingsPath = Path.Combine(SolutionRoot, "src", "EShop.WebApi", "appsettings.json");
+        _fs.SeedFile(appsettingsPath, "{ \"Messaging\": { \"Transport\": \"RabbitMq\" } }");
+        _fs.SeedFile(
+            Path.Combine(SolutionRoot, "aspire", "EShop.AppHost", "EShop.AppHost.csproj"),
+            MinimalCsproj);
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync(Slnx, json: false, strict: false);
+
+        result.ShouldBe(0);
+        _console.SuccessLines.ShouldContain(l => l.Contains("MessagingConfig") && l.Contains("Aspire"));
+    }
+
     // ── MigrationGuidance ─────────────────────────────────────────
 
     [Fact]
@@ -286,6 +359,49 @@ public class DoctorHandlerTests
 
         result.ShouldBe(0);
         _console.SuccessLines.ShouldContain(l => l.Contains("MigrationGuidance"));
+    }
+
+    [Fact]
+    public async Task Doctor_pristine_scaffold_with_commented_out_guidance_does_not_warn()
+    {
+        // Mirrors Program.cs.template: the outbox/inbox registration and the migration call are
+        // both commented-out guidance. A naive Contains-based match would find "AddModulusOutbox"
+        // and "UseModulusMessagingMigrationsAsync" inside the comments and (by coincidence) still
+        // pass — this asserts the intended, comment-aware behavior explicitly.
+        SeedHealthySolution();
+        _fs.SeedFile(
+            Path.Combine(SolutionRoot, "src", "EShop.WebApi", "Program.cs"),
+            "var builder = WebApplication.CreateBuilder(args);\n" +
+            "//   builder.Services.AddModulusOutbox(o => o.UseSqlServer(\"...\"));\n" +
+            "var app = builder.Build();\n" +
+            "//   await app.UseModulusMessagingMigrationsAsync();\n" +
+            "app.Run();\n");
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync(Slnx, json: false, strict: false);
+
+        result.ShouldBe(0);
+        _console.SuccessLines.ShouldContain(l => l.Contains("MigrationGuidance"));
+    }
+
+    [Fact]
+    public async Task Doctor_real_outbox_registration_with_commented_out_migration_call_warns()
+    {
+        // The actual false-negative this fix targets: outbox registration was uncommented (real),
+        // but the migration call is still commented out — a comment mentioning
+        // UseModulusMessagingMigrationsAsync must not count as "calls it".
+        SeedHealthySolution();
+        _fs.SeedFile(
+            Path.Combine(SolutionRoot, "src", "EShop.WebApi", "Program.cs"),
+            "builder.Services.AddModulusOutbox(o => o.UseSqlServer(\"...\"));\n" +
+            "//   await app.UseModulusMessagingMigrationsAsync();\n" +
+            "app.Run();\n");
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync(Slnx, json: false, strict: false);
+
+        result.ShouldBe(0);
+        _console.Lines.ShouldContain(l => l.Contains("MigrationGuidance") && l.Contains("UseModulusMessagingMigrationsAsync"));
     }
 
     // ── --json output ─────────────────────────────────────────────

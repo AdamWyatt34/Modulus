@@ -27,6 +27,55 @@ public class TemplateEngineModuleTests
         outputs.ShouldContain(o => o.RelativePath == "src/Catalog.Api/Catalog.Api.csproj");
     }
 
+    // ── H-PKG3 / C4: analyzer/generator references flow neither transitively across ─────
+    // ── ProjectReference nor across the module boundary, so MOD rules and              ─────
+    // ── [StronglyTypedId] were previously inert everywhere module code actually lives. ─────
+
+    [Theory]
+    [InlineData("src/Catalog.Domain/Catalog.Domain.csproj")]
+    [InlineData("src/Catalog.Application/Catalog.Application.csproj")]
+    [InlineData("src/Catalog.Infrastructure/Catalog.Infrastructure.csproj")]
+    [InlineData("src/Catalog.Api/Catalog.Api.csproj")]
+    public void GenerateModule_LayerProjects_ReferenceModulusKitAnalyzers(string relativePath)
+    {
+        var engine = new TemplateEngine();
+
+        var outputs = engine.GenerateModule(CreateOptions());
+
+        var csproj = outputs.Single(o => o.RelativePath == relativePath);
+        csproj.Content.ShouldContain(
+            "<PackageReference Include=\"ModulusKit.Analyzers\" OutputItemType=\"Analyzer\" ReferenceOutputAssembly=\"false\" />");
+    }
+
+    [Theory]
+    [InlineData("src/Catalog.Domain/Catalog.Domain.csproj")]
+    [InlineData("src/Catalog.Application/Catalog.Application.csproj")]
+    public void GenerateModule_DomainAndApplication_ReferenceModulusKitGenerators(string relativePath)
+    {
+        var engine = new TemplateEngine();
+
+        var outputs = engine.GenerateModule(CreateOptions());
+
+        var csproj = outputs.Single(o => o.RelativePath == relativePath);
+        csproj.Content.ShouldContain(
+            "<PackageReference Include=\"ModulusKit.Generators\" OutputItemType=\"Analyzer\" ReferenceOutputAssembly=\"false\" />");
+    }
+
+    [Theory]
+    [InlineData("src/Catalog.Infrastructure/Catalog.Infrastructure.csproj")]
+    [InlineData("src/Catalog.Api/Catalog.Api.csproj")]
+    public void GenerateModule_InfrastructureAndApi_DoNotReferenceModulusKitGenerators(string relativePath)
+    {
+        // Generators emits [StronglyTypedId] support for Domain types and handler/validator
+        // registration for Application types — Infrastructure/Api have no use for it.
+        var engine = new TemplateEngine();
+
+        var outputs = engine.GenerateModule(CreateOptions());
+
+        var csproj = outputs.Single(o => o.RelativePath == relativePath);
+        csproj.Content.ShouldNotContain("ModulusKit.Generators");
+    }
+
     [Fact]
     public void GenerateModule_ProducesThreeTestProjects()
     {
@@ -64,6 +113,20 @@ public class TemplateEngineModuleTests
         module.Content.ShouldContain("using Modulus.Messaging.Outbox;");
         module.Content.ShouldContain("sp.GetService<OutboxNotifyingInterceptor>()");
         module.Content.ShouldContain("options.AddInterceptors(outboxInterceptor);");
+    }
+
+    [Fact]
+    public void GenerateModule_WriteDbContext_AttachesAuditableEntityInterceptor()
+    {
+        // The interceptor was scaffolded (BuildingBlocks.Infrastructure) but never registered
+        // anywhere, so IAuditable.CreatedAtUtc/UpdatedAtUtc silently never got set.
+        var engine = new TemplateEngine();
+
+        var outputs = engine.GenerateModule(CreateOptions());
+
+        var module = outputs.Single(o => o.RelativePath == "src/Catalog.Infrastructure/CatalogModule.cs");
+        module.Content.ShouldContain("using EShop.BuildingBlocks.Infrastructure.Persistence;");
+        module.Content.ShouldContain("options.AddInterceptors(new AuditableEntityInterceptor());");
     }
 
     [Fact]

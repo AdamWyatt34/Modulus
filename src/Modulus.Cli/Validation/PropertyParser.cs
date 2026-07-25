@@ -6,12 +6,23 @@ namespace Modulus.Cli.Validation;
 
 public static class PropertyParser
 {
+    /// <summary>
+    /// The entity base classes (<c>Entity&lt;TId&gt;</c> / <c>AggregateRoot&lt;TId&gt;</c>)
+    /// already declare an <c>Id</c> property, and <c>EntityGenerator</c>'s factory method always
+    /// takes a hard-coded <c>id</c> parameter for it. A user-supplied property that collides with
+    /// "Id" (in any casing — the factory's camelCase parameter name collapses "Id"/"id" to the
+    /// same "id" either way) produces an uncompilable entity: a duplicate member initializer
+    /// (CS1912) and/or a duplicate factory parameter (CS0100).
+    /// </summary>
+    private const string ReservedIdName = "Id";
+
     public static (IReadOnlyList<EntityProperty> Properties, string? Error) Parse(string? input)
     {
         if (string.IsNullOrWhiteSpace(input))
             return ([], null);
 
         var results = new List<EntityProperty>();
+        var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var parts = input.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         foreach (var part in parts)
@@ -26,43 +37,18 @@ public static class PropertyParser
             if (!CSharpIdentifierValidator.IsValid(name))
                 return ([], $"Property name '{name}' is not a valid C# identifier.");
 
-            if (!IsValidTypeName(type))
+            if (string.Equals(name, ReservedIdName, StringComparison.OrdinalIgnoreCase))
+                return ([], $"Property name '{name}' is reserved: every generated entity already declares 'Id' from its base class.");
+
+            if (!seenNames.Add(name))
+                return ([], $"Property name '{name}' is specified more than once.");
+
+            if (!CSharpIdentifierValidator.IsValidTypeName(type))
                 return ([], $"Property type '{type}' is not a valid C# type name.");
 
             results.Add(new EntityProperty(name, type));
         }
 
         return (results, null);
-    }
-
-    private static bool IsValidTypeName(string type)
-    {
-        // Strip nullable suffix
-        var baseType = type.TrimEnd('?');
-
-        // Allow built-in C# type aliases
-        var builtInTypes = new HashSet<string>
-        {
-            "bool", "byte", "sbyte", "char", "decimal", "double", "float",
-            "int", "uint", "long", "ulong", "short", "ushort", "string",
-            "object", "nint", "nuint"
-        };
-
-        if (builtInTypes.Contains(baseType))
-            return true;
-
-        // Allow common .NET types
-        var commonTypes = new HashSet<string>
-        {
-            "Guid", "DateTime", "DateTimeOffset", "DateOnly", "TimeOnly", "TimeSpan"
-        };
-
-        if (commonTypes.Contains(baseType))
-            return true;
-
-        // For custom types, validate as C# identifier (handles generic types with dots)
-        // Split on '.' for fully qualified names and validate each part
-        var parts = baseType.Split('.');
-        return parts.All(CSharpIdentifierValidator.IsValid);
     }
 }

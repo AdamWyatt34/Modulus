@@ -38,7 +38,7 @@ public sealed class AddConsumerHandler(
         var slnxPath = solutionFinder.ResolveSolutionPath(solutionPath, fileSystem.GetCurrentDirectory());
         if (slnxPath is null)
         {
-            console.WriteError("Could not find a solution file. Use --solution to specify the path, or run from within a Modulus solution directory.");
+            console.WriteError(solutionFinder.DescribeResolutionFailure(solutionPath));
             return Task.FromResult(1);
         }
 
@@ -228,17 +228,17 @@ public sealed class AddConsumerHandler(
     /// MOD001-compliant cross-module reference (Integration projects are the only permitted
     /// cross-module dependency target). Returns <c>true</c> when a reference was added,
     /// <c>false</c> when an actual <c>ProjectReference</c> to the source project already exists.
-    /// Idempotency is decided by inspecting parsed <c>ProjectReference</c> elements — not raw
-    /// text — so commented-out references or unrelated text mentioning the file name never cause
-    /// the required wiring to be silently skipped. The caller guarantees the file exists, parses
-    /// as XML, and contains a closing tag.
+    /// Idempotency and the edit itself are delegated to <see cref="ProjectReferenceEditor"/> so
+    /// every handler that wires a cross-project reference resolves "is it already there?" and
+    /// applies the edit the same way. The caller guarantees the file exists, parses as XML, and
+    /// contains a closing tag.
     /// </summary>
     private bool AddIntegrationProjectReference(string csprojPath, string sourceModule)
     {
         var content = fileSystem.ReadAllText(csprojPath);
         var expectedCsprojFileName = $"{sourceModule}.Integration.csproj";
 
-        if (HasProjectReferenceTo(content, expectedCsprojFileName))
+        if (ProjectReferenceEditor.HasReferenceTo(content, expectedCsprojFileName))
         {
             return false;
         }
@@ -250,52 +250,8 @@ public sealed class AddConsumerHandler(
         }
 
         var relativeReference = $"..\\..\\..\\{sourceModule}\\src\\{sourceModule}.Integration\\{sourceModule}.Integration.csproj";
-        var itemGroup =
-            "  <ItemGroup>\n" +
-            $"    <ProjectReference Include=\"{relativeReference}\" />\n" +
-            "  </ItemGroup>\n\n";
-
-        content = content.Replace("</Project>", itemGroup + "</Project>");
-        fileSystem.WriteAllText(csprojPath, content);
+        fileSystem.WriteAllText(csprojPath, ProjectReferenceEditor.AddReference(content, relativeReference));
         return true;
-    }
-
-    /// <summary>
-    /// Returns <c>true</c> when the csproj declares a real <c>ProjectReference</c> whose
-    /// <c>Include</c> resolves to the given project file name. Parses the XML so comments and
-    /// unrelated nodes are ignored; matches on the file name to be independent of how the
-    /// relative path is spelled and of the path separator in use.
-    /// </summary>
-    private static bool HasProjectReferenceTo(string csprojXml, string expectedCsprojFileName)
-    {
-        XDocument document;
-        try
-        {
-            document = XDocument.Parse(csprojXml);
-        }
-        catch (XmlException)
-        {
-            // The caller validates well-formedness up front; treat an unparseable file as
-            // "reference not present" so wiring is attempted rather than silently skipped.
-            return false;
-        }
-
-        return document.Descendants()
-            .Where(element => element.Name.LocalName == "ProjectReference")
-            .Select(element => (string?)element.Attribute("Include"))
-            .Where(include => !string.IsNullOrWhiteSpace(include))
-            .Any(include => string.Equals(FileNameOf(include!), expectedCsprojFileName, StringComparison.OrdinalIgnoreCase));
-    }
-
-    /// <summary>
-    /// Extracts the final path segment, treating both <c>/</c> and <c>\</c> as separators so the
-    /// comparison is correct regardless of the OS the CLI runs on.
-    /// </summary>
-    private static string FileNameOf(string path)
-    {
-        var normalized = path.Replace('\\', '/');
-        var lastSlash = normalized.LastIndexOf('/');
-        return lastSlash >= 0 ? normalized[(lastSlash + 1)..] : normalized;
     }
 
     /// <summary>

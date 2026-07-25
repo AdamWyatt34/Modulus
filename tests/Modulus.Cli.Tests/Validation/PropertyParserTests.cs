@@ -106,4 +106,54 @@ public class PropertyParserTests
         props[0].Name.ShouldBe("Price");
         props[0].Type.ShouldBe("decimal");
     }
+
+    // ── Built-in type aliases are shared with CSharpIdentifierValidator ──────────────────
+
+    [Fact]
+    public void Parse_builtin_type_alias_string_is_valid()
+    {
+        var (props, error) = PropertyParser.Parse("Name:string");
+
+        error.ShouldBeNull();
+        props[0].Type.ShouldBe("string");
+    }
+
+    // ── Reserved 'Id' name — collides with the base class's own Id property/parameter ────
+
+    [Theory]
+    [InlineData("Id")]
+    [InlineData("id")]
+    [InlineData("ID")]
+    public void Parse_rejects_reserved_id_property_name(string name)
+    {
+        var (props, error) = PropertyParser.Parse($"{name}:string");
+
+        error.ShouldNotBeNull();
+        error.ShouldContain("reserved");
+        props.ShouldBeEmpty();
+    }
+
+    // ── Duplicate property names — generate an uncompilable entity (duplicate member) ────
+
+    [Fact]
+    public void Parse_rejects_duplicate_property_names()
+    {
+        var (props, error) = PropertyParser.Parse("Name:string,Name:int");
+
+        error.ShouldNotBeNull();
+        error.ShouldContain("more than once");
+        props.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Parse_rejects_duplicate_property_names_differing_only_by_case()
+    {
+        // EntityGenerator lowercases only the first letter for the factory parameter name, so
+        // "Name" and "name" both become the "name" parameter — a guaranteed duplicate-parameter
+        // compile error (CS0100) if both were allowed through.
+        var (props, error) = PropertyParser.Parse("Name:string,name:int");
+
+        error.ShouldNotBeNull();
+        error.ShouldContain("more than once");
+    }
 }

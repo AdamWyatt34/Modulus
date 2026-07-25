@@ -31,13 +31,12 @@ public sealed class EndpointGenerator
         if (o.CommandName is not null || o.QueryName is not null)
         {
             sb.AppendLine("using Modulus.Mediator.Abstractions;");
-            sb.AppendLine($"using {o.SolutionName}.BuildingBlocks.Infrastructure.Endpoints;");
-            sb.AppendLine($"using {o.SolutionName}.WebApi.Extensions;");
         }
-        else
-        {
-            sb.AppendLine($"using {o.SolutionName}.BuildingBlocks.Infrastructure.Endpoints;");
-        }
+
+        // NOTE: the module's Api project cannot reference the host WebApi project (that would be
+        // a MOD001 violation — a backward, host-to-module-only reference is the only supported
+        // shape), and nothing below needs a WebApi-namespace using anyway.
+        sb.AppendLine($"using {o.SolutionName}.BuildingBlocks.Infrastructure.Endpoints;");
 
         if (o.CommandName is not null)
         {
@@ -76,8 +75,17 @@ public sealed class EndpointGenerator
 
             if (o.ResultType is not null && o.HttpMethod == "POST")
             {
+                // The Location value is resolved here (generation time), not with a C#
+                // interpolated string in the generated file: the route may contain literal
+                // "{param}" placeholders (e.g. "/items/{itemId}"), and emitting those inside a
+                // generated `$"..."` string would make the compiler treat "{itemId}" as an
+                // interpolation hole with no such variable in scope (CS0103). Concatenating a
+                // plain, non-interpolated string literal keeps the braces inert text either way.
+                var location = "/api/" + o.ModuleName.ToLowerInvariant() + o.Route;
+                sb.AppendLine("            // NOTE: route parameters, if any, aren't bound into the Location value below yet —");
+                sb.AppendLine("            // it echoes the raw route template. Wire real values in once add-endpoint supports it.");
                 sb.AppendLine($"            return result.Match(");
-                sb.AppendLine($"                value => Results.Created($\"/api/{o.ModuleName.ToLowerInvariant()}{o.Route}\", value),");
+                sb.AppendLine($"                value => Results.Created(\"{location}\", value),");
                 sb.AppendLine("                ApiResults.Problem);");
             }
             else if (o.ResultType is not null)

@@ -54,4 +54,32 @@ public class CSharpIdentifierValidatorTests
         CSharpIdentifierValidator.IsValid(name)
             .ShouldBeFalse($"validator must reject '{name}' — {reason}");
     }
+
+    // ── H-CLI3: IsValidTypeName accepts the built-in aliases IsValid correctly rejects ────
+
+    [Theory]
+    [InlineData("string", true)]
+    [InlineData("int", true)]
+    [InlineData("bool", true)]
+    [InlineData("decimal", true)]
+    [InlineData("long", true)]
+    [InlineData("double", true)]
+    [InlineData("object", true)]
+    [InlineData("Guid", true)]
+    [InlineData("DateTime", true)]
+    [InlineData("DateTimeOffset", true)]
+    [InlineData("string?", true)]
+    [InlineData("int?", true)]
+    [InlineData("Guid?", true)]
+    [InlineData("ProductDto", true)]
+    [InlineData("Some.Namespaced.Dto", true)]
+    [InlineData("123Bad", false)]
+    [InlineData("", false)]
+    [InlineData("?", false)]
+    [InlineData("Foo<Bar>", false)]
+    [InlineData("Foo;Bar", false)]
+    public void Validates_type_names(string type, bool expected)
+    {
+        CSharpIdentifierValidator.IsValidTypeName(type).ShouldBe(expected);
+    }
 }

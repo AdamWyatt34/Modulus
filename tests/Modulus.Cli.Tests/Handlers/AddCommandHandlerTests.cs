@@ -254,6 +254,21 @@ public class AddCommandHandlerTests
         _console.ErrorLines.ShouldContain(l => l.Contains("123Bad"));
     }
 
+    [Fact]
+    public async Task AddCommand_accepts_builtin_type_alias_as_result_type()
+    {
+        // H-CLI3: --result-type used to be validated with the identifier validator, which
+        // rejects C# keywords like "string" even though it's a perfectly legal generic argument.
+        SeedModulusSolutionWithModule();
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync("CreateToken", "Catalog", @"C:\work\EShop\EShop.slnx", "string");
+
+        result.ShouldBe(0);
+        var content = _fs.ReadAllText(@"C:\work\EShop\src\Modules\Catalog\src\Catalog.Application\Commands\CreateToken\CreateToken.cs");
+        content.ShouldContain(": ICommand<string>;");
+    }
+
     // ── Success output ───────────────────────────────────────────
 
     [Fact]

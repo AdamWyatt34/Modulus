@@ -84,8 +84,13 @@ internal static class ResourceManifest
             = "init/src/BuildingBlocks.Infrastructure/Outbox/OutboxMessageConsumer.cs.template",
         ["Modulus.Templates.templates.init.building_blocks.infrastructure.Outbox.OutboxMessageConsumerConfiguration.cs.template"]
             = "init/src/BuildingBlocks.Infrastructure/Outbox/OutboxMessageConsumerConfiguration.cs.template",
-        ["Modulus.Templates.templates.init.building_blocks.infrastructure.Outbox.IdempotentDomainEventHandler.cs.template"]
-            = "init/src/BuildingBlocks.Infrastructure/Outbox/IdempotentDomainEventHandler.cs.template",
+        // NOTE: IdempotentDomainEventHandler<TEvent> was scaffolded here but never registered —
+        // it's a decorator, and neither the current DI story nor the source generator's
+        // handler-registration model has a supported way to wrap generator-registered handlers
+        // with a decorator (Modulus doesn't depend on Scrutor or similar, and the mediator
+        // pipeline only wraps Send/Query, not Publish). Removed rather than shipping dead,
+        // never-invoked code; see AuditableEntityInterceptor below for the interceptor that *is*
+        // now wired (ModuleNameModule.cs.template).
         ["Modulus.Templates.templates.init.building_blocks.infrastructure.Persistence.AuditableEntityInterceptor.cs.template"]
             = "init/src/BuildingBlocks.Infrastructure/Persistence/AuditableEntityInterceptor.cs.template",
         ["Modulus.Templates.templates.init.building_blocks.infrastructure.Persistence.EfRepository.cs.template"]

@@ -37,6 +37,56 @@ public static class CSharpIdentifierValidator
         return !CSharpKeywords.Contains(name);
     }
 
+    /// <summary>
+    /// Validates a C# <b>type name</b> — used for <c>--result-type</c> on add-query/add-command/
+    /// add-endpoint, and for property types parsed by <c>PropertyParser</c> — as opposed to
+    /// <see cref="IsValid"/>, which validates a C# <b>identifier</b> (a name that will be
+    /// declared, not referenced as a type). Built-in type aliases (<c>string</c>, <c>int</c>,
+    /// <c>bool</c>, ...) and common BCL types (<c>Guid</c>, <c>DateTime</c>, ...) are accepted
+    /// even though several of them are C# keywords that <see cref="IsValid"/> correctly rejects —
+    /// the scaffold's own sample query returns <c>IQuery&lt;string&gt;</c>, so rejecting it here
+    /// would make the scaffold reject its own shape. A trailing <c>?</c> (nullable) is stripped
+    /// before validation. Does not support generic type arguments (e.g. <c>List&lt;T&gt;</c>) or
+    /// array types — those remain unsupported until the CLI gains a real type-syntax parser.
+    /// </summary>
+    /// <remarks>
+    /// This is the single source of truth both add-query/add-command/add-endpoint's
+    /// <c>--result-type</c> validation and <c>PropertyParser</c>'s per-property type validation
+    /// delegate to, so the accepted type surface never drifts between the two call sites.
+    /// </remarks>
+    public static bool IsValidTypeName(string type)
+    {
+        if (string.IsNullOrEmpty(type))
+            return false;
+
+        // Strip a trailing nullable marker, e.g. "int?", "Guid?".
+        var baseType = type.TrimEnd('?');
+        if (baseType.Length == 0)
+            return false;
+
+        if (BuiltInTypeAliases.Contains(baseType) || CommonFrameworkTypes.Contains(baseType))
+            return true;
+
+        // Custom or fully-qualified names: every dot-separated segment must be a valid
+        // identifier. This still rejects the characters IsValid already guards against
+        // (angle brackets, parens, semicolons, ...) — it just additionally allows the dot
+        // separator between segments.
+        var segments = baseType.Split('.');
+        return segments.Length > 0 && segments.All(IsValid);
+    }
+
+    private static readonly HashSet<string> BuiltInTypeAliases = new(StringComparer.Ordinal)
+    {
+        "bool", "byte", "sbyte", "char", "decimal", "double", "float",
+        "int", "uint", "long", "ulong", "short", "ushort", "string",
+        "object", "nint", "nuint",
+    };
+
+    private static readonly HashSet<string> CommonFrameworkTypes = new(StringComparer.Ordinal)
+    {
+        "Guid", "DateTime", "DateTimeOffset", "DateOnly", "TimeOnly", "TimeSpan",
+    };
+
     private static readonly HashSet<string> CSharpKeywords = new(StringComparer.Ordinal)
     {
         "abstract", "as", "base", "bool", "break", "byte", "case", "catch",

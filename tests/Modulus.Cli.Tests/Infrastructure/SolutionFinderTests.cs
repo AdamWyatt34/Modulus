@@ -47,6 +47,94 @@ public class SolutionFinderTests
     }
 
     [Fact]
+    public void FindSolutionFile_multiple_slnx_in_same_directory_is_ambiguous_and_does_not_walk_up()
+    {
+        var fs = new FakeFileSystem();
+        // An unrelated, unambiguous solution one level up must NOT be picked as a fallback —
+        // that would silently mask the ambiguity in C:\work.
+        fs.SeedFile(@"C:\Ancestor.slnx", "<Solution />");
+        fs.SeedFile(@"C:\work\First.slnx", "<Solution />");
+        fs.SeedFile(@"C:\work\Second.slnx", "<Solution />");
+        var finder = new SolutionFinder(fs);
+
+        var result = finder.FindSolutionFile(@"C:\work");
+
+        result.ShouldBeNull();
+    }
+
+    [Fact]
+    public void ResolveSolutionPath_explicit_slnx_file_that_does_not_exist_returns_null()
+    {
+        var fs = new FakeFileSystem();
+        fs.SetCurrentDirectory(@"C:\work");
+        var finder = new SolutionFinder(fs);
+
+        var result = finder.ResolveSolutionPath(@"C:\work\DoesNotExist.slnx", @"C:\work");
+
+        result.ShouldBeNull();
+    }
+
+    [Fact]
+    public void ResolveSolutionPath_explicit_directory_that_does_not_exist_returns_null()
+    {
+        var fs = new FakeFileSystem();
+        fs.SetCurrentDirectory(@"C:\work");
+        var finder = new SolutionFinder(fs);
+
+        var result = finder.ResolveSolutionPath(@"C:\work\NoSuchDirectory", @"C:\work");
+
+        result.ShouldBeNull();
+    }
+
+    [Fact]
+    public void DescribeResolutionFailure_no_solution_option_suggests_solution_flag()
+    {
+        var fs = new FakeFileSystem();
+        var finder = new SolutionFinder(fs);
+
+        finder.DescribeResolutionFailure(null).ShouldContain("--solution");
+    }
+
+    [Fact]
+    public void DescribeResolutionFailure_explicit_missing_file_names_the_file()
+    {
+        var fs = new FakeFileSystem();
+        fs.SetCurrentDirectory(@"C:\work");
+        var finder = new SolutionFinder(fs);
+
+        var message = finder.DescribeResolutionFailure(@"C:\work\Ghost.slnx");
+
+        message.ShouldContain("Ghost.slnx");
+        message.ShouldContain("does not exist");
+    }
+
+    [Fact]
+    public void DescribeResolutionFailure_explicit_missing_directory_names_the_directory()
+    {
+        var fs = new FakeFileSystem();
+        fs.SetCurrentDirectory(@"C:\work");
+        var finder = new SolutionFinder(fs);
+
+        var message = finder.DescribeResolutionFailure(@"C:\work\NoSuchDirectory");
+
+        message.ShouldContain("NoSuchDirectory");
+        message.ShouldContain("does not exist");
+    }
+
+    [Fact]
+    public void DescribeResolutionFailure_ambiguous_directory_reports_multiple_files()
+    {
+        var fs = new FakeFileSystem();
+        fs.SeedFile(@"C:\work\First.slnx", "<Solution />");
+        fs.SeedFile(@"C:\work\Second.slnx", "<Solution />");
+        var finder = new SolutionFinder(fs);
+
+        var message = finder.DescribeResolutionFailure(@"C:\work");
+
+        message.ShouldContain("Multiple .slnx files");
+    }
+
+    [Fact]
     public void GetSolutionName_returns_filename_without_extension()
     {
         SolutionFinder.GetSolutionName(@"C:\work\EShop.slnx").ShouldBe("EShop");

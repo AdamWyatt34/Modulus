@@ -1,3 +1,5 @@
+using System.Xml;
+using System.Xml.Linq;
 using Modulus.Cli.Infrastructure;
 using Modulus.Cli.Validation;
 using Modulus.Templates;
@@ -24,7 +26,7 @@ public sealed class AddModuleHandler(
         var slnxPath = solutionFinder.ResolveSolutionPath(solutionPath, fileSystem.GetCurrentDirectory());
         if (slnxPath is null)
         {
-            console.WriteError("Could not find a solution file. Use --solution to specify the path, or run from within a Modulus solution directory.");
+            console.WriteError(solutionFinder.DescribeResolutionFailure(solutionPath));
             return 1;
         }
 
@@ -59,6 +61,13 @@ public sealed class AddModuleHandler(
             filtered.RemoveAll(o => o.RelativePath.Contains($".Api{Path.DirectorySeparatorChar}")
                 || o.RelativePath.Contains(".Api/"));
 
+            // H-CLI4: without an Api project the module maps zero HTTP endpoints, so the
+            // scaffolded integration test that GETs one would be red out of the box (or, at
+            // best, meaningless) — exclude it the same way the Api project's own files are
+            // excluded above. This file doesn't live under a ".Api/" path, so the removal above
+            // never catches it.
+            filtered.RemoveAll(o => o.RelativePath.EndsWith($"{moduleName}EndpointTests.cs", StringComparison.OrdinalIgnoreCase));
+
             for (var i = 0; i < filtered.Count; i++)
             {
                 var output = filtered[i];
@@ -83,7 +92,7 @@ public sealed class AddModuleHandler(
         }
 
         var moduleRoot = Path.Combine("src", "Modules", moduleName);
-        var csprojPaths = new List<string>();
+        var csprojEntries = new List<(string FullPath, bool IsTestProject)>();
         var fileCount = 0;
 
         foreach (var output in filtered)
@@ -98,13 +107,19 @@ public sealed class AddModuleHandler(
 
             if (fullPath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
             {
-                csprojPaths.Add(fullPath);
+                csprojEntries.Add((fullPath, IsTestProjectOutput(output.RelativePath)));
             }
         }
 
         console.WriteLine($"Created module '{moduleName}' with {fileCount} files.");
 
-        await AddProjectsToSolution(slnxPath, solutionRoot, moduleName, csprojPaths);
+        // Module discovery (ModuleRegistrationGenerator / HandlerRegistrationGenerator) scans the
+        // host's *referenced assemblies* at compile time — adding the module to the .slnx alone
+        // never makes the host build against it. Without this ProjectReference the module builds
+        // but its ConfigureServices/handlers/endpoints never run.
+        var hostReferenceAdded = AddHostProjectReference(solutionRoot, solutionName, moduleName);
+
+        await AddProjectsToSolution(slnxPath, solutionRoot, moduleName, csprojEntries);
 
         var restoreResult = await processRunner.RunAsync("dotnet", ["restore"], solutionRoot);
         if (restoreResult != 0)
@@ -113,24 +128,77 @@ public sealed class AddModuleHandler(
         }
 
         console.WriteSuccess($"Module '{moduleName}' added successfully.");
-        console.WriteLine($"  Projects: {csprojPaths.Count}");
+        console.WriteLine($"  Projects: {csprojEntries.Count}");
         console.WriteLine($"  Endpoints: {(noEndpoints ? "Skipped" : "Included")}");
 
+        if (hostReferenceAdded)
+        {
+            console.WriteLine($"  Host wiring: added ProjectReference {solutionName}.WebApi -> {moduleName}.Infrastructure (required for module discovery)");
+        }
+
         return 0;
+    }
+
+    /// <summary>
+    /// Wires a <c>ProjectReference</c> from <c>&lt;Solution&gt;.WebApi.csproj</c> to the new
+    /// module's Infrastructure project. Module discovery is compile-time over the host's
+    /// referenced assemblies, so this reference — not the .slnx entry — is what makes the
+    /// scaffolded module's <c>ConfigureServices</c>, handlers, and endpoints actually run.
+    /// Uses the same XML-parsed, idempotent edit as <c>AddConsumerHandler</c>
+    /// (<see cref="ProjectReferenceEditor"/>): detection inspects parsed <c>ProjectReference</c>
+    /// elements so a repeat/repair run never double-wires. Failures here are reported as warnings
+    /// rather than aborting — every module file has already been written to disk by this point,
+    /// so failing the whole command would misreport a mostly-successful scaffold.
+    /// </summary>
+    private bool AddHostProjectReference(string solutionRoot, string solutionName, string moduleName)
+    {
+        var hostCsprojPath = Path.Combine(solutionRoot, "src", $"{solutionName}.WebApi", $"{solutionName}.WebApi.csproj");
+        var infrastructureCsprojFileName = $"{moduleName}.Infrastructure.csproj";
+
+        if (!fileSystem.FileExists(hostCsprojPath))
+        {
+            console.WriteError($"Warning: host project file was not found at '{hostCsprojPath}'. Add a ProjectReference to '{infrastructureCsprojFileName}' manually so the host discovers the module.");
+            return false;
+        }
+
+        var content = fileSystem.ReadAllText(hostCsprojPath);
+
+        try
+        {
+            _ = XDocument.Parse(content);
+        }
+        catch (XmlException ex)
+        {
+            console.WriteError($"Warning: '{hostCsprojPath}' is not well-formed XML ({ex.Message}); could not wire the module into the host. Add a ProjectReference to '{infrastructureCsprojFileName}' manually.");
+            return false;
+        }
+
+        if (!content.Contains("</Project>", StringComparison.Ordinal))
+        {
+            console.WriteError($"Warning: '{hostCsprojPath}' has no closing </Project> tag; could not wire the module into the host.");
+            return false;
+        }
+
+        if (ProjectReferenceEditor.HasReferenceTo(content, infrastructureCsprojFileName))
+        {
+            return false; // Already wired — e.g. re-running after a partially-completed prior run.
+        }
+
+        var relativeReference = $"..\\Modules\\{moduleName}\\src\\{moduleName}.Infrastructure\\{infrastructureCsprojFileName}";
+        fileSystem.WriteAllText(hostCsprojPath, ProjectReferenceEditor.AddReference(content, relativeReference));
+        return true;
     }
 
     private async Task AddProjectsToSolution(
         string slnxPath,
         string solutionRoot,
         string moduleName,
-        List<string> csprojPaths)
+        List<(string FullPath, bool IsTestProject)> csprojEntries)
     {
         var fullSlnxPath = fileSystem.GetFullPath(slnxPath);
 
-        foreach (var csproj in csprojPaths)
+        foreach (var (csproj, isTestProject) in csprojEntries)
         {
-            var isTestProject = csproj.Contains("tests", StringComparison.OrdinalIgnoreCase);
-
             var solutionFolder = isTestProject
                 ? $"/tests/Modules/{moduleName}/"
                 : $"/src/Modules/{moduleName}/";
@@ -145,6 +213,24 @@ public sealed class AddModuleHandler(
                 console.WriteError($"Warning: Failed to add '{fileSystem.GetFileName(csproj)}' to solution.");
             }
         }
+    }
+
+    /// <summary>
+    /// Classifies a module-relative template output path (e.g.
+    /// <c>tests/Catalog.Tests.Unit/Catalog.Tests.Unit.csproj</c> vs.
+    /// <c>src/Catalog.Domain/Catalog.Domain.csproj</c>) as a test project by checking whether its
+    /// *first path segment* is "tests" — never by substring-matching the full absolute path.
+    /// A raw <c>Contains("tests")</c> over the whole path misfiles a module whose name contains
+    /// "tests" (e.g. "Contests") or any solution checked out under a directory whose name
+    /// contains "tests", because the substring shows up outside the path segment that actually
+    /// distinguishes src from tests.
+    /// </summary>
+    internal static bool IsTestProjectOutput(string moduleRelativePath)
+    {
+        var normalized = moduleRelativePath.Replace('\\', '/');
+        var firstSlash = normalized.IndexOf('/');
+        var firstSegment = firstSlash >= 0 ? normalized[..firstSlash] : normalized;
+        return string.Equals(firstSegment, "tests", StringComparison.OrdinalIgnoreCase);
     }
 
     internal static string StripApiReferencesFromArchTests(string content)

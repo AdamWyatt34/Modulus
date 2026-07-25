@@ -21,12 +21,17 @@ public sealed record DlqConnection(
     string? EventTypeName);
 
 /// <summary>One dead-lettered message as shown by <c>modulus dlq list</c>.</summary>
+/// <remarks>
+/// <paramref name="DeliveryCount"/> is nullable: RabbitMQ only exposes it via the <c>x-death</c>
+/// header, which is absent until a message has actually been nacked/rejected at least once
+/// (rendered as "-" when unavailable, the same as <paramref name="EnqueuedAt"/>).
+/// </remarks>
 public sealed record DlqMessage(
     string MessageId,
     string EventType,
     DateTimeOffset? EnqueuedAt,
     string? Reason,
-    long DeliveryCount);
+    long? DeliveryCount);
 
 /// <summary>
 /// Transport-specific DLQ access port. Implementations own the broker connection; disposing
@@ -51,38 +56,46 @@ public sealed class DlqHandler(
 {
     public async Task<int> ListAsync(DlqConnection connection, int max, CancellationToken cancellationToken = default)
     {
-        await using var browser = browserFactory(connection);
-
-        IReadOnlyList<DlqMessage> messages;
+        // The browser is constructed inside the try — building it can itself fail (an invalid
+        // connection string, an unreachable broker) and must produce the same friendly error as
+        // a failure from the browser's own methods, not a raw, unhandled stack trace.
+        IDlqBrowser? browser = null;
         try
         {
-            messages = await browser.ListAsync(max, cancellationToken);
+            browser = browserFactory(connection);
+            var messages = await browser.ListAsync(max, cancellationToken);
+
+            if (messages.Count == 0)
+            {
+                console.WriteLine("No dead-lettered messages.");
+                return 0;
+            }
+
+            console.WriteLine($"Dead-lettered messages (showing up to {max}): {messages.Count}");
+            console.WriteLine("");
+            console.WriteLine($"{"MessageId",-38} {"EnqueuedAt (UTC)",-21} {"Deliveries",-11} {"EventType",-45} Reason");
+            console.WriteLine(new string('-', 140));
+
+            foreach (var msg in messages)
+            {
+                var enqueued = msg.EnqueuedAt?.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss") ?? "-";
+                var deliveries = msg.DeliveryCount?.ToString() ?? "-";
+                console.WriteLine(
+                    $"{msg.MessageId,-38} {enqueued,-21} {deliveries,-11} {Truncate(msg.EventType, 45),-45} {msg.Reason ?? "-"}");
+            }
+
+            return 0;
         }
         catch (Exception ex)
         {
             console.WriteError($"Failed to read the dead-letter queue: {ex.Message}");
             return 1;
         }
-
-        if (messages.Count == 0)
+        finally
         {
-            console.WriteLine("No dead-lettered messages.");
-            return 0;
+            if (browser is not null)
+                await browser.DisposeAsync();
         }
-
-        console.WriteLine($"Dead-lettered messages (showing up to {max}): {messages.Count}");
-        console.WriteLine("");
-        console.WriteLine($"{"MessageId",-38} {"EnqueuedAt (UTC)",-21} {"Deliveries",-11} {"EventType",-45} Reason");
-        console.WriteLine(new string('-', 140));
-
-        foreach (var msg in messages)
-        {
-            var enqueued = msg.EnqueuedAt?.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss") ?? "-";
-            console.WriteLine(
-                $"{msg.MessageId,-38} {enqueued,-21} {msg.DeliveryCount,-11} {Truncate(msg.EventType, 45),-45} {msg.Reason ?? "-"}");
-        }
-
-        return 0;
     }
 
     public async Task<int> ReplayAsync(
@@ -98,10 +111,11 @@ public sealed class DlqHandler(
             return 1;
         }
 
-        await using var browser = browserFactory(connection);
-
+        IDlqBrowser? browser = null;
         try
         {
+            browser = browserFactory(connection);
+
             if (all)
             {
                 var replayed = await browser.ReplayAllAsync(max, cancellationToken);
@@ -123,6 +137,11 @@ public sealed class DlqHandler(
         {
             console.WriteError($"Replay failed: {ex.Message}");
             return 1;
+        }
+        finally
+        {
+            if (browser is not null)
+                await browser.DisposeAsync();
         }
     }
 

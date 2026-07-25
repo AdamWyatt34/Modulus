@@ -60,6 +60,12 @@ public sealed class AddEndpointHandler(
             return Task.FromResult(1);
         }
 
+        if (resultType is not null && !CSharpIdentifierValidator.IsValidTypeName(resultType))
+        {
+            console.WriteError($"'{resultType}' is not a valid C# type name.");
+            return Task.FromResult(1);
+        }
+
         if (commandName is not null && queryName is not null)
         {
             console.WriteError("Options --command and --query are mutually exclusive. Specify only one.");
@@ -75,7 +81,7 @@ public sealed class AddEndpointHandler(
         var slnxPath = solutionFinder.ResolveSolutionPath(solutionPath, fileSystem.GetCurrentDirectory());
         if (slnxPath is null)
         {
-            console.WriteError("Could not find a solution file. Use --solution to specify the path, or run from within a Modulus solution directory.");
+            console.WriteError(solutionFinder.DescribeResolutionFailure(solutionPath));
             return Task.FromResult(1);
         }
 
@@ -96,7 +102,14 @@ public sealed class AddEndpointHandler(
             return Task.FromResult(1);
         }
 
-        var endpointsDir = Path.Combine(moduleDir, "src", $"{moduleName}.Api", "Endpoints");
+        var apiProjectDir = Path.Combine(moduleDir, "src", $"{moduleName}.Api");
+        if (!fileSystem.DirectoryExists(apiProjectDir))
+        {
+            console.WriteError($"Module '{moduleName}' has no Api project at '{apiProjectDir}' (it was likely scaffolded with --no-endpoints). Endpoints cannot be added to a module without one.");
+            return Task.FromResult(1);
+        }
+
+        var endpointsDir = Path.Combine(apiProjectDir, "Endpoints");
         var endpointFilePath = PathGuard.EnsureContained(
             solutionRoot,
             Path.GetRelativePath(solutionRoot, Path.Combine(endpointsDir, $"{endpointName}.cs")));
@@ -120,6 +133,7 @@ public sealed class AddEndpointHandler(
             ResultType = resultType,
         });
 
+        fileSystem.CreateDirectory(endpointsDir);
         fileSystem.WriteAllText(endpointFilePath, output.Content);
 
         console.WriteSuccess($"Endpoint '{endpointName}' added to {moduleName} at Endpoints/{endpointName}.cs.");

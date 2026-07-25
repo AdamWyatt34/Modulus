@@ -72,6 +72,34 @@ public class TemplateEngineInitTests
     }
 
     [Fact]
+    public void GenerateInit_DoesNotEmitUnregisteredIdempotentDomainEventHandler()
+    {
+        // Removed: it was scaffolded but never wired into any DI/decoration story, so it was
+        // dead code in every scaffold. AuditableEntityInterceptor is the interceptor that *is*
+        // now registered (see TemplateEngineModuleTests).
+        var engine = new TemplateEngine();
+
+        var outputs = engine.GenerateInit(CreateOptions());
+
+        outputs.ShouldNotContain(o => o.RelativePath.Contains("IdempotentDomainEventHandler"));
+    }
+
+    [Fact]
+    public void GenerateInit_DirectoryPackagesProps_PinsVulnerableMicrosoftOpenApiVersion()
+    {
+        // Mirrors samples/SampleApp/Directory.Packages.props: without this pin a fresh scaffold
+        // pulls a transitive Microsoft.OpenApi version with a known advisory
+        // (GHSA-v5pm-xwqc-g5wc) and fails the project's own vulnerable-package gate.
+        var engine = new TemplateEngine();
+
+        var outputs = engine.GenerateInit(CreateOptions());
+
+        var packages = outputs.Single(o => o.RelativePath == "Directory.Packages.props");
+        packages.Content.ShouldContain("<PackageVersion Include=\"Microsoft.OpenApi\" Version=\"2.9.0\" />");
+        packages.Content.ShouldContain("<CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>");
+    }
+
+    [Fact]
     public void GenerateInit_SubstitutesModulusKitVersionInDirectoryPackagesProps()
     {
         var engine = new TemplateEngine();
@@ -100,6 +128,39 @@ public class TemplateEngineInitTests
         var slnx = outputs.Single(o => o.RelativePath == "EShop.slnx");
         slnx.Content.ShouldContain("EShop.AppHost/EShop.AppHost.csproj");
         slnx.Content.ShouldContain("EShop.ServiceDefaults/EShop.ServiceDefaults.csproj");
+    }
+
+    [Fact]
+    public void GenerateInit_IncludeAspireTrue_InjectsServiceDefaultsIntoHostProgram()
+    {
+        // Regression: the injection anchor used to be "app.MapModuleEndpoints();", which never
+        // matches the host template's actual "app.MapAllModuleEndpoints();" line, so
+        // `--aspire` silently never injected AddServiceDefaults()/MapDefaultEndpoints().
+        var engine = new TemplateEngine();
+
+        var outputs = engine.GenerateInit(CreateOptions(includeAspire: true));
+
+        var program = outputs.Single(o => o.RelativePath == "src/EShop.WebApi/Program.cs");
+        program.Content.ShouldContain("builder.AddServiceDefaults();");
+        program.Content.ShouldContain("app.MapDefaultEndpoints();");
+
+        // MapDefaultEndpoints() must run before the module endpoints it complements.
+        var defaultEndpointsIndex = program.Content.IndexOf("app.MapDefaultEndpoints();", StringComparison.Ordinal);
+        var moduleEndpointsIndex = program.Content.IndexOf("app.MapAllModuleEndpoints();", StringComparison.Ordinal);
+        defaultEndpointsIndex.ShouldBeGreaterThan(-1);
+        moduleEndpointsIndex.ShouldBeGreaterThan(defaultEndpointsIndex);
+    }
+
+    [Fact]
+    public void GenerateInit_IncludeAspireFalse_HostProgramHasNoAspireInjection()
+    {
+        var engine = new TemplateEngine();
+
+        var outputs = engine.GenerateInit(CreateOptions(includeAspire: false));
+
+        var program = outputs.Single(o => o.RelativePath == "src/EShop.WebApi/Program.cs");
+        program.Content.ShouldNotContain("AddServiceDefaults");
+        program.Content.ShouldNotContain("MapDefaultEndpoints");
     }
 
     [Fact]

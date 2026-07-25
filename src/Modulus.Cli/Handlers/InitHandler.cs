@@ -86,24 +86,44 @@ public sealed class InitHandler(
             console.WriteError($"Warning: dotnet restore failed with exit code {restoreResult}. You may need to run it manually.");
         }
 
+        var gitStatus = "Skipped";
+
         if (!noGit)
         {
             var gitResult = await processRunner.RunAsync("git", ["init"], solutionRoot);
             if (gitResult != 0)
             {
-                console.WriteError("Warning: git init failed. You may need to initialize the repository manually.");
+                console.WriteError($"Warning: git init failed with exit code {gitResult}. You may need to initialize the repository manually.");
+                gitStatus = "Failed (init)";
             }
             else
             {
-                await processRunner.RunAsync("git", ["add", "."], solutionRoot);
-                await processRunner.RunAsync("git", ["commit", "-m", "Initial commit from Modulus"], solutionRoot);
+                var addResult = await processRunner.RunAsync("git", ["add", "."], solutionRoot);
+                if (addResult != 0)
+                {
+                    console.WriteError($"Warning: 'git add .' failed with exit code {addResult}. The repository was initialized, but nothing was staged — commit manually once resolved.");
+                    gitStatus = "Initialized (nothing staged)";
+                }
+                else
+                {
+                    var commitResult = await processRunner.RunAsync("git", ["commit", "-m", "Initial commit from Modulus"], solutionRoot);
+                    if (commitResult != 0)
+                    {
+                        console.WriteError($"Warning: the initial commit failed with exit code {commitResult}. Files are staged but not committed.");
+                        gitStatus = "Initialized (not committed)";
+                    }
+                    else
+                    {
+                        gitStatus = "Initialized";
+                    }
+                }
             }
         }
 
         console.WriteSuccess($"Solution '{solutionName}' created successfully at {solutionRoot}");
         console.WriteLine($"  Aspire: {(includeAspire ? "Yes" : "No")}");
         console.WriteLine($"  Transport: {transport}");
-        console.WriteLine($"  Git: {(noGit ? "Skipped" : "Initialized")}");
+        console.WriteLine($"  Git: {gitStatus}");
 
         return 0;
     }
