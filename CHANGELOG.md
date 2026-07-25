@@ -5,9 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [3.0.0] - 2026-07-25
 
-Fix wave from the 2026-07-25 full audit (`docs/audit/full-scan-2026-07-25.md`). Contains interface and schema changes to the messaging stores — following the precedent of 2.0.0, the next coordinated release should be a **major**.
+Coordinated release of all nine packages at 3.0.0 — the fix wave from the 2026-07-25 full audit (`docs/audit/full-scan-2026-07-25.md`). Major because of the interface and schema changes to the messaging stores (see Changed); everything else is bug fixes.
 
 ### Fixed
 
@@ -143,6 +143,7 @@ Coordinated release of all nine packages at 2.0.0 — the scaffolded `Directory.
   - Entity Framework Core outbox implementation (`EfOutboxStore`)
   - Automatic handler discovery and consumer adapter registration
 
+[3.0.0]: https://github.com/adamwyatt34/Modulus/compare/messaging-v2.1.0...messaging-v3.0.0
 [2.1.0]: https://github.com/adamwyatt34/Modulus/compare/messaging-v2.0.0...messaging-v2.1.0
 [2.0.0]: https://github.com/adamwyatt34/Modulus/compare/v1.1.0...messaging-v2.0.0
 [1.1.0]: https://github.com/adamwyatt34/Modulus/compare/v1.0.0...v1.1.0
