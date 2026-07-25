@@ -302,4 +302,68 @@ public sealed class RabbitMqTransportIntegrationTests(RabbitMqContainerFixture r
         PreDeclaredTopologyHandler.Handled.TryPeek(out var received).ShouldBeTrue();
         received!.Value.ShouldBe(21);
     }
+
+    [Fact]
+    public async Task Publish_ManyEventTypesConcurrently_AllRoundTripWithoutExchangeDeclareRace()
+    {
+        ConcurrentPublishHandlerA.Handled.Clear();
+        ConcurrentPublishHandlerB.Handled.Clear();
+        ConcurrentPublishHandlerC.Handled.Clear();
+
+        const string endpointName = "it-concurrent-publish";
+        const int perTypeCount = 20;
+
+        await using var host = await StartHost(BuildServices(endpointName));
+
+        using var scope = host.Provider.CreateScope();
+        var messageBus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
+
+        // Exercises the transport's first-publish exchange-declare race (H-TR1): three distinct
+        // event types, each publishing for the first time (and repeatedly thereafter),
+        // concurrently, all against the same singleton transport instance's declared-exchange
+        // cache. Before the ConcurrentDictionary fix this raced a plain HashSet.
+        var publishTasks = new List<Task>();
+        for (var i = 0; i < perTypeCount; i++)
+        {
+            publishTasks.Add(messageBus.Publish(new ConcurrentPublishEventA { Value = i }));
+            publishTasks.Add(messageBus.Publish(new ConcurrentPublishEventB { Value = i }));
+            publishTasks.Add(messageBus.Publish(new ConcurrentPublishEventC { Value = i }));
+        }
+
+        await Task.WhenAll(publishTasks);
+
+        await WaitFor(() => ConcurrentPublishHandlerA.Handled.Count == perTypeCount, "all A events should round-trip");
+        await WaitFor(() => ConcurrentPublishHandlerB.Handled.Count == perTypeCount, "all B events should round-trip");
+        await WaitFor(() => ConcurrentPublishHandlerC.Handled.Count == perTypeCount, "all C events should round-trip");
+    }
+
+    [Fact]
+    public async Task StopConsumingAsync_WaitsForInFlightHandlerToComplete_BeforeReturning()
+    {
+        SlowHandler.Reset();
+        const string endpointName = "it-stop-drain";
+        var services = BuildServices(endpointName);
+        var provider = services.BuildServiceProvider();
+
+        using var scope = provider.CreateScope();
+        var transport = scope.ServiceProvider.GetRequiredService<IMessageTransport>();
+        var catalog = provider.GetRequiredService<TransportSubscriptionCatalog>();
+        var dispatcher = provider.GetRequiredService<ConsumerDispatcher>();
+
+        await transport.StartConsumingAsync(catalog.Subscriptions, dispatcher.DispatchAsync);
+
+        var messageBus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
+        await messageBus.Publish(new SlowEvent { Value = 1 });
+
+        await WaitFor(() => SlowHandler.Started, "the slow handler should have started before Stop is called");
+
+        // H-TR3: StopConsumingAsync must await this in-flight dispatch before returning — if it
+        // didn't, the host would go on to dispose the ServiceProvider while the handler (and its
+        // eventual ack) were still running.
+        await transport.StopConsumingAsync();
+
+        SlowHandler.Completed.ShouldBeTrue();
+
+        await provider.DisposeAsync();
+    }
 }

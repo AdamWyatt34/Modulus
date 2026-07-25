@@ -31,8 +31,19 @@ internal sealed class EfInboxStore(InboxDbContext dbContext) : IInboxStore
         }
         catch (DbUpdateException)
         {
-            // Concurrent insert of the same message — safe to ignore
             dbContext.ChangeTracker.Clear();
+
+            // A unique-key violation from a concurrent Save of the same message is the only
+            // failure this method may swallow — the row is already there, so the outcome is
+            // identical either way. Anything else that surfaces as DbUpdateException (a
+            // timeout, a deadlock, a disconnected database) must not be misclassified as that
+            // benign race: re-check whether the row actually exists before deciding.
+            var stillMissing = !await dbContext.InboxMessages
+                .AsNoTracking()
+                .AnyAsync(m => m.Id == @event.EventId, cancellationToken).ConfigureAwait(false);
+
+            if (stillMissing)
+                throw;
         }
     }
 
@@ -127,5 +138,17 @@ internal sealed class EfInboxStore(InboxDbContext dbContext) : IInboxStore
             .ExecuteUpdateAsync(
                 s => s.SetProperty(c => c.ProcessedOnUtc, DateTime.UtcNow),
                 cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task ReleaseReservation(
+        Guid messageId,
+        string handlerName,
+        CancellationToken cancellationToken = default)
+    {
+        // ProcessedOnUtc == null guards a completed reservation from ever being un-done —
+        // only an in-flight, never-succeeded reservation is a candidate for release.
+        await dbContext.InboxMessageConsumers
+            .Where(c => c.InboxMessageId == messageId && c.Name == handlerName && c.ProcessedOnUtc == null)
+            .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
     }
 }

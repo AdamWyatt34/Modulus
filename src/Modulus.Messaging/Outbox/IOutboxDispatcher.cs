@@ -8,8 +8,12 @@ namespace Modulus.Messaging.Outbox;
 internal interface IOutboxDispatcher
 {
     /// <summary>
-    /// Returns the number of messages fetched (not necessarily published) — a full batch
-    /// signals probable backlog so the caller can re-dispatch immediately instead of waiting.
+    /// Returns the number of messages that made forward progress this pass: published, or
+    /// durably marked failed (attempt recorded and backed off, so it will not be refetched
+    /// next pass). A message whose own MarkAsFailed bookkeeping call fails does not count — it
+    /// is unchanged in the store and will simply be reconsidered next pass. A full batch of
+    /// progress signals probable backlog so the caller can re-dispatch immediately instead of
+    /// waiting.
     /// </summary>
     Task<int> DispatchPendingAsync(CancellationToken cancellationToken = default);
 }

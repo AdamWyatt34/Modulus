@@ -13,6 +13,8 @@ namespace Modulus.Generators;
 public sealed class ModuleRegistrationGenerator : IIncrementalGenerator
 {
     private const string EndpointRouteBuilderFullName = "Microsoft.AspNetCore.Routing.IEndpointRouteBuilder";
+    private const string ServiceCollectionFullName = "Microsoft.Extensions.DependencyInjection.IServiceCollection";
+    private const string ConfigurationFullName = "Microsoft.Extensions.Configuration.IConfiguration";
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
@@ -51,9 +53,20 @@ public sealed class ModuleRegistrationGenerator : IIncrementalGenerator
     {
         var builder = ImmutableArray.CreateBuilder<ModuleRegistrationModel>();
 
+        // Single-assembly monoliths (a WebApi/host project that also declares its own
+        // IModuleRegistration types directly) must be discovered too — not just modules that
+        // live in separately-referenced projects.
+        CollectModulesFromNamespace(compilation.Assembly.GlobalNamespace, builder, ct);
+
         foreach (var assemblySymbol in compilation.SourceModule.ReferencedAssemblySymbols)
         {
             ct.ThrowIfCancellationRequested();
+
+            // Skip the BCL/framework closure and any assembly that couldn't possibly define a
+            // module — the dominant cost of this walk otherwise (H-GEN5).
+            if (!ReferencedAssemblyFilter.ShouldWalkForModules(assemblySymbol))
+                continue;
+
             CollectModulesFromNamespace(assemblySymbol.GlobalNamespace, builder, ct);
         }
 
@@ -79,9 +92,10 @@ public sealed class ModuleRegistrationGenerator : IIncrementalGenerator
 
             if (HasBothStaticMethods(type))
             {
+                // Keep the `global::` prefix — stripping it lets a host-side namespace segment
+                // (e.g. a host type named `Orders`) shadow the module's own top-level namespace,
+                // producing CS0234 in the generated call.
                 var fqn = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                if (fqn.StartsWith("global::"))
-                    fqn = fqn.Substring("global::".Length);
 
                 var order = GetModuleOrder(type);
                 builder.Add(new ModuleRegistrationModel(fqn, order));
@@ -99,9 +113,15 @@ public sealed class ModuleRegistrationGenerator : IIncrementalGenerator
     {
         var builder = ImmutableArray.CreateBuilder<Diagnostic>();
 
+        CollectIncompleteDiagnostics(compilation.Assembly.GlobalNamespace, builder, ct);
+
         foreach (var assemblySymbol in compilation.SourceModule.ReferencedAssemblySymbols)
         {
             ct.ThrowIfCancellationRequested();
+
+            if (!ReferencedAssemblyFilter.ShouldWalkForModules(assemblySymbol))
+                continue;
+
             CollectIncompleteDiagnostics(assemblySymbol.GlobalNamespace, builder, ct);
         }
 
@@ -123,8 +143,8 @@ public sealed class ModuleRegistrationGenerator : IIncrementalGenerator
             if (HasBothStaticMethods(type))
                 continue;
 
-            var hasConfigureServices = HasStaticMethod(type, "ConfigureServices");
-            var hasConfigureEndpoints = HasStaticMethod(type, "ConfigureEndpoints");
+            var hasConfigureServices = HasValidConfigureServicesMethod(type);
+            var hasConfigureEndpoints = HasValidConfigureEndpointsMethod(type);
 
             if (!hasConfigureServices)
             {
@@ -179,21 +199,61 @@ public sealed class ModuleRegistrationGenerator : IIncrementalGenerator
         return false;
     }
 
-    private static bool HasBothStaticMethods(INamedTypeSymbol type)
-    {
-        return HasStaticMethod(type, "ConfigureServices") &&
-               HasStaticMethod(type, "ConfigureEndpoints");
-    }
+    private static bool HasBothStaticMethods(INamedTypeSymbol type) =>
+        HasValidConfigureServicesMethod(type) && HasValidConfigureEndpointsMethod(type);
 
-    private static bool HasStaticMethod(INamedTypeSymbol type, string methodName)
+    private static bool HasValidConfigureServicesMethod(INamedTypeSymbol type) =>
+        HasValidStaticMethod(type, "ConfigureServices", ServiceCollectionFullName, ConfigurationFullName);
+
+    private static bool HasValidConfigureEndpointsMethod(INamedTypeSymbol type) =>
+        HasValidStaticMethod(type, "ConfigureEndpoints", EndpointRouteBuilderFullName);
+
+    /// <summary>
+    /// Looks for a <c>public static</c> method with the given name and exact parameter-type
+    /// signature. Discovery previously only checked name + <see cref="IMethodSymbol.IsStatic"/>,
+    /// so an explicit interface implementation (private, and not callable via the type name) or a
+    /// method with the wrong parameters would still be treated as "present" and generate a
+    /// non-compiling call (CS0122/CS1501). Now such a method is treated as missing, so the
+    /// existing MODGEN004 diagnostic fires and the module is skipped from auto-registration
+    /// instead.
+    /// </summary>
+    private static bool HasValidStaticMethod(
+        INamedTypeSymbol type,
+        string methodName,
+        params string[] parameterTypeFullyQualifiedNames)
     {
-        foreach (var member in type.GetMembers())
+        foreach (var member in type.GetMembers(methodName))
         {
-            if (member is IMethodSymbol method && method.IsStatic && method.Name == methodName)
+            if (member is not IMethodSymbol { IsStatic: true, DeclaredAccessibility: Accessibility.Public } method)
+                continue;
+
+            if (method.Parameters.Length != parameterTypeFullyQualifiedNames.Length)
+                continue;
+
+            var isMatch = true;
+            for (var i = 0; i < parameterTypeFullyQualifiedNames.Length; i++)
+            {
+                if (!ParameterTypeMatches(method.Parameters[i], parameterTypeFullyQualifiedNames[i]))
+                {
+                    isMatch = false;
+                    break;
+                }
+            }
+
+            if (isMatch)
                 return true;
         }
 
         return false;
+    }
+
+    private static bool ParameterTypeMatches(IParameterSymbol parameter, string expectedFullyQualifiedName)
+    {
+        var actual = parameter.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        if (actual.StartsWith("global::", StringComparison.Ordinal))
+            actual = actual.Substring("global::".Length);
+
+        return actual == expectedFullyQualifiedName;
     }
 
     private static int GetModuleOrder(INamedTypeSymbol type)
@@ -334,6 +394,8 @@ internal readonly struct EquatableArray<T> : IEquatable<EquatableArray<T>>
     public ImmutableArray<T> Array => _array.IsDefault ? ImmutableArray<T>.Empty : _array;
 
     public int Length => Array.Length;
+
+    public bool IsEmpty => Length == 0;
 
     public bool Equals(EquatableArray<T> other)
     {

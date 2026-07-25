@@ -4,6 +4,18 @@ using Modulus.Mediator.Abstractions;
 namespace Modulus.Mediator.Behaviors;
 
 /// <summary>
+/// Holds the single <see cref="ActivitySource"/> shared by every closed generic
+/// <see cref="TracingBehavior{TRequest, TResponse}"/>. A static field declared directly on the
+/// generic type would be instantiated once per closed generic combination instead of once overall.
+/// </summary>
+internal static class MediatorActivitySource
+{
+    public const string Name = "Modulus.Mediator";
+
+    public static readonly ActivitySource Instance = new(Name);
+}
+
+/// <summary>
 /// Wraps every request in a <see cref="Activity"/> from the "Modulus.Mediator" source,
 /// tagging request type and outcome (success / failure with error count / exception).
 /// Register an OpenTelemetry listener with <c>.AddSource("Modulus.Mediator")</c> to export.
@@ -13,16 +25,14 @@ public sealed class TracingBehavior<TRequest, TResponse> : IPipelineBehavior<TRe
     where TResponse : Result
 {
     /// <summary>The <see cref="ActivitySource"/> name to subscribe to in OpenTelemetry configuration.</summary>
-    public const string ActivitySourceName = "Modulus.Mediator";
-
-    private static readonly ActivitySource Source = new(ActivitySourceName);
+    public const string ActivitySourceName = MediatorActivitySource.Name;
 
     public async Task<TResponse> Handle(
         TRequest request,
         RequestHandlerDelegate<TResponse> next,
         CancellationToken cancellationToken)
     {
-        using var activity = Source.StartActivity(typeof(TRequest).Name, ActivityKind.Internal);
+        using var activity = MediatorActivitySource.Instance.StartActivity(typeof(TRequest).Name, ActivityKind.Internal);
         activity?.SetTag("modulus.request_type", typeof(TRequest).FullName);
 
         try

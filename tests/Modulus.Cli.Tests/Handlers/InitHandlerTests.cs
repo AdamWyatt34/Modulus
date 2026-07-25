@@ -183,6 +183,44 @@ public class InitHandlerTests
     }
 
     [Fact]
+    public async Task Init_git_add_failure_warns_and_does_not_claim_success()
+    {
+        // git add/commit exit codes used to be ignored entirely — the summary claimed
+        // "Git: Initialized" even when nothing was actually staged or committed.
+        _proc.ExitCodeOverrides["git add ."] = 1;
+        var handler = CreateHandler();
+
+        await handler.ExecuteAsync("EShop", @"C:\work", includeAspire: false, "inmemory", noGit: false);
+
+        _console.ErrorLines.ShouldContain(l => l.Contains("git add"));
+        _console.Lines.ShouldContain(l => l.Contains("Git:") && l.Contains("nothing staged"));
+        // The initial commit must not even be attempted once staging failed.
+        _proc.Invocations.ShouldNotContain(i => i.Command == "git" && i.Arguments.Contains("commit"));
+    }
+
+    [Fact]
+    public async Task Init_git_commit_failure_warns_and_does_not_claim_success()
+    {
+        _proc.ExitCodeOverrides["git commit -m Initial commit from Modulus"] = 1;
+        var handler = CreateHandler();
+
+        await handler.ExecuteAsync("EShop", @"C:\work", includeAspire: false, "inmemory", noGit: false);
+
+        _console.ErrorLines.ShouldContain(l => l.Contains("commit"));
+        _console.Lines.ShouldContain(l => l.Contains("Git:") && l.Contains("not committed"));
+    }
+
+    [Fact]
+    public async Task Init_git_all_steps_succeed_reports_initialized()
+    {
+        var handler = CreateHandler();
+
+        await handler.ExecuteAsync("EShop", @"C:\work", includeAspire: false, "inmemory", noGit: false);
+
+        _console.Lines.ShouldContain(l => l.Contains("Git: Initialized") && !l.Contains("("));
+    }
+
+    [Fact]
     public async Task Init_with_invalid_name_returns_error()
     {
         var handler = CreateHandler();
@@ -307,15 +345,19 @@ public class InitHandlerTests
     }
 
     [Fact]
-    public async Task Init_appsettings_uses_narrow_AllowedHosts()
+    public async Task Init_appsettings_uses_wildcard_AllowedHosts()
     {
+        // "localhost" 400s any real (non-localhost) deployment out of the box — ASP.NET Core's
+        // host filtering middleware rejects the Host header for every environment except a
+        // developer's own machine. "*" matches the framework's own default and leaves host
+        // filtering as something the user opts into deliberately, not a scaffold footgun.
         var handler = CreateHandler();
 
         await handler.ExecuteAsync("EShop", @"C:\work", includeAspire: false, "inmemory", noGit: true);
 
         var appSettings = _fs.ReadAllText(@"C:\work\EShop\src\EShop.WebApi\appsettings.json");
-        appSettings.ShouldNotContain("\"AllowedHosts\": \"*\"");
-        appSettings.ShouldContain("\"AllowedHosts\": \"localhost\"");
+        appSettings.ShouldContain("\"AllowedHosts\": \"*\"");
+        appSettings.ShouldNotContain("\"AllowedHosts\": \"localhost\"");
     }
 
     [Fact]

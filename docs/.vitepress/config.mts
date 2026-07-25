@@ -7,15 +7,12 @@ export default withMermaid(
     description: 'A CLI tool and library suite for scaffolding .NET modular monolith solutions',
 
     head: [
-      ['link', { rel: 'icon', type: 'image/x-icon', href: '/Modulus/favicon.ico' }],
-      ['link', { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/Modulus/favicon-32x32.png' }],
-      ['link', { rel: 'icon', type: 'image/png', sizes: '16x16', href: '/Modulus/favicon-16x16.png' }],
-      ['link', { rel: 'apple-touch-icon', sizes: '180x180', href: '/Modulus/apple-touch-icon.png' }],
+      // The only shipped asset in docs/public is logo.svg — reference nothing else here.
+      ['link', { rel: 'icon', type: 'image/svg+xml', href: '/Modulus/logo.svg' }],
       ['meta', { property: 'og:title', content: 'Modulus' }],
       ['meta', { property: 'og:description', content: 'Scaffold production-ready modular monoliths in seconds' }],
-      ['meta', { property: 'og:image', content: 'https://adamwyatt34.github.io/Modulus/og-image.png' }],
       ['meta', { property: 'og:type', content: 'website' }],
-      ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+      ['meta', { name: 'twitter:card', content: 'summary' }],
     ],
 
     base: '/Modulus/',
@@ -40,10 +37,10 @@ export default withMermaid(
         },
         { text: 'Recipes', link: '/recipes/' },
         {
-          text: 'v1.1.0',
+          text: 'v2.1.0',
           items: [
             { text: 'Changelog', link: 'https://github.com/adamwyatt34/Modulus/blob/main/CHANGELOG.md' },
-            { text: 'NuGet', link: 'https://www.nuget.org/packages/Modulus.Cli' },
+            { text: 'NuGet', link: 'https://www.nuget.org/packages/ModulusKit.Cli' },
           ]
         }
       ],
@@ -178,6 +175,8 @@ export default withMermaid(
               { text: 'OpenTelemetry', link: '/recipes/opentelemetry' },
               { text: 'API Versioning', link: '/recipes/api-versioning' },
               { text: 'Health Checks', link: '/recipes/health-checks' },
+              { text: 'Custom Analyzers', link: '/recipes/custom-analyzers' },
+              { text: 'Custom Generators', link: '/recipes/custom-generators' },
             ]
           }
         ],

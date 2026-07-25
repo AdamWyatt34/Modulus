@@ -90,6 +90,29 @@ public class MediatorTests
     }
 
     [Fact]
+    public async Task Query_dispatches_correctly_for_type_implementing_two_closed_IQuery_interfaces()
+    {
+        // MultiResultQuery implements both IQuery<int> and IQuery<string>. Before the fix, the
+        // MakeGenericMethod cache was keyed on the runtime type alone, so the second Query<TResult>
+        // call below would reuse (and mis-cast) the MethodInfo built for the first.
+        var services = new ServiceCollection();
+        services.AddScoped<IQueryHandler<MultiResultQuery, int>, MultiResultQueryIntHandler>();
+        services.AddScoped<IQueryHandler<MultiResultQuery, string>, MultiResultQueryStringHandler>();
+        services.AddScoped<IMediator, Mediator>();
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
+
+        var intResult = await mediator.Query<int>(new MultiResultQuery(5));
+        var stringResult = await mediator.Query<string>(new MultiResultQuery(5));
+
+        intResult.IsSuccess.ShouldBeTrue();
+        intResult.Value.ShouldBe(10);
+        stringResult.IsSuccess.ShouldBeTrue();
+        stringResult.Value.ShouldBe("Multi-5");
+    }
+
+    [Fact]
     public async Task Stream_query_returns_all_items()
     {
         var services = new ServiceCollection();
@@ -151,6 +174,78 @@ public class MediatorTests
         handler1.HandledOrderIds.ShouldBe([1]);
         handler2.HandledOrderIds.ShouldBe([1]);
         failingHandler.WasCalled.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Publish_through_IDomainEvent_typed_variable_reaches_concrete_handler()
+    {
+        // Regression test for C1: declaring the local as IDomainEvent forces TEvent to be inferred
+        // as IDomainEvent at the call site (the shape of the canonical `foreach (var e in domainEvents)
+        // await mediator.Publish(e, ct)` loop over a `List<IDomainEvent>`). The mediator must dispatch
+        // on domainEvent.GetType() — not the compile-time TEvent — to find the handler registered for
+        // the concrete OrderPlacedEvent type.
+        var handler = new OrderPlacedHandler1();
+
+        var services = new ServiceCollection();
+        services.AddSingleton<IDomainEventHandler<OrderPlacedEvent>>(handler);
+        services.AddScoped<IMediator, Mediator>();
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
+
+        IDomainEvent domainEvent = new OrderPlacedEvent(42);
+        await mediator.Publish(domainEvent);
+
+        handler.HandledOrderIds.ShouldBe([42]);
+    }
+
+    [Fact]
+    public async Task Publish_through_IDomainEvent_typed_variable_runs_all_handlers_and_aggregates_failures()
+    {
+        var handler1 = new OrderPlacedHandler1();
+        var failingHandler = new FailingOrderPlacedHandler();
+        var handler2 = new OrderPlacedHandler2();
+
+        var services = new ServiceCollection();
+        services.AddSingleton<IDomainEventHandler<OrderPlacedEvent>>(handler1);
+        services.AddSingleton<IDomainEventHandler<OrderPlacedEvent>>(failingHandler);
+        services.AddSingleton<IDomainEventHandler<OrderPlacedEvent>>(handler2);
+        services.AddScoped<IMediator, Mediator>();
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
+
+        IDomainEvent domainEvent = new OrderPlacedEvent(7);
+        var ex = await Should.ThrowAsync<AggregateException>(
+            () => mediator.Publish(domainEvent));
+
+        ex.InnerExceptions.Count.ShouldBe(1);
+        handler1.HandledOrderIds.ShouldBe([7]);
+        handler2.HandledOrderIds.ShouldBe([7]);
+        failingHandler.WasCalled.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Publish_stops_dispatch_and_throws_when_cancelled_between_handlers()
+    {
+        using var cts = new CancellationTokenSource();
+        var cancelingHandler = new CancelingOrderPlacedHandler(cts);
+        var handler2 = new OrderPlacedHandler2();
+
+        var services = new ServiceCollection();
+        services.AddSingleton<IDomainEventHandler<OrderPlacedEvent>>(cancelingHandler);
+        services.AddSingleton<IDomainEventHandler<OrderPlacedEvent>>(handler2);
+        services.AddScoped<IMediator, Mediator>();
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
+
+        // cancelingHandler cancels cts while handling; the loop must observe that before invoking
+        // handler2 and stop dispatching instead of continuing on to the next handler.
+        await Should.ThrowAsync<OperationCanceledException>(
+            () => mediator.Publish(new OrderPlacedEvent(1), cts.Token));
+
+        handler2.HandledOrderIds.ShouldBeEmpty();
     }
 
     [Fact]
@@ -298,6 +393,71 @@ public class MediatorTests
 
         ex.Message.ShouldContain("CreateItemCommand");
         ex.Message.ShouldContain("ICommandHandler");
+    }
+
+    [Fact]
+    public async Task Send_null_command_throws_ArgumentNullException()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IMediator, Mediator>();
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
+
+        await Should.ThrowAsync<ArgumentNullException>(
+            () => mediator.Send((ICommand)null!));
+    }
+
+    [Fact]
+    public async Task Send_null_typed_command_throws_ArgumentNullException()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IMediator, Mediator>();
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
+
+        await Should.ThrowAsync<ArgumentNullException>(
+            () => mediator.Send((ICommand<int>)null!));
+    }
+
+    [Fact]
+    public async Task Query_null_query_throws_ArgumentNullException()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IMediator, Mediator>();
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
+
+        await Should.ThrowAsync<ArgumentNullException>(
+            () => mediator.Query((IQuery<string>)null!));
+    }
+
+    [Fact]
+    public void Stream_null_query_throws_ArgumentNullException()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IMediator, Mediator>();
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
+
+        Should.Throw<ArgumentNullException>(
+            () => mediator.Stream((IStreamQuery<int>)null!));
+    }
+
+    [Fact]
+    public async Task Publish_null_domainEvent_throws_ArgumentNullException()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IMediator, Mediator>();
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
+
+        await Should.ThrowAsync<ArgumentNullException>(
+            () => mediator.Publish((OrderPlacedEvent)null!));
     }
 
     private class TokenCapturingHandler : ICommandHandler<TestCommand>

@@ -1,10 +1,14 @@
 # Unit Testing
 
-Unit tests verify handlers, validators, and domain logic in isolation. By mocking infrastructure dependencies like repositories and the unit of work, you can test business logic without a database, HTTP server, or message broker.
+Unit tests verify handlers, validators, and domain logic in isolation. By substituting infrastructure dependencies like repositories and the unit of work, you can test business logic without a database, HTTP server, or message broker.
+
+::: info The scaffold ships no mocking framework
+The generated `Tests.Unit` project includes xunit, Shouldly, and FluentValidation -- deliberately no mocking library. The scaffolded starter tests construct handlers directly, and validators and domain types need no substitutes at all. The handler examples on this page use [NSubstitute](https://nsubstitute.github.io/); to follow along, add it to the test project first (with central package management: add `<PackageVersion Include="NSubstitute" Version="..." />` to `Directory.Packages.props` and `<PackageReference Include="NSubstitute" />` to `Catalog.Tests.Unit.csproj`). Hand-rolled fakes work just as well if you prefer zero extra dependencies.
+:::
 
 ## Testing Command Handlers
 
-Command handlers contain the core business logic of your application. Test them by mocking the repository and unit of work, then asserting the `Result` outcome.
+Command handlers contain the core business logic of your application. Test them by substituting the repository and unit of work, then asserting the `Result` outcome. The repository interface here is the per-aggregate `IProductRepository` that `modulus add-entity` generates in the Domain layer.
 
 ### Setup Pattern
 
@@ -12,17 +16,17 @@ Command handlers contain the core business logic of your application. Test them 
 using NSubstitute;
 using Shouldly;
 
-namespace EShop.Modules.Catalog.Tests.Unit.Products.Commands;
+namespace EShop.Catalog.Tests.Unit.Commands;
 
 public class CreateProductHandlerTests
 {
-    private readonly IRepository<Product> _repository;
+    private readonly IProductRepository _repository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly CreateProductHandler _sut;
 
     public CreateProductHandlerTests()
     {
-        _repository = Substitute.For<IRepository<Product>>();
+        _repository = Substitute.For<IProductRepository>();
         _unitOfWork = Substitute.For<IUnitOfWork>();
         _sut = new CreateProductHandler(_repository, _unitOfWork);
     }
@@ -57,7 +61,7 @@ public async Task Handle_DuplicateSku_ReturnsConflictError()
     var command = new CreateProduct("Widget", 9.99m);
 
     _repository.GetBySkuAsync(command.Sku, Arg.Any<CancellationToken>())
-        .Returns(new Product("Existing Widget", 5.00m, command.Sku));
+        .Returns(Product.Create(Guid.NewGuid(), "Existing Widget", 5.00m));
 
     // Act
     var result = await _sut.Handle(command, CancellationToken.None);
@@ -86,7 +90,7 @@ public async Task Handle_ValidCommand_AddsProductAndCommits()
         Arg.Is<Product>(p => p.Name == "Widget"),
         Arg.Any<CancellationToken>());
 
-    await _unitOfWork.Received(1).CommitAsync(Arg.Any<CancellationToken>());
+    await _unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
 }
 ```
 
@@ -97,10 +101,10 @@ public async Task Handle_ValidCommand_AddsProductAndCommits()
 public async Task Handle_ExistingProduct_ReturnsSuccess()
 {
     // Arrange
-    var product = Product.Create("Widget", 9.99m);
+    var product = Product.Create(Guid.NewGuid(), "Widget", 9.99m);
     var command = new DeleteProductCommand(product.Id);
 
-    _repository.GetByIdAsync<Guid>(product.Id, Arg.Any<CancellationToken>())
+    _repository.GetByIdAsync(product.Id, Arg.Any<CancellationToken>())
         .Returns(product);
 
     // Act
@@ -116,7 +120,7 @@ public async Task Handle_NonExistentProduct_ReturnsNotFound()
     // Arrange
     var command = new DeleteProductCommand(Guid.NewGuid());
 
-    _repository.GetByIdAsync<Guid>(command.ProductId, Arg.Any<CancellationToken>())
+    _repository.GetByIdAsync(command.ProductId, Arg.Any<CancellationToken>())
         .Returns((Product?)null);
 
     // Act
@@ -135,12 +139,12 @@ Query handlers retrieve data and return DTOs. Mock the repository or `IQueryDb` 
 ```csharp
 public class GetProductByIdHandlerTests
 {
-    private readonly IRepository<Product> _repository;
+    private readonly IProductRepository _repository;
     private readonly GetProductByIdHandler _sut;
 
     public GetProductByIdHandlerTests()
     {
-        _repository = Substitute.For<IRepository<Product>>();
+        _repository = Substitute.For<IProductRepository>();
         _sut = new GetProductByIdHandler(_repository);
     }
 
@@ -148,10 +152,10 @@ public class GetProductByIdHandlerTests
     public async Task Handle_ExistingProduct_ReturnsDtoWithCorrectValues()
     {
         // Arrange
-        var product = Product.Create("Widget", 9.99m);
-        var query = new GetProductByIdQuery(product.Id);
+        var product = Product.Create(Guid.NewGuid(), "Widget", 9.99m);
+        var query = new GetProductById(product.Id);
 
-        _repository.GetByIdAsync<Guid>(product.Id, Arg.Any<CancellationToken>())
+        _repository.GetByIdAsync(product.Id, Arg.Any<CancellationToken>())
             .Returns(product);
 
         // Act
@@ -168,9 +172,9 @@ public class GetProductByIdHandlerTests
     public async Task Handle_NonExistentProduct_ReturnsNotFound()
     {
         // Arrange
-        var query = new GetProductByIdQuery(Guid.NewGuid());
+        var query = new GetProductById(Guid.NewGuid());
 
-        _repository.GetByIdAsync<Guid>(query.ProductId, Arg.Any<CancellationToken>())
+        _repository.GetByIdAsync(query.ProductId, Arg.Any<CancellationToken>())
             .Returns((Product?)null);
 
         // Act
@@ -191,7 +195,7 @@ FluentValidation provides a `TestValidate` extension method that makes validator
 ```csharp
 using FluentValidation.TestHelper;
 
-namespace EShop.Modules.Catalog.Tests.Unit.Products.Validators;
+namespace EShop.Catalog.Tests.Unit.Validators;
 
 public class CreateProductValidatorTests
 {
@@ -277,7 +281,7 @@ The `TestValidate` extension from FluentValidation returns a `TestValidationResu
 Domain events are raised by aggregate roots. Test them by invoking the domain method and inspecting the `DomainEvents` collection.
 
 ```csharp
-namespace EShop.Modules.Catalog.Tests.Unit.Domain;
+namespace EShop.Catalog.Tests.Unit.Domain;
 
 public class ProductTests
 {
@@ -285,7 +289,7 @@ public class ProductTests
     public void Create_RaisesProductCreatedEvent()
     {
         // Act
-        var product = Product.Create("Widget", 9.99m);
+        var product = Product.Create(Guid.NewGuid(), "Widget", 9.99m);
 
         // Assert
         product.DomainEvents.ShouldHaveSingleItem();
@@ -296,7 +300,7 @@ public class ProductTests
     public void Create_ProductCreatedEvent_ContainsCorrectData()
     {
         // Act
-        var product = Product.Create("Widget", 9.99m);
+        var product = Product.Create(Guid.NewGuid(), "Widget", 9.99m);
 
         // Assert
         var domainEvent = product.DomainEvents[0].ShouldBeOfType<ProductCreatedEvent>();
@@ -307,7 +311,7 @@ public class ProductTests
     public void ClearDomainEvents_RemovesAllEvents()
     {
         // Arrange
-        var product = Product.Create("Widget", 9.99m);
+        var product = Product.Create(Guid.NewGuid(), "Widget", 9.99m);
         product.DomainEvents.Count.ShouldBe(1);
 
         // Act

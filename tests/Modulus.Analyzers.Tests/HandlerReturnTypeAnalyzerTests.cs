@@ -185,6 +185,38 @@ public class HandlerReturnTypeAnalyzerTests
     }
 
     [Fact]
+    public async Task HandlerImplementingTwoInterfaces_ChecksEachOverloadIndependently()
+    {
+        // `GetMembers("Handle").First()` resolved an arbitrary overload regardless of which
+        // interface was being checked, so a type implementing two handler interfaces could get a
+        // spurious diagnostic against the wrong (valid) overload, miss the actually-offending
+        // one, or report it twice. FindImplementationForInterfaceMember must map each interface
+        // to its own correctly-corresponding method.
+        const string source = """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Modulus.Mediator.Abstractions;
+
+            public record MyCommand : ICommand;
+            public record MyQuery : IQuery<string>;
+
+            public class MyHandler : ICommandHandler<MyCommand>, IQueryHandler<MyQuery, string>
+            {
+                public Task<string> Handle(MyQuery query, CancellationToken cancellationToken = default)
+                    => Task.FromResult("bad");
+
+                public Task<Result> Handle(MyCommand command, CancellationToken cancellationToken = default)
+                    => Task.FromResult(Result.Success());
+            }
+            """;
+
+        var diagnostics = await AnalyzerTestHelper.GetDiagnosticsAsync(_analyzer, source);
+
+        diagnostics.Length.ShouldBe(1);
+        diagnostics[0].Id.ShouldBe("MOD002");
+    }
+
+    [Fact]
     public async Task DomainEventHandler_NoDiagnostic()
     {
         const string source = """

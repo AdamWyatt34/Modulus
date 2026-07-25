@@ -92,6 +92,44 @@ public class DlqHandlerTests
     }
 
     [Fact]
+    public async Task List_browser_construction_failure_reports_friendly_error_not_an_exception()
+    {
+        // The browser is constructed inside the try now — a bad connection string (or any other
+        // failure while opening the broker connection) must produce the same friendly error as a
+        // failure from the browser's own methods, not an unhandled exception out of ListAsync.
+        var handler = new DlqHandler(_fs, _console, _ => throw new InvalidOperationException("bad connection string"));
+
+        var exit = await handler.ListAsync(RabbitConnection, max: 50);
+
+        exit.ShouldBe(1);
+        _console.ErrorLines.ShouldContain(e => e.Contains("bad connection string"));
+    }
+
+    [Fact]
+    public async Task Replay_browser_construction_failure_reports_friendly_error_not_an_exception()
+    {
+        var handler = new DlqHandler(_fs, _console, _ => throw new InvalidOperationException("bad connection string"));
+
+        var exit = await handler.ReplayAsync(RabbitConnection, messageId: null, all: true, max: 50);
+
+        exit.ShouldBe(1);
+        _console.ErrorLines.ShouldContain(e => e.Contains("bad connection string"));
+    }
+
+    [Fact]
+    public async Task List_renders_dash_when_delivery_count_is_unavailable()
+    {
+        var browser = new FakeDlqBrowser();
+        browser.Messages.Add(new DlqMessage("id-1", "Event", null, null, DeliveryCount: null));
+        var handler = CreateHandler(browser);
+
+        var exit = await handler.ListAsync(RabbitConnection, max: 50);
+
+        exit.ShouldBe(0);
+        _console.Lines.ShouldContain(l => l.Contains("id-1") && l.Contains("-"));
+    }
+
+    [Fact]
     public async Task Replay_by_id_succeeds_when_found()
     {
         var browser = new FakeDlqBrowser();

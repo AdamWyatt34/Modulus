@@ -24,7 +24,7 @@ public sealed class RemoveModuleHandler(
         var slnxPath = solutionFinder.ResolveSolutionPath(solutionPath, fileSystem.GetCurrentDirectory());
         if (slnxPath is null)
         {
-            console.WriteError("Could not find a solution file. Use --solution to specify the path, or run from within a Modulus solution directory.");
+            console.WriteError(solutionFinder.DescribeResolutionFailure(solutionPath));
             return 1;
         }
 
@@ -47,11 +47,22 @@ public sealed class RemoveModuleHandler(
             return 1;
         }
 
-        var references = FindReferencingProjects(modulesDir, moduleName);
+        // The host's own registration reference (wired by `add-module`, see AddModuleHandler) is
+        // deliberately excluded from the blocking scan below and from `--force`: it is machinery
+        // this tool owns end-to-end, so it is always safe to clean up unconditionally as part of
+        // removal, the same way `add-module` added it. Any *other* reference into this module —
+        // a sibling module, a root-level test project, BuildingBlocks, anything hand-authored — is
+        // a real, human-intended dependency and still requires --force.
+        var infrastructureCsprojFileName = $"{moduleName}.Infrastructure.csproj";
+        var hostCsprojPath = Path.Combine(solutionRoot, "src", $"{solutionName}.WebApi", $"{solutionName}.WebApi.csproj");
+        var hostReferencesModule = fileSystem.FileExists(hostCsprojPath)
+            && ProjectReferenceEditor.HasReferenceTo(fileSystem.ReadAllText(hostCsprojPath), infrastructureCsprojFileName);
+
+        var references = FindReferencingProjects(solutionRoot, modulesDir, moduleDir, hostCsprojPath, moduleName);
 
         if (references.Count > 0 && !force)
         {
-            console.WriteError($"Module '{moduleName}' is still referenced by other modules. Pass --force to remove it anyway:");
+            console.WriteError($"Module '{moduleName}' is still referenced by other projects. Pass --force to remove it anyway:");
             foreach (var reference in references)
             {
                 console.WriteError($"  {reference.ModuleName} -> {reference.CsprojPath}");
@@ -62,7 +73,7 @@ public sealed class RemoveModuleHandler(
 
         if (references.Count > 0 && force)
         {
-            console.WriteLine("Warning: the following modules reference this module and will be left with broken references:");
+            console.WriteLine("Warning: the following projects reference this module and will be left with broken references:");
             foreach (var reference in references)
             {
                 console.WriteLine($"  {reference.ModuleName} -> {reference.CsprojPath}");
@@ -86,9 +97,14 @@ public sealed class RemoveModuleHandler(
 
             console.WriteLine($"  Delete directory: {moduleDir}");
 
+            if (hostReferencesModule)
+            {
+                console.WriteLine($"  Remove project reference: {solutionName}.WebApi -> {moduleName}.Infrastructure");
+            }
+
             if (references.Count > 0)
             {
-                console.WriteLine("  Cross-module references found (would break without --force):");
+                console.WriteLine("  Cross-project references found (would break without --force):");
                 foreach (var reference in references)
                 {
                     console.WriteLine($"    {reference.ModuleName} -> {reference.CsprojPath}");
@@ -112,43 +128,85 @@ public sealed class RemoveModuleHandler(
             }
         }
 
+        if (hostReferencesModule)
+        {
+            var updatedHostCsproj = ProjectReferenceEditor.RemoveReference(
+                fileSystem.ReadAllText(hostCsprojPath), infrastructureCsprojFileName, out var removed);
+
+            if (removed)
+            {
+                fileSystem.WriteAllText(hostCsprojPath, updatedHostCsproj);
+            }
+        }
+
         fileSystem.DeleteDirectory(moduleDir, recursive: true);
 
         console.WriteSuccess($"Module '{moduleName}' removed successfully.");
         console.WriteLine($"  Projects removed from solution: {csprojPaths.Count}");
+
+        if (hostReferencesModule)
+        {
+            console.WriteLine($"  Removed project reference: {solutionName}.WebApi -> {moduleName}.Infrastructure");
+        }
+
         console.WriteLine($"  Deleted: {moduleDir}");
 
         return 0;
     }
 
-    private IReadOnlyList<ModuleReference> FindReferencingProjects(string modulesDir, string moduleName)
+    private IReadOnlyList<ModuleReference> FindReferencingProjects(
+        string solutionRoot, string modulesDir, string moduleDir, string hostCsprojPath, string moduleName)
     {
         var references = new List<ModuleReference>();
 
-        if (!fileSystem.DirectoryExists(modulesDir))
+        if (fileSystem.DirectoryExists(modulesDir))
         {
-            return references;
-        }
+            var otherModules = fileSystem.GetDirectories(modulesDir)
+                .Select(fileSystem.GetFileName)
+                .Where(name => !string.Equals(name, moduleName, StringComparison.Ordinal));
 
-        var otherModules = fileSystem.GetDirectories(modulesDir)
-            .Select(fileSystem.GetFileName)
-            .Where(name => !string.Equals(name, moduleName, StringComparison.Ordinal));
-
-        foreach (var otherModule in otherModules)
-        {
-            var otherModuleDir = Path.Combine(modulesDir, otherModule);
-
-            foreach (var csproj in fileSystem.GetFiles(otherModuleDir, "*.csproj", SearchOption.AllDirectories))
+            foreach (var otherModule in otherModules)
             {
-                var content = fileSystem.ReadAllText(csproj);
-                if (ReferencesModule(content, moduleName))
+                var otherModuleDir = Path.Combine(modulesDir, otherModule);
+
+                foreach (var csproj in fileSystem.GetFiles(otherModuleDir, "*.csproj", SearchOption.AllDirectories))
                 {
-                    references.Add(new ModuleReference(otherModule, csproj));
+                    var content = fileSystem.ReadAllText(csproj);
+                    if (ReferencesModule(content, moduleName))
+                    {
+                        references.Add(new ModuleReference(otherModule, csproj));
+                    }
                 }
             }
         }
 
+        // H-CLI1: a dangling reference from *outside* src/Modules (root tests/, BuildingBlocks,
+        // or any other project) breaks the build exactly the same way a sibling module's does, so
+        // it must block removal (absent --force) too — today it doesn't, because the scan never
+        // looked past src/Modules. The host's own module-registration reference is excluded here;
+        // it is unconditionally auto-removed above instead of being gated behind --force.
+        foreach (var csproj in fileSystem.GetFiles(solutionRoot, "*.csproj", SearchOption.AllDirectories))
+        {
+            if (IsWithin(csproj, modulesDir) || PathText.Equals(csproj, hostCsprojPath))
+            {
+                continue;
+            }
+
+            var content = fileSystem.ReadAllText(csproj);
+            if (ReferencesModule(content, moduleName))
+            {
+                references.Add(new ModuleReference(PathText.GetFileNameWithoutExtension(csproj), csproj));
+            }
+        }
+
         return references;
+    }
+
+    private static bool IsWithin(string path, string directory)
+    {
+        var normalizedDirectory = directory.Replace('\\', '/').TrimEnd('/') + "/";
+        var normalizedPath = path.Replace('\\', '/');
+        return normalizedPath.StartsWith(normalizedDirectory, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

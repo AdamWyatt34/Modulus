@@ -32,11 +32,12 @@ public class OutboxStoreFailureTests
         await db.SaveChangesAsync();
 
         var store = new EfOutboxStore(db, new FakeOutboxNotifier());
-        await store.MarkAsFailed(id, "transient network blip");
+        await store.MarkAsFailed(id, "transient network blip", nextAttemptOnUtc: null);
 
         var reloaded = await db.OutboxMessages.AsNoTracking().FirstAsync(m => m.Id == id);
         reloaded.Attempts.ShouldBe(1);
         reloaded.LastError.ShouldBe("transient network blip");
+        reloaded.NextAttemptOnUtc.ShouldBeNull();
     }
 
     [Fact]
@@ -54,13 +55,74 @@ public class OutboxStoreFailureTests
         await db.SaveChangesAsync();
 
         var store = new EfOutboxStore(db, new FakeOutboxNotifier());
-        await store.MarkAsFailed(id, "attempt 1");
-        await store.MarkAsFailed(id, "attempt 2");
-        await store.MarkAsFailed(id, "attempt 3");
+        await store.MarkAsFailed(id, "attempt 1", nextAttemptOnUtc: null);
+        await store.MarkAsFailed(id, "attempt 2", nextAttemptOnUtc: null);
+        await store.MarkAsFailed(id, "attempt 3", nextAttemptOnUtc: null);
 
         var reloaded = await db.OutboxMessages.AsNoTracking().FirstAsync(m => m.Id == id);
         reloaded.Attempts.ShouldBe(3);
         reloaded.LastError.ShouldBe("attempt 3");
+    }
+
+    [Fact]
+    public async Task MarkAsFailed_WithNextAttemptOnUtc_PersistsBackoffTimestamp()
+    {
+        using var db = CreateDbContext();
+        var id = Guid.NewGuid();
+        db.OutboxMessages.Add(new OutboxMessage
+        {
+            Id = id,
+            EventType = "Test.Event",
+            Payload = "{}",
+            CreatedAt = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
+
+        var nextAttempt = DateTime.UtcNow.AddMinutes(5);
+        var store = new EfOutboxStore(db, new FakeOutboxNotifier());
+        await store.MarkAsFailed(id, "broker unavailable", nextAttempt);
+
+        var reloaded = await db.OutboxMessages.AsNoTracking().FirstAsync(m => m.Id == id);
+        reloaded.NextAttemptOnUtc.ShouldBe(nextAttempt);
+    }
+
+    [Fact]
+    public async Task GetPending_ExcludesRowsBackedOffIntoTheFuture()
+    {
+        // Regression for the poison-row hot loop (C3 / H-MSG3): once a row is marked failed
+        // with a future NextAttemptOnUtc, GetPending must not return it again until that time
+        // elapses — otherwise the dispatcher would refetch and re-fail it every single pass.
+        using var db = CreateDbContext();
+        var baseTime = DateTime.UtcNow.AddMinutes(-10);
+
+        var backedOffId = Guid.NewGuid();
+        db.OutboxMessages.Add(new OutboxMessage
+        {
+            Id = backedOffId,
+            EventType = "Test.Event",
+            Payload = "{}",
+            CreatedAt = baseTime,
+            Attempts = 1,
+            NextAttemptOnUtc = DateTime.UtcNow.AddMinutes(5),
+        });
+
+        var eligibleId = Guid.NewGuid();
+        db.OutboxMessages.Add(new OutboxMessage
+        {
+            Id = eligibleId,
+            EventType = "Test.Event",
+            Payload = "{}",
+            CreatedAt = baseTime.AddSeconds(1),
+            Attempts = 1,
+            NextAttemptOnUtc = DateTime.UtcNow.AddMinutes(-1),
+        });
+        await db.SaveChangesAsync();
+
+        var store = new EfOutboxStore(db, new FakeOutboxNotifier());
+        var pending = await store.GetPending(10, maxAttempts: 5);
+
+        pending.Count.ShouldBe(1);
+        pending[0].Id.ShouldBe(eligibleId);
     }
 
     [Fact]

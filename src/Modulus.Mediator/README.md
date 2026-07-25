@@ -11,7 +11,8 @@ dotnet add package ModulusKit.Mediator
 ## Setup
 
 ```csharp
-services.AddModulusMediator(typeof(Program).Assembly);
+services.AddModulusMediator();
+services.AddModulusHandlers(); // source-generated — registers all handlers and validators
 
 // Add built-in pipeline behaviors (order matters — first registered = outermost).
 services.AddPipelineBehavior(typeof(UnhandledExceptionBehavior<,>));
@@ -21,7 +22,13 @@ services.AddPipelineBehavior(typeof(ValidationBehavior<,>));
 services.AddPipelineBehavior(typeof(UnitOfWorkBehavior<,>));
 ```
 
-`AddModulusMediator` scans the provided assemblies and auto-registers all handlers (`ICommandHandler<>`, `IQueryHandler<,>`, `IStreamQueryHandler<,>`, `IDomainEventHandler<>`).
+`AddModulusMediator()` takes no arguments — it registers only the `IMediator` itself. Handler registration comes from the source-generated `AddModulusHandlers()` extension method, which the `ModulusKit.Generators` package emits at compile time for every handler and validator in the compilation (`ICommandHandler<>`, `IQueryHandler<,>`, `IStreamQueryHandler<,>`, `IDomainEventHandler<>`, `AbstractValidator<>`). Reference the generator in each project that defines handlers:
+
+```xml
+<PackageReference Include="ModulusKit.Generators" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+```
+
+Solutions scaffolded by the `modulus` CLI have this wired up already.
 
 ## Usage
 
@@ -79,6 +86,7 @@ Behaviors wrap every request in a middleware-style pipeline. They execute in reg
 | `UnhandledExceptionBehavior` | Catches unhandled exceptions and converts them to failure Results |
 | `LoggingBehavior` | Logs request start, elapsed time, and success/failure |
 | `MetricsBehavior` | Emits `modulus.mediator.handler.duration` histogram per request |
+| `TracingBehavior` | Wraps each request in an `Activity` from the `Modulus.Mediator` source, tagging request type and outcome (success / failure with error code / exception). Subscribe with `.AddSource("Modulus.Mediator")` in OpenTelemetry. |
 | `ValidationBehavior` | Runs FluentValidation validators and short-circuits on errors |
 | `UnitOfWorkBehavior` | Commits an `IUnitOfWork` (resolved from DI; no-op if not registered) after a successful command. Queries bypass. |
 

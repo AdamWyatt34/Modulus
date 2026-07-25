@@ -96,8 +96,8 @@ public class StronglyTypedIdGeneratorTests
         generated.ShouldContain("reader.GetInt32()");
         generated.ShouldContain("writer.WriteNumberValue(value.Value)");
 
-        // TypeConverter
-        generated.ShouldContain("int.Parse(s)");
+        // TypeConverter — culture-invariant so a numeric ID round-trips independent of thread culture
+        generated.ShouldContain("int.Parse(s, System.Globalization.CultureInfo.InvariantCulture)");
 
         // No compilation errors
         var errors = outputCompilation.GetDiagnostics()
@@ -138,8 +138,8 @@ public class StronglyTypedIdGeneratorTests
         generated.ShouldContain("reader.GetInt64()");
         generated.ShouldContain("writer.WriteNumberValue(value.Value)");
 
-        // TypeConverter
-        generated.ShouldContain("long.Parse(s)");
+        // TypeConverter — culture-invariant so a numeric ID round-trips independent of thread culture
+        generated.ShouldContain("long.Parse(s, System.Globalization.CultureInfo.InvariantCulture)");
 
         // No compilation errors
         var errors = outputCompilation.GetDiagnostics()
@@ -322,6 +322,188 @@ public class StronglyTypedIdGeneratorTests
         generated.ShouldContain("System.ComponentModel.TypeConverter");
 
         // Verify no compilation errors
+        var errors = outputCompilation.GetDiagnostics()
+            .Where(d => d.Severity == DiagnosticSeverity.Error)
+            .ToList();
+        errors.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Generate_WithoutEfCoreReference_NoValueConverterAndNoErrors()
+    {
+        var source = """
+            using Modulus.Mediator.Abstractions;
+
+            namespace TestNamespace;
+
+            [StronglyTypedId]
+            public readonly partial record struct OrderId;
+            """;
+
+        var (outputCompilation, diagnostics, runResult) = GeneratorTestHelper.RunGenerator(source, includeEfCoreReference: false);
+
+        diagnostics.ShouldBeEmpty();
+
+        var generated = GeneratorTestHelper.GetGeneratedSource(runResult, "OrderId.g.cs");
+
+        generated.ShouldNotContain("ValueConverter");
+        generated.ShouldNotContain("Microsoft.EntityFrameworkCore");
+
+        // The rest of the generated members are unaffected by the missing EF reference
+        generated.ShouldContain("public System.Guid Value { get; }");
+        generated.ShouldContain("OrderIdJsonConverter");
+        generated.ShouldContain("OrderIdTypeConverter");
+
+        var errors = outputCompilation.GetDiagnostics()
+            .Where(d => d.Severity == DiagnosticSeverity.Error)
+            .ToList();
+        errors.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Generate_WithEfCoreReference_StillEmitsValueConverter()
+    {
+        var source = """
+            using Modulus.Mediator.Abstractions;
+
+            namespace TestNamespace;
+
+            [StronglyTypedId]
+            public readonly partial record struct OrderId;
+            """;
+
+        var (outputCompilation, diagnostics, runResult) = GeneratorTestHelper.RunGenerator(source, includeEfCoreReference: true);
+
+        diagnostics.ShouldBeEmpty();
+
+        var generated = GeneratorTestHelper.GetGeneratedSource(runResult, "OrderId.g.cs");
+
+        generated.ShouldContain("public sealed class OrderIdValueConverter : Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<OrderId, System.Guid>");
+
+        var errors = outputCompilation.GetDiagnostics()
+            .Where(d => d.Severity == DiagnosticSeverity.Error)
+            .ToList();
+        errors.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Generate_SameNamedIdsInDifferentNamespaces_BothGetDistinctGeneratedCode()
+    {
+        var source = """
+            using Modulus.Mediator.Abstractions;
+
+            namespace Orders
+            {
+                [StronglyTypedId]
+                public readonly partial record struct OrderId;
+            }
+
+            namespace Invoicing
+            {
+                [StronglyTypedId(typeof(int))]
+                public readonly partial record struct OrderId;
+            }
+            """;
+
+        var (outputCompilation, diagnostics, runResult) = GeneratorTestHelper.RunGenerator(source);
+
+        // Before the fix, both types hashed to the same "OrderId.g.cs" hint name, which faults
+        // the generator with a duplicate-hintName exception (CS8785) and loses every generated
+        // member for both types.
+        diagnostics.ShouldBeEmpty();
+        runResult.GeneratedTrees.Length.ShouldBe(2);
+
+        var ordersOrderId = GeneratorTestHelper.GetGeneratedSource(runResult, "Orders.OrderId.g.cs");
+        var invoicingOrderId = GeneratorTestHelper.GetGeneratedSource(runResult, "Invoicing.OrderId.g.cs");
+
+        ordersOrderId.ShouldContain("namespace Orders;");
+        ordersOrderId.ShouldContain("public System.Guid Value { get; }");
+
+        invoicingOrderId.ShouldContain("namespace Invoicing;");
+        invoicingOrderId.ShouldContain("public int Value { get; }");
+
+        var errors = outputCompilation.GetDiagnostics()
+            .Where(d => d.Severity == DiagnosticSeverity.Error)
+            .ToList();
+        errors.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Generate_UnsupportedBackingType_ReportsDiagnosticError()
+    {
+        var source = """
+            using Modulus.Mediator.Abstractions;
+
+            namespace TestNamespace;
+
+            [StronglyTypedId(typeof(string))]
+            public readonly partial record struct OrderId;
+            """;
+
+        var (_, _, runResult) = GeneratorTestHelper.RunGenerator(source);
+
+        runResult.GeneratedTrees.Length.ShouldBe(0);
+
+        var generatorDiagnostics = runResult.Results
+            .SelectMany(r => r.Diagnostics)
+            .ToList();
+
+        generatorDiagnostics.Count.ShouldBe(1);
+        generatorDiagnostics[0].Id.ShouldBe("MODGEN005");
+        generatorDiagnostics[0].Severity.ShouldBe(DiagnosticSeverity.Error);
+        generatorDiagnostics[0].GetMessage().ShouldContain("OrderId");
+    }
+
+    [Fact]
+    public void Generate_NestedStronglyTypedId_ReportsDiagnosticError()
+    {
+        var source = """
+            using Modulus.Mediator.Abstractions;
+
+            namespace TestNamespace;
+
+            public class Outer
+            {
+                [StronglyTypedId]
+                public readonly partial record struct OrderId;
+            }
+            """;
+
+        var (_, _, runResult) = GeneratorTestHelper.RunGenerator(source);
+
+        runResult.GeneratedTrees.Length.ShouldBe(0);
+
+        var generatorDiagnostics = runResult.Results
+            .SelectMany(r => r.Diagnostics)
+            .ToList();
+
+        generatorDiagnostics.Count.ShouldBe(1);
+        generatorDiagnostics[0].Id.ShouldBe("MODGEN006");
+        generatorDiagnostics[0].Severity.ShouldBe(DiagnosticSeverity.Error);
+        generatorDiagnostics[0].GetMessage().ShouldContain("OrderId");
+    }
+
+    [Fact]
+    public void Generate_InternalId_GeneratedPartialIsInternal()
+    {
+        var source = """
+            using Modulus.Mediator.Abstractions;
+
+            namespace TestNamespace;
+
+            [StronglyTypedId]
+            internal readonly partial record struct OrderId;
+            """;
+
+        var (outputCompilation, diagnostics, runResult) = GeneratorTestHelper.RunGenerator(source);
+
+        diagnostics.ShouldBeEmpty();
+
+        var generated = GeneratorTestHelper.GetGeneratedSource(runResult, "OrderId.g.cs");
+
+        generated.ShouldContain("internal readonly partial record struct OrderId");
+        generated.ShouldNotContain("public readonly partial record struct OrderId");
+
         var errors = outputCompilation.GetDiagnostics()
             .Where(d => d.Severity == DiagnosticSeverity.Error)
             .ToList();

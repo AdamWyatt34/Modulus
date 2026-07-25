@@ -32,7 +32,7 @@ When you have a valid reason to suppress a specific diagnostic, use `#pragma`:
 
 ```csharp
 #pragma warning disable MOD001 // Cross-module reference needed for shared test utilities
-using EShop.Modules.Catalog.Domain.Products;
+using EShop.Catalog.Domain.Products;
 #pragma warning restore MOD001
 ```
 

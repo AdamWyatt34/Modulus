@@ -537,4 +537,223 @@ public class HandlerRegistrationGeneratorTests
         resolved.ShouldNotBeNull();
         resolved.ShouldBeOfType(handlerType!);
     }
+
+    [Fact]
+    public void Generate_InternalHandlerInReferencedAssembly_IsNotRegistered()
+    {
+        var moduleSource = SystemUsings + """
+            using Modulus.Mediator.Abstractions;
+
+            namespace MyModule.Application;
+
+            public record GetItemQuery : IQuery<string>;
+
+            internal sealed class GetItemQueryHandler : IQueryHandler<GetItemQuery, string>
+            {
+                public Task<Result<string>> Handle(GetItemQuery query, CancellationToken cancellationToken = default)
+                    => Task.FromResult(Result<string>.Success("item"));
+            }
+            """;
+
+        var hostSource = """
+            namespace MyHost;
+
+            public class Marker { }
+            """;
+
+        var (outputCompilation, _, runResult) = GeneratorTestHelper.RunHandlerRegistrationGenerator(
+            hostSource, "MyHost", moduleSource);
+
+        var generatedSource = GeneratorTestHelper.GetGeneratedSource(runResult, "ModulusHandlerRegistrations.g.cs");
+
+        // An internal type in a referenced assembly is inaccessible to the host — registering it
+        // would be CS0122 in generated code.
+        generatedSource.ShouldNotContain("GetItemQueryHandler");
+        generatedSource.ShouldNotContain("AddScoped");
+
+        var errors = outputCompilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
+        errors.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Generate_RecordStructHandlerInReferencedAssembly_IsNotRegistered()
+    {
+        var moduleSource = SystemUsings + """
+            using Modulus.Mediator.Abstractions;
+
+            namespace MyModule.Application;
+
+            public record GetItemQuery : IQuery<string>;
+
+            public readonly record struct GetItemQueryHandler : IQueryHandler<GetItemQuery, string>
+            {
+                public Task<Result<string>> Handle(GetItemQuery query, CancellationToken cancellationToken = default)
+                    => Task.FromResult(Result<string>.Success("item"));
+            }
+            """;
+
+        var hostSource = """
+            namespace MyHost;
+
+            public class Marker { }
+            """;
+
+        var (outputCompilation, _, runResult) = GeneratorTestHelper.RunHandlerRegistrationGenerator(
+            hostSource, "MyHost", moduleSource);
+
+        var generatedSource = GeneratorTestHelper.GetGeneratedSource(runResult, "ModulusHandlerRegistrations.g.cs");
+
+        // A value type can't satisfy `AddScoped<TService, TImplementation> where TImplementation : class`
+        // — registering it would be CS0452 in generated code (the local-path predicate already
+        // excludes record structs; the referenced-assembly scan must exclude them too).
+        generatedSource.ShouldNotContain("GetItemQueryHandler");
+        generatedSource.ShouldNotContain("AddScoped");
+
+        var errors = outputCompilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
+        errors.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Generate_PrivateNestedHandler_IsNotRegistered()
+    {
+        var source = SystemUsings + """
+            using Modulus.Mediator.Abstractions;
+
+            namespace TestApp;
+
+            public record CreateOrderCommand : ICommand;
+
+            public class Outer
+            {
+                private sealed class NestedHandler : ICommandHandler<CreateOrderCommand>
+                {
+                    public Task<Result> Handle(CreateOrderCommand command, CancellationToken cancellationToken = default)
+                        => Task.FromResult(Result.Success());
+                }
+            }
+            """;
+
+        var (outputCompilation, _, runResult) = GeneratorTestHelper.RunHandlerRegistrationGenerator(source, "TestApp");
+        var generatedSource = GeneratorTestHelper.GetGeneratedSource(runResult, "ModulusHandlerRegistrations.g.cs");
+
+        // A `private` nested handler can't be named from the generated top-level static class —
+        // registering it would be CS0122 in generated code.
+        generatedSource.ShouldNotContain("NestedHandler");
+        generatedSource.ShouldNotContain("AddScoped");
+
+        var errors = outputCompilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
+        errors.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Generate_PartialClassWithAbstractInOtherPart_DoesNotCrashGenerator()
+    {
+        var source = SystemUsings + """
+            using Modulus.Mediator.Abstractions;
+
+            namespace TestApp;
+
+            public record CreateOrderCommand : ICommand;
+
+            public partial class SplitHandler : ICommandHandler<CreateOrderCommand>
+            {
+            }
+
+            public abstract partial class SplitHandler
+            {
+                public Task<Result> Handle(CreateOrderCommand command, CancellationToken cancellationToken = default)
+                    => Task.FromResult(Result.Success());
+            }
+            """;
+
+        var (outputCompilation, _, runResult) = GeneratorTestHelper.RunHandlerRegistrationGenerator(source, "TestApp");
+
+        // Before the fix, `AnalyzeCandidate` returned a raw `default(CandidateResult)` for this
+        // shape (the merged symbol is abstract even though the base-list-bearing part isn't), and
+        // `.Where(r => r.Registrations.Length > 0)` NREs on the resulting default ImmutableArray —
+        // faulting the whole generator and losing every registration in the assembly.
+        runResult.Results.ShouldAllBe(r => r.Exception == null);
+
+        var generatedSource = GeneratorTestHelper.GetGeneratedSource(runResult, "ModulusHandlerRegistrations.g.cs");
+        generatedSource.ShouldNotContain("SplitHandler");
+
+        var errors = outputCompilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
+        errors.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Generate_PartialClassHandlerListedInBothParts_RegistersOnlyOnce()
+    {
+        var source = SystemUsings + """
+            using Modulus.Mediator.Abstractions;
+
+            namespace TestApp;
+
+            public record CreateOrderCommand : ICommand;
+
+            public partial class CreateOrderCommandHandler : ICommandHandler<CreateOrderCommand>
+            {
+            }
+
+            public partial class CreateOrderCommandHandler : ICommandHandler<CreateOrderCommand>
+            {
+                public Task<Result> Handle(CreateOrderCommand command, CancellationToken cancellationToken = default)
+                    => Task.FromResult(Result.Success());
+            }
+            """;
+
+        var (outputCompilation, _, runResult) = GeneratorTestHelper.RunHandlerRegistrationGenerator(source, "TestApp");
+
+        var generatedSource = GeneratorTestHelper.GetGeneratedSource(runResult, "ModulusHandlerRegistrations.g.cs");
+
+        const string registrationLine =
+            "services.AddScoped<global::Modulus.Mediator.Abstractions.ICommandHandler<global::TestApp.CreateOrderCommand>, global::TestApp.CreateOrderCommandHandler>();";
+
+        // The syntax-based scan visits each partial declaration that carries the base list
+        // separately; without de-duplication the same (handler, interface) pair is emitted once
+        // per partial part, and a domain-event handler/validator resolved via
+        // `GetServices<T>()` would run twice per event.
+        CountOccurrences(generatedSource, registrationLine).ShouldBe(1);
+
+        var errors = outputCompilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
+        errors.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Generate_CompilationWithoutDependencyInjection_EmitsNothing()
+    {
+        // A Domain project references this generator solely for [StronglyTypedId] and has no
+        // Microsoft.Extensions.DependencyInjection — emitting the registrations file there
+        // produces CS0246 on IServiceCollection in generated code (E2E regression).
+        const string source = """
+            namespace TestApp.Domain;
+
+            public sealed class Product
+            {
+                public string Name { get; private set; } = string.Empty;
+            }
+            """;
+
+        var (outputCompilation, _, runResult) = GeneratorTestHelper.RunHandlerRegistrationGenerator(
+            source, dependencyInjectionReferences: false);
+
+        runResult.Results.ShouldAllBe(r => r.Exception == null);
+        runResult.GeneratedTrees.ShouldBeEmpty();
+
+        var errors = outputCompilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
+        errors.ShouldBeEmpty();
+    }
+
+    private static int CountOccurrences(string text, string value)
+    {
+        var count = 0;
+        var index = 0;
+        while ((index = text.IndexOf(value, index, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            index += value.Length;
+        }
+
+        return count;
+    }
 }

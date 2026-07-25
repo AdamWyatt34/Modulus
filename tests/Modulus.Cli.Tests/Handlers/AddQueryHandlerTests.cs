@@ -189,6 +189,21 @@ public class AddQueryHandlerTests
     }
 
     [Fact]
+    public async Task AddQuery_accepts_builtin_type_alias_as_result_type()
+    {
+        // H-CLI3: the scaffold's own sample query is IQuery<string> — rejecting "string" would
+        // make add-query reject its own shape.
+        SeedModulusSolutionWithModule();
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync("GetStatusMessage", "Catalog", @"C:\work\EShop\EShop.slnx", "string");
+
+        result.ShouldBe(0);
+        var content = _fs.ReadAllText(@"C:\work\EShop\src\Modules\Catalog\src\Catalog.Application\Queries\GetStatusMessage\GetStatusMessage.cs");
+        content.ShouldContain(": IQuery<string>;");
+    }
+
+    [Fact]
     public async Task AddQuery_returns_error_when_solution_not_found()
     {
         _fs.SetCurrentDirectory(@"C:\empty");

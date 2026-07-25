@@ -2,6 +2,10 @@
 
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <!-- No CentralPackageTransitivePinningEnabled: it turns every transitive version above a
+         central pin into an NU1109 downgrade error, which breaks restore whenever Aspire or the
+         ModulusKit packages require newer Microsoft.Extensions.* than the pins below. Vulnerable
+         transitives are pinned by promoting them to direct PackageReferences instead. -->
   </PropertyGroup>
 
   <ItemGroup>
@@ -36,6 +40,10 @@
 
     <!-- API Documentation -->
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.4" />
+    <!-- Transitive of Microsoft.AspNetCore.OpenApi: 2.0.x has GHSA-v5pm-xwqc-g5wc. Promoted to a
+         direct PackageReference in the WebApi project so this pin binds without transitive
+         pinning. Stays on the 2.x line for AspNetCore.OpenApi compatibility. -->
+    <PackageVersion Include="Microsoft.OpenApi" Version="2.9.0" />
     <PackageVersion Include="Scalar.AspNetCore" Version="2.4.18" />
 
     <!-- Aspire (used by the aspire/ projects when scaffolded with the aspire flag; harmless otherwise) -->

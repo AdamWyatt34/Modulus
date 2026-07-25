@@ -88,11 +88,39 @@ public class UnhandledExceptionBehaviorTests
         result.Errors[0].Code.ShouldBe("UnhandledException");
     }
 
+    [Fact]
+    public async Task Propagates_OperationCanceledException_instead_of_converting_to_Result()
+    {
+        var logger = new TestLogger<UnhandledExceptionBehavior<TestCommand, Result>>();
+        var services = new ServiceCollection();
+        services.AddScoped<ICommandHandler<TestCommand>, OperationCanceledCommandHandler>();
+        services.AddScoped<IMediator, Mediator>();
+        services.AddSingleton<ILogger<UnhandledExceptionBehavior<TestCommand, Result>>>(logger);
+        services.AddPipelineBehavior(typeof(UnhandledExceptionBehavior<,>));
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
+
+        await Should.ThrowAsync<OperationCanceledException>(
+            () => mediator.Send(new TestCommand("test")));
+
+        // Cancellation is not an unhandled failure: it must not be logged as one.
+        logger.Entries.ShouldNotContain(e => e.Level == LogLevel.Error);
+    }
+
     private class ThrowingCreateItemHandler : ICommandHandler<CreateItemCommand, int>
     {
         public Task<Result<int>> Handle(CreateItemCommand command, CancellationToken cancellationToken = default)
         {
             throw new InvalidOperationException("Handler exploded");
+        }
+    }
+
+    private class OperationCanceledCommandHandler : ICommandHandler<TestCommand>
+    {
+        public Task<Result> Handle(TestCommand command, CancellationToken cancellationToken = default)
+        {
+            throw new OperationCanceledException();
         }
     }
 }

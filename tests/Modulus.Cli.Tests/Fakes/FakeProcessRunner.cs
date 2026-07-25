@@ -10,6 +10,14 @@ public sealed class FakeProcessRunner : IProcessRunner
 
     public int ExitCodeToReturn { get; set; }
 
+    /// <summary>
+    /// Optional per-invocation exit code override, keyed by the space-joined
+    /// "command arg1 arg2 ..." text of the call (e.g. <c>"git add ."</c>). Checked before falling
+    /// back to <see cref="ExitCodeToReturn"/>, so a single test can simulate one command
+    /// succeeding while a later one in the same handler run fails.
+    /// </summary>
+    public Dictionary<string, int> ExitCodeOverrides { get; } = new(StringComparer.Ordinal);
+
     public Task<int> RunAsync(
         string command,
         IReadOnlyList<string> arguments,
@@ -17,7 +25,9 @@ public sealed class FakeProcessRunner : IProcessRunner
         CancellationToken cancellationToken = default)
     {
         _invocations.Add(new Invocation(command, [.. arguments], workingDirectory));
-        return Task.FromResult(ExitCodeToReturn);
+
+        var key = string.Join(' ', new[] { command }.Concat(arguments));
+        return Task.FromResult(ExitCodeOverrides.TryGetValue(key, out var exitCode) ? exitCode : ExitCodeToReturn);
     }
 
     public sealed record Invocation(string Command, IReadOnlyList<string> Arguments, string WorkingDirectory);

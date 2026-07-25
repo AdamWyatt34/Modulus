@@ -23,44 +23,47 @@ modulus add-module <module-name> [options]
 
 ## Generated Output
 
-Running `modulus add-module Catalog` inside an `EShop` solution generates:
+Running `modulus add-module Catalog` inside an `EShop` solution generates the module under `src/Modules/Catalog/`, with source projects in `src/` and test projects in `tests/`. Project names are `{Module}.{Layer}`; namespaces are `{Solution}.{Module}.{Layer}` (e.g. `EShop.Catalog.Application`):
 
 ```
-src/
-└── Modules/
-    └── Catalog/
-        ├── EShop.Modules.Catalog.Domain/
-        │   ├── EShop.Modules.Catalog.Domain.csproj
-        │   └── Entities/
-        ├── EShop.Modules.Catalog.Application/
-        │   ├── EShop.Modules.Catalog.Application.csproj
-        │   ├── Commands/
-        │   ├── Queries/
-        │   └── Contracts/
-        ├── EShop.Modules.Catalog.Infrastructure/
-        │   ├── EShop.Modules.Catalog.Infrastructure.csproj
-        │   ├── Persistence/
-        │   │   └── CatalogDbContext.cs
-        │   └── CatalogModuleInstaller.cs
-        ├── EShop.Modules.Catalog.Api/
-        │   ├── EShop.Modules.Catalog.Api.csproj
-        │   ├── Endpoints/
-        │   └── CatalogModule.cs
-        └── EShop.Modules.Catalog.Integration/
-            ├── EShop.Modules.Catalog.Integration.csproj
-            └── Events/
-
-tests/
-└── Modules/
-    └── Catalog/
-        ├── EShop.Modules.Catalog.UnitTests/
-        │   └── EShop.Modules.Catalog.UnitTests.csproj
-        ├── EShop.Modules.Catalog.IntegrationTests/
-        │   └── EShop.Modules.Catalog.IntegrationTests.csproj
-        └── EShop.Modules.Catalog.ArchitectureTests/
-            ├── EShop.Modules.Catalog.ArchitectureTests.csproj
-            └── LayerDependencyTests.cs
+src/Modules/Catalog/
+├── src/
+│   ├── Catalog.Domain/
+│   │   ├── Catalog.Domain.csproj
+│   │   └── AssemblyReference.cs
+│   ├── Catalog.Application/
+│   │   ├── Catalog.Application.csproj
+│   │   ├── Data/
+│   │   │   └── IQueryDb.cs
+│   │   └── Samples/
+│   │       ├── GetSampleQuery.cs
+│   │       └── GetSampleQueryHandler.cs
+│   ├── Catalog.Infrastructure/
+│   │   ├── Catalog.Infrastructure.csproj
+│   │   ├── CatalogModule.cs            # IModuleRegistration — DI + endpoint wiring
+│   │   └── Persistence/
+│   │       ├── CatalogDbContext.cs
+│   │       └── CatalogReadOnlyDbContext.cs
+│   ├── Catalog.Api/
+│   │   ├── Catalog.Api.csproj
+│   │   └── Endpoints/
+│   │       ├── CatalogEndpointRegistration.cs
+│   │       └── GetSample.cs            # GET /api/catalog/sample
+│   └── Catalog.Integration/
+│       └── Catalog.Integration.csproj
+└── tests/
+    ├── Catalog.Tests.Unit/
+    │   └── Catalog.Tests.Unit.csproj
+    ├── Catalog.Tests.Integration/
+    │   ├── Catalog.Tests.Integration.csproj
+    │   ├── CatalogEndpointTests.cs
+    │   └── CatalogIntegrationTestBase.cs
+    └── Catalog.Tests.Architecture/
+        ├── Catalog.Tests.Architecture.csproj
+        └── LayerDependencyTests.cs
 ```
+
+The module ships with a working sample slice -- `GetSampleQuery` in Application and the `GetSample` endpoint in Api -- so a fresh module responds at `GET /api/catalog/sample` as soon as the host runs.
 
 ### Layer Responsibilities
 
@@ -76,8 +79,11 @@ tests/
 
 When you add a module, the CLI also:
 
-1. **Updates the solution file** (`EShop.slnx`) -- All five source projects and three test projects are added to the solution with proper folder grouping.
-2. **Auto-discovered at startup** -- The module auto-discovery source generator scans referenced assemblies for `IModuleRegistration` implementations. No manual composition root file needs to be updated.
+1. **Updates the solution file** (`EShop.slnx`) -- All five source projects and three test projects are added to the solution with proper folder grouping (`/src/Modules/Catalog/` and `/tests/Modules/Catalog/`).
+2. **Wires the host reference** -- A `ProjectReference` to `Catalog.Infrastructure` is added to `EShop.WebApi.csproj`, which is what makes the module visible to the module auto-discovery source generator.
+3. **Runs `dotnet restore`** so the solution is immediately buildable.
+
+At startup the module is then auto-discovered: the source generator scans the host's referenced assemblies for `IModuleRegistration` implementations and emits the `AddAllModules(...)` / `MapAllModuleEndpoints()` calls that `Program.cs` already makes. No manual composition root file needs to be updated.
 
 ## Examples
 

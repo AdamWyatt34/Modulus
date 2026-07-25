@@ -14,7 +14,7 @@ public sealed class DoctorHandler(
         var slnxPath = solutionFinder.ResolveSolutionPath(solutionPath, fileSystem.GetCurrentDirectory());
         if (slnxPath is null)
         {
-            console.WriteError("Could not find a solution file. Use --solution to specify the path, or run from within a Modulus solution directory.");
+            console.WriteError(solutionFinder.DescribeResolutionFailure(solutionPath));
             return Task.FromResult(1);
         }
 
@@ -291,11 +291,41 @@ public sealed class DoctorHandler(
 
             if (string.IsNullOrWhiteSpace(connectionString) && string.IsNullOrWhiteSpace(fullyQualifiedNamespace))
             {
+                // Under Aspire, the broker resource injects ConnectionStrings:<name> (e.g.
+                // "messaging") at run time via service discovery — appsettings.json legitimately
+                // has no static ConnectionString/FullyQualifiedNamespace for a pristine Aspire
+                // scaffold, and Program.cs.template documents reading it from there instead. Warn
+                // only when this isn't an Aspire scaffold.
+                if (IsAspireScaffold(solutionRoot, document.RootElement))
+                {
+                    return [new DoctorCheckResult(checkName, DoctorStatus.Pass, $"Messaging section found with Transport '{transportValue}'; connection is supplied by Aspire (ConnectionStrings:messaging / an AppHost project was detected).")];
+                }
+
                 return [new DoctorCheckResult(checkName, DoctorStatus.Warn, $"Messaging:Transport is '{transportValue}' but neither ConnectionString nor FullyQualifiedNamespace is set in '{appsettingsPath}'.")];
             }
 
             return [new DoctorCheckResult(checkName, DoctorStatus.Pass, $"Messaging section found with Transport '{transportValue}' and a connection configured.")];
         }
+    }
+
+    /// <summary>
+    /// Detects an Aspire scaffold two ways: an <c>AppHost</c> project anywhere in the solution
+    /// (the shape <c>init --aspire</c> produces), or a <c>ConnectionStrings</c> entry whose name
+    /// matches what Aspire's resource injection uses (e.g. "messaging" for
+    /// <c>builder.AddRabbitMQ("messaging")</c>). Either signal is enough — appsettings.json is
+    /// static and can't reflect what Aspire injects at run time, so this is necessarily a
+    /// best-effort heuristic, not proof the connection actually resolves.
+    /// </summary>
+    private bool IsAspireScaffold(string solutionRoot, JsonElement appSettingsRoot)
+    {
+        if (appSettingsRoot.TryGetProperty("ConnectionStrings", out var connectionStrings)
+            && connectionStrings.ValueKind == JsonValueKind.Object
+            && connectionStrings.EnumerateObject().Any(p => string.Equals(p.Name, "messaging", StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        return fileSystem.GetFiles(solutionRoot, "*.AppHost.csproj", SearchOption.AllDirectories).Count > 0;
     }
 
     private static readonly HashSet<string> ValidTransports = new(StringComparer.Ordinal) { "InMemory", "RabbitMq", "AzureServiceBus" };
@@ -345,9 +375,18 @@ public sealed class DoctorHandler(
 
             foreach (var include in references)
             {
+                // MSBuild property/item expansions (e.g. "$(SolutionDir)Foo\Foo.csproj",
+                // "$(MSBuildThisFileDirectory)..\Bar.csproj") can't be resolved by this static
+                // text scan — only MSBuild itself knows the property's value — so treat them as
+                // unverifiable rather than false-failing on a literal, never-real "$(...)" path.
+                if (include!.Contains("$(", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
                 // Separator-agnostic: Path.GetFullPath cannot collapse ".." through
                 // backslashes on Linux, where they are literal name characters.
-                var targetPath = PathText.ResolveRelative(csprojDir, include!);
+                var targetPath = PathText.ResolveRelative(csprojDir, include);
 
                 if (!fileSystem.FileExists(targetPath))
                 {
@@ -384,7 +423,15 @@ public sealed class DoctorHandler(
 
         foreach (var programFile in programFiles)
         {
-            var content = fileSystem.ReadAllText(programFile);
+            // Ignore commented-out lines before matching: the scaffold's own Program.cs.template
+            // ships the whole outbox/inbox + migration guidance block commented out by default,
+            // and `Contains` doesn't know the difference between a real call and prose inside a
+            // `//` line mentioning the same method name. Left unfiltered, a pristine scaffold
+            // could accidentally "pass" only because both mentions are commented (no real
+            // signal either way), and — the actual bug — a solution that later uncomments the
+            // real registration but forgets to uncomment the migration call would still see the
+            // commented-out mention of UseModulusMessagingMigrationsAsync and wrongly pass.
+            var content = StripCommentedLines(fileSystem.ReadAllText(programFile));
             var usesOutboxOrInbox = content.Contains("AddModulusOutbox", StringComparison.Ordinal)
                 || content.Contains("AddModulusInbox", StringComparison.Ordinal);
 
@@ -406,6 +453,22 @@ public sealed class DoctorHandler(
         }
 
         return results;
+    }
+
+    /// <summary>
+    /// Removes every line whose first non-whitespace characters are <c>//</c>. A line-oriented
+    /// heuristic rather than a full C# tokenizer — sufficient for scaffolded Program.cs files,
+    /// which either contain real, un-commented top-level statements or fully `//`-prefixed
+    /// guidance blocks (see Program.cs.template), never code hiding after an inline trailing
+    /// comment on the same line as something this check searches for.
+    /// </summary>
+    private static string StripCommentedLines(string content)
+    {
+        var kept = content
+            .Split('\n')
+            .Where(line => !line.TrimStart().StartsWith("//", StringComparison.Ordinal));
+
+        return string.Join('\n', kept);
     }
 }
 

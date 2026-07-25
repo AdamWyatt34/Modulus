@@ -270,16 +270,19 @@ public sealed class EntityGenerator
         // Build the id value expression
         var idExpr = GetDefaultIdExpression(o.IdType);
 
-        // Build factory call
-        var args = new List<string> { "id" };
+        // This test only asserts the id, so each property's default expression can be passed
+        // straight through as a Create() argument — nothing here re-checks a property's value,
+        // so it doesn't matter that a non-deterministic expression (Guid.NewGuid(),
+        // DateTime.UtcNow) would be evaluated once, right here, for this call only.
+        var idTestArgs = new List<string> { "id" };
         foreach (var prop in o.Properties)
         {
-            args.Add(GetDefaultValueExpression(prop.Type));
+            idTestArgs.Add(GetDefaultValueExpression(prop.Type));
         }
 
         sb.AppendLine($"        var id = {idExpr};");
         sb.AppendLine();
-        sb.AppendLine($"        var entity = {o.EntityName}.Create({string.Join(", ", args)});");
+        sb.AppendLine($"        var entity = {o.EntityName}.Create({string.Join(", ", idTestArgs)});");
         sb.AppendLine();
         sb.AppendLine("        entity.Id.ShouldBe(id);");
         sb.AppendLine("    }");
@@ -291,14 +294,34 @@ public sealed class EntityGenerator
             sb.AppendLine("    public void Create_should_set_properties()");
             sb.AppendLine("    {");
             sb.AppendLine($"        var id = {idExpr};");
-            sb.AppendLine();
-            sb.AppendLine($"        var entity = {o.EntityName}.Create({string.Join(", ", args)});");
-            sb.AppendLine();
 
+            // H-CLI4: each property's default value is hoisted into its own local and reused for
+            // BOTH the Create() argument and the ShouldBe() assertion below. The previous shape
+            // emitted the same *expression text* (e.g. "Guid.NewGuid()") twice; since that's a
+            // method call, not a constant, each occurrence evaluates independently — a Guid
+            // property's assertion compared a freshly generated Guid against the one actually
+            // passed to Create(), so it failed on every run (DateTime.UtcNow variants were
+            // merely flaky). Naming the local off the property gives distinct, valid C#
+            // identifiers as long as property names are themselves distinct — which
+            // PropertyParser now guarantees case-insensitively upstream of this generator.
+            var localNames = new List<string>(o.Properties.Count);
             foreach (var prop in o.Properties)
             {
-                var expected = GetDefaultValueExpression(prop.Type);
-                sb.AppendLine($"        entity.{prop.Name}.ShouldBe({expected});");
+                var localName = CamelCase(prop.Name);
+                localNames.Add(localName);
+                sb.AppendLine($"        var {localName} = {GetDefaultValueExpression(prop.Type)};");
+            }
+
+            var propsTestArgs = new List<string> { "id" };
+            propsTestArgs.AddRange(localNames);
+
+            sb.AppendLine();
+            sb.AppendLine($"        var entity = {o.EntityName}.Create({string.Join(", ", propsTestArgs)});");
+            sb.AppendLine();
+
+            for (var i = 0; i < o.Properties.Count; i++)
+            {
+                sb.AppendLine($"        entity.{o.Properties[i].Name}.ShouldBe({localNames[i]});");
             }
 
             sb.AppendLine("    }");

@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <!-- Packed into the ModulusKit.Analyzers package by Modulus.Analyzers.csproj (alongside the
+         analyzer dll, both under analyzers/dotnet/cs) — this project produces no package itself. -->
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Modulus.Analyzers.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Code fixes are IDE/Workspaces-hosted only (never loaded by csc at command-line build
+         time), so referencing Workspaces here — unlike in the analyzer assembly — is safe and
+         does not trip RS1038. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

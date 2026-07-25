@@ -59,6 +59,29 @@ public class ResultTests
         result.Errors[0].Type.ShouldBe(ErrorType.NotFound);
     }
 
+    [Fact]
+    public void Failure_defensively_copies_the_caller_array()
+    {
+        var errors = new[] { Error.Failure("E1", "First") };
+
+        var result = Result.Failure(errors);
+        errors[0] = Error.Failure("Mutated", "Should not be visible");
+
+        result.Errors[0].Code.ShouldBe("E1");
+    }
+
+    [Fact]
+    public void Failure_with_zero_errors_throws_ArgumentException()
+    {
+        Should.Throw<ArgumentException>(() => Result.Failure());
+    }
+
+    [Fact]
+    public void Failure_with_null_errors_throws_ArgumentNullException()
+    {
+        Should.Throw<ArgumentNullException>(() => Result.Failure((Error[])null!));
+    }
+
     // ── Result<T> ────────────────────────────────────────────────
 
     [Fact]
@@ -121,6 +144,38 @@ public class ResultTests
         result.Errors[0].Type.ShouldBe(ErrorType.Conflict);
     }
 
+    [Fact]
+    public void Failure_resultT_defensively_copies_the_caller_array()
+    {
+        var errors = new[] { Error.Failure("E1", "First") };
+
+        var result = Result<int>.Failure(errors);
+        errors[0] = Error.Failure("Mutated", "Should not be visible");
+
+        result.Errors[0].Code.ShouldBe("E1");
+    }
+
+    [Fact]
+    public void Failure_resultT_with_zero_errors_throws_ArgumentException()
+    {
+        Should.Throw<ArgumentException>(() => Result<int>.Failure());
+    }
+
+    [Fact]
+    public void Success_resultT_with_null_value_throws_ArgumentNullException()
+    {
+        Should.Throw<ArgumentNullException>(() => Result<string>.Success(null!));
+    }
+
+    [Fact]
+    public void Implicit_conversion_of_null_TValue_to_ResultT_throws_ArgumentNullException()
+    {
+        // Mirrors `return someValue;` inside a handler — the implicit conversion, not Success directly.
+        static Result<string> ConvertImplicitly(string value) => value;
+
+        Should.Throw<ArgumentNullException>(() => ConvertImplicitly(null!));
+    }
+
     // ── Error ────────────────────────────────────────────────────
 
     [Fact]
@@ -175,5 +230,17 @@ public class ResultTests
 
         result.IsFailure.ShouldBeTrue();
         result.ShouldBeAssignableTo<Result<int>>();
+    }
+
+    [Fact]
+    public void ValidationResult_WithErrors_with_zero_errors_throws_ArgumentException()
+    {
+        Should.Throw<ArgumentException>(() => ValidationResult.WithErrors());
+    }
+
+    [Fact]
+    public void ValidationResultT_WithErrors_with_zero_errors_throws_ArgumentException()
+    {
+        Should.Throw<ArgumentException>(() => ValidationResult<int>.WithErrors());
     }
 }

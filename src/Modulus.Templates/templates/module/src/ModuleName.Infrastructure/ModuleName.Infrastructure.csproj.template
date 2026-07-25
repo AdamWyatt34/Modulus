@@ -8,6 +8,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Analyzer reference doesn't flow across ProjectReference — MOD rules only run here if
+         referenced directly. -->
+    <PackageReference Include="ModulusKit.Analyzers" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
     <!-- {{ModuleName}}Module.cs registers the DbContext with UseSqlServer. -->

@@ -11,6 +11,7 @@ namespace Modulus.Generators;
 public sealed class StronglyTypedIdGenerator : IIncrementalGenerator
 {
     private const string AttributeFullName = "Modulus.Mediator.Abstractions.StronglyTypedIdAttribute";
+    private const string DbContextFullName = "Microsoft.EntityFrameworkCore.DbContext";
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
@@ -21,14 +22,24 @@ public sealed class StronglyTypedIdGenerator : IIncrementalGenerator
                 transform: static (ctx, _) => GetModel(ctx))
             .Where(static m => m is not null);
 
-        context.RegisterSourceOutput(provider, static (spc, model) => Execute(spc, model!.Value));
+        // Cacheable bool — same pattern ModuleRegistrationGenerator uses for IEndpointRouteBuilder.
+        // Gating the EF Core ValueConverter on this means a project without an EF Core reference
+        // (e.g. a Domain project, where strongly typed IDs are meant to live) never gets CS0234
+        // from generated code that references a type it can't see.
+        var hasEfCore = context.CompilationProvider
+            .Select(static (compilation, _) =>
+                compilation.GetTypeByMetadataName(DbContextFullName) is not null);
+
+        var combined = provider.Combine(hasEfCore);
+
+        context.RegisterSourceOutput(combined, static (spc, pair) => Execute(spc, pair.Left!.Value, pair.Right));
     }
 
     private static StronglyTypedIdResult? GetModel(GeneratorAttributeSyntaxContext context)
     {
         var structDeclaration = (TypeDeclarationSyntax)context.TargetNode;
         var symbol = (INamedTypeSymbol)context.TargetSymbol;
-        var location = structDeclaration.Identifier.GetLocation();
+        var location = EquatableLocation.FromLocation(structDeclaration.Identifier.GetLocation());
 
         // Validate: must be partial (check first — more actionable)
         var isPartial = structDeclaration.Modifiers.Any(SyntaxKind.PartialKeyword);
@@ -51,20 +62,31 @@ public sealed class StronglyTypedIdGenerator : IIncrementalGenerator
                 symbol.Name);
         }
 
+        // Validate: must be top-level. A nested type would need a qualified partial declaration
+        // to be extended; generating an unrelated top-level type of the same simple name is worse
+        // than refusing, so this is a diagnostic instead.
+        if (symbol.ContainingType is not null)
+        {
+            return new StronglyTypedIdResult(
+                null,
+                DiagnosticDescriptors.NestedStronglyTypedId,
+                location,
+                symbol.Name);
+        }
+
         // Extract backing type from attribute constructor argument
         var backingType = BackingType.Guid;
         var attributeData = context.Attributes[0];
         if (attributeData.ConstructorArguments.Length > 0)
         {
             var arg = attributeData.ConstructorArguments[0];
-            if (arg.Value is INamedTypeSymbol typeSymbol)
+            if (arg.Value is ITypeSymbol typeSymbol && !TryGetBackingType(typeSymbol, out backingType))
             {
-                backingType = typeSymbol.SpecialType switch
-                {
-                    SpecialType.System_Int32 => BackingType.Int,
-                    SpecialType.System_Int64 => BackingType.Long,
-                    _ => BackingType.Guid
-                };
+                return new StronglyTypedIdResult(
+                    null,
+                    DiagnosticDescriptors.UnsupportedBackingType,
+                    location,
+                    symbol.Name);
             }
         }
 
@@ -72,20 +94,46 @@ public sealed class StronglyTypedIdGenerator : IIncrementalGenerator
             ? null
             : symbol.ContainingNamespace.ToDisplayString();
 
+        var accessibility = symbol.DeclaredAccessibility == Accessibility.Internal ? "internal" : "public";
+
         return new StronglyTypedIdResult(
-            new StronglyTypedIdModel(symbol.Name, namespaceName, backingType),
+            new StronglyTypedIdModel(symbol.Name, namespaceName, backingType, accessibility),
             null,
             null,
             null);
     }
 
-    private static void Execute(SourceProductionContext context, StronglyTypedIdResult result)
+    private static bool TryGetBackingType(ITypeSymbol typeSymbol, out BackingType backingType)
+    {
+        switch (typeSymbol.SpecialType)
+        {
+            case SpecialType.System_Int32:
+                backingType = BackingType.Int;
+                return true;
+            case SpecialType.System_Int64:
+                backingType = BackingType.Long;
+                return true;
+        }
+
+        if (typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::System.Guid")
+        {
+            backingType = BackingType.Guid;
+            return true;
+        }
+
+        // Unsupported (e.g. typeof(string)) — caller reports a diagnostic instead of silently
+        // falling back to Guid.
+        backingType = BackingType.Guid;
+        return false;
+    }
+
+    private static void Execute(SourceProductionContext context, StronglyTypedIdResult result, bool includeEfCoreValueConverter)
     {
         if (result.Diagnostic is not null)
         {
             context.ReportDiagnostic(Diagnostic.Create(
                 result.Diagnostic,
-                result.DiagnosticLocation,
+                result.DiagnosticLocation?.ToLocation() ?? Location.None,
                 result.DiagnosticArg));
             return;
         }
@@ -94,11 +142,35 @@ public sealed class StronglyTypedIdGenerator : IIncrementalGenerator
             return;
 
         var model = result.Model.Value;
-        var source = GenerateSource(model);
-        context.AddSource($"{model.TypeName}.g.cs", SourceText.From(source, Encoding.UTF8));
+        var source = GenerateSource(model, includeEfCoreValueConverter);
+        context.AddSource(GetHintName(model), SourceText.From(source, Encoding.UTF8));
     }
 
-    internal static string GenerateSource(StronglyTypedIdModel model)
+    private static string GetHintName(StronglyTypedIdModel model)
+    {
+        // Namespace-qualified and sanitized so two [StronglyTypedId] structs with the same name
+        // in different namespaces of one assembly don't collide on AddSource's hint name (which
+        // would fault the generator with a duplicate-hintName exception and lose every generated
+        // ID in the assembly).
+        var qualifiedName = model.Namespace is null
+            ? model.TypeName
+            : $"{model.Namespace}.{model.TypeName}";
+
+        return $"{Sanitize(qualifiedName)}.g.cs";
+    }
+
+    private static string Sanitize(string value)
+    {
+        var sb = new StringBuilder(value.Length);
+        foreach (var c in value)
+        {
+            sb.Append(char.IsLetterOrDigit(c) || c is '_' or '.' ? c : '_');
+        }
+
+        return sb.ToString();
+    }
+
+    internal static string GenerateSource(StronglyTypedIdModel model, bool includeEfCoreValueConverter)
     {
         var typeName = model.TypeName;
         var backingTypeName = GetBackingTypeName(model.BackingType);
@@ -114,10 +186,12 @@ public sealed class StronglyTypedIdGenerator : IIncrementalGenerator
             sb.AppendLine();
         }
 
-        // Partial struct with attributes
+        // Partial struct with attributes — accessibility mirrors the declared type instead of
+        // being hardcoded, so an `internal` strongly typed ID doesn't get a `public` partial
+        // (CS0262-adjacent inconsistency) generated for it.
         sb.AppendLine($"[System.ComponentModel.TypeConverter(typeof({typeName}.{typeName}TypeConverter))]");
         sb.AppendLine($"[System.Text.Json.Serialization.JsonConverter(typeof({typeName}.{typeName}JsonConverter))]");
-        sb.AppendLine($"public readonly partial record struct {typeName}");
+        sb.AppendLine($"{model.Accessibility} readonly partial record struct {typeName}");
         sb.AppendLine("{");
         sb.AppendLine($"    public {backingTypeName} Value {{ get; }}");
         sb.AppendLine();
@@ -143,14 +217,19 @@ public sealed class StronglyTypedIdGenerator : IIncrementalGenerator
         sb.AppendLine("    public override string ToString() => Value.ToString();");
         sb.AppendLine();
 
-        // ValueConverter (nested inside the partial struct to stay in the same namespace)
-        sb.AppendLine($"    [global::System.CodeDom.Compiler.GeneratedCode(\"Modulus.Generators.StronglyTypedIdGenerator\", \"{GeneratorVersion.Value}\")]");
-        sb.AppendLine($"    public sealed class {typeName}ValueConverter : Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<{typeName}, {backingTypeName}>");
-        sb.AppendLine("    {");
-        sb.AppendLine($"        public {typeName}ValueConverter()");
-        sb.AppendLine($"            : base(id => id.Value, value => new {typeName}(value)) {{ }}");
-        sb.AppendLine("    }");
-        sb.AppendLine();
+        if (includeEfCoreValueConverter)
+        {
+            // ValueConverter (nested inside the partial struct to stay in the same namespace).
+            // Only emitted when the compilation references EF Core — otherwise this is CS0234 in
+            // generated code, exactly in Domain projects where strongly typed IDs are meant to live.
+            sb.AppendLine($"    [global::System.CodeDom.Compiler.GeneratedCode(\"Modulus.Generators.StronglyTypedIdGenerator\", \"{GeneratorVersion.Value}\")]");
+            sb.AppendLine($"    public sealed class {typeName}ValueConverter : Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<{typeName}, {backingTypeName}>");
+            sb.AppendLine("    {");
+            sb.AppendLine($"        public {typeName}ValueConverter()");
+            sb.AppendLine($"            : base(id => id.Value, value => new {typeName}(value)) {{ }}");
+            sb.AppendLine("    }");
+            sb.AppendLine();
+        }
 
         // JsonConverter
         var (jsonRead, jsonWrite) = model.BackingType switch
@@ -171,11 +250,12 @@ public sealed class StronglyTypedIdGenerator : IIncrementalGenerator
         sb.AppendLine("    }");
         sb.AppendLine();
 
-        // TypeConverter
+        // TypeConverter — parses with CultureInfo.InvariantCulture so a numeric ID's textual
+        // round-trip is independent of the current thread's culture (e.g. thousands separators).
         var parseExpr = model.BackingType switch
         {
-            BackingType.Int => "int.Parse(s)",
-            BackingType.Long => "long.Parse(s)",
+            BackingType.Int => "int.Parse(s, System.Globalization.CultureInfo.InvariantCulture)",
+            BackingType.Long => "long.Parse(s, System.Globalization.CultureInfo.InvariantCulture)",
             _ => "System.Guid.Parse(s)"
         };
 
@@ -216,18 +296,21 @@ internal readonly struct StronglyTypedIdModel : IEquatable<StronglyTypedIdModel>
     public string TypeName { get; }
     public string? Namespace { get; }
     public BackingType BackingType { get; }
+    public string Accessibility { get; }
 
-    public StronglyTypedIdModel(string typeName, string? ns, BackingType backingType)
+    public StronglyTypedIdModel(string typeName, string? ns, BackingType backingType, string accessibility)
     {
         TypeName = typeName;
         Namespace = ns;
         BackingType = backingType;
+        Accessibility = accessibility;
     }
 
     public bool Equals(StronglyTypedIdModel other) =>
         TypeName == other.TypeName &&
         Namespace == other.Namespace &&
-        BackingType == other.BackingType;
+        BackingType == other.BackingType &&
+        Accessibility == other.Accessibility;
 
     public override bool Equals(object obj) =>
         obj is StronglyTypedIdModel other && Equals(other);
@@ -239,6 +322,7 @@ internal readonly struct StronglyTypedIdModel : IEquatable<StronglyTypedIdModel>
             var hash = TypeName?.GetHashCode() ?? 0;
             hash = (hash * 397) ^ (Namespace?.GetHashCode() ?? 0);
             hash = (hash * 397) ^ (int)BackingType;
+            hash = (hash * 397) ^ (Accessibility?.GetHashCode() ?? 0);
             return hash;
         }
     }
@@ -248,13 +332,13 @@ internal readonly struct StronglyTypedIdResult : IEquatable<StronglyTypedIdResul
 {
     public StronglyTypedIdModel? Model { get; }
     public DiagnosticDescriptor? Diagnostic { get; }
-    public Location? DiagnosticLocation { get; }
+    public EquatableLocation? DiagnosticLocation { get; }
     public string? DiagnosticArg { get; }
 
     public StronglyTypedIdResult(
         StronglyTypedIdModel? model,
         DiagnosticDescriptor? diagnostic,
-        Location? diagnosticLocation,
+        EquatableLocation? diagnosticLocation,
         string? diagnosticArg)
     {
         Model = model;
@@ -266,6 +350,7 @@ internal readonly struct StronglyTypedIdResult : IEquatable<StronglyTypedIdResul
     public bool Equals(StronglyTypedIdResult other) =>
         Equals(Model, other.Model) &&
         Equals(Diagnostic, other.Diagnostic) &&
+        Equals(DiagnosticLocation, other.DiagnosticLocation) &&
         DiagnosticArg == other.DiagnosticArg;
 
     public override bool Equals(object obj) =>
@@ -277,6 +362,7 @@ internal readonly struct StronglyTypedIdResult : IEquatable<StronglyTypedIdResul
         {
             var hash = Model?.GetHashCode() ?? 0;
             hash = (hash * 397) ^ (Diagnostic?.GetHashCode() ?? 0);
+            hash = (hash * 397) ^ (DiagnosticLocation?.GetHashCode() ?? 0);
             hash = (hash * 397) ^ (DiagnosticArg?.GetHashCode() ?? 0);
             return hash;
         }

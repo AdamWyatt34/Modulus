@@ -149,4 +149,57 @@ public class UpgradeHandlerTests
         exit.ShouldBe(1);
         _console.ErrorLines.ShouldContain(e => e.Contains("Could not find a solution file"));
     }
+
+    // ── --version validation ──────────────────────────────────────
+
+    [Theory]
+    [InlineData("2.0.0\" Foo=\"bar")]
+    [InlineData("2.0.0$1")]
+    [InlineData("$(EvilProp)")]
+    [InlineData("not-a-version")]
+    [InlineData("1")]
+    public async Task Upgrade_rejects_invalid_version_and_writes_nothing(string badVersion)
+    {
+        Seed();
+        var handler = CreateHandler();
+
+        var exit = await handler.ExecuteAsync(badVersion, Slnx, dryRun: false);
+
+        exit.ShouldBe(1);
+        _console.ErrorLines.ShouldContain(e => e.Contains("not a valid NuGet package version"));
+        _fs.ReadAllText(PropsPath).ShouldBe(Props);
+    }
+
+    [Theory]
+    [InlineData("1.2.3")]
+    [InlineData("1.2")]
+    [InlineData("1.2.3.4")]
+    [InlineData("1.2.3-preview.1")]
+    [InlineData("1.2.3-alpha.0.5+abc123")]
+    public async Task Upgrade_accepts_legitimate_version_shapes(string goodVersion)
+    {
+        Seed();
+        var handler = CreateHandler();
+
+        var exit = await handler.ExecuteAsync(goodVersion, Slnx, dryRun: false);
+
+        exit.ShouldBe(0);
+        _fs.ReadAllText(PropsPath).ShouldContain($"Version=\"{goodVersion}\"");
+    }
+
+    [Fact]
+    public async Task Upgrade_version_containing_dollar_sign_is_rejected_before_any_replace_runs()
+    {
+        // Regression: a literal "$" in the replacement value used to risk Regex.Replace
+        // interpreting it as a backreference ($1, $$, ...) and corrupting the XML. The version
+        // validator now rejects it outright, and the replacement additionally uses a
+        // MatchEvaluator so the value is never parsed as a replacement pattern either way.
+        Seed();
+        var handler = CreateHandler();
+
+        var exit = await handler.ExecuteAsync("2.0.0$$1", Slnx, dryRun: false);
+
+        exit.ShouldBe(1);
+        _fs.ReadAllText(PropsPath).ShouldBe(Props);
+    }
 }

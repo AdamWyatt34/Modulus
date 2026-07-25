@@ -14,6 +14,7 @@ public class RemoveModuleHandlerTests
 
     private const string Slnx = @"C:\work\EShop\EShop.slnx";
     private const string ModuleRoot = @"C:\work\EShop\src\Modules\Catalog";
+    private const string HostCsprojPath = @"C:\work\EShop\src\EShop.WebApi\EShop.WebApi.csproj";
 
     private RemoveModuleHandler CreateHandler()
     {
@@ -26,6 +27,22 @@ public class RemoveModuleHandlerTests
         _fs.SetCurrentDirectory(@"C:\work\EShop");
         _fs.SeedFile(Slnx, "<Solution></Solution>");
         _fs.SeedFile(@"C:\work\EShop\src\EShop.WebApi\Program.cs", "// program");
+    }
+
+    /// <summary>
+    /// Seeds the host WebApi csproj the way `add-module` (post-C2) would have left it: a
+    /// ProjectReference into the target module's Infrastructure project, alongside an unrelated
+    /// reference that must survive the removal untouched.
+    /// </summary>
+    private void SeedHostCsprojReferencingCatalog()
+    {
+        _fs.SeedFile(HostCsprojPath,
+            "<Project Sdk=\"Microsoft.NET.Sdk.Web\">\n" +
+            "  <ItemGroup>\n" +
+            "    <ProjectReference Include=\"..\\BuildingBlocks.Application\\BuildingBlocks.Application.csproj\" />\n" +
+            "    <ProjectReference Include=\"..\\Modules\\Catalog\\src\\Catalog.Infrastructure\\Catalog.Infrastructure.csproj\" />\n" +
+            "  </ItemGroup>\n" +
+            "</Project>\n");
     }
 
     private void SeedCatalogModule()
@@ -259,5 +276,177 @@ public class RemoveModuleHandlerTests
         await handler.ExecuteAsync("Catalog", Slnx, confirm: true, force: false);
 
         _fs.AllFiles.Keys.ShouldNotContain(k => k.Contains(".."));
+    }
+
+    // ── C2 / H-CLI1: host wiring is cleaned up on removal ────────────────────────────────
+
+    [Fact]
+    public async Task RemoveModule_with_confirm_removes_host_project_reference()
+    {
+        SeedModulusSolution();
+        SeedCatalogModule();
+        SeedHostCsprojReferencingCatalog();
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync("Catalog", Slnx, confirm: true, force: false);
+
+        result.ShouldBe(0);
+        var hostCsproj = _fs.ReadAllText(HostCsprojPath);
+        hostCsproj.ShouldNotContain("Catalog.Infrastructure.csproj");
+        hostCsproj.ShouldContain("BuildingBlocks.Application.csproj");
+    }
+
+    [Fact]
+    public async Task RemoveModule_with_confirm_prints_host_reference_removed()
+    {
+        SeedModulusSolution();
+        SeedCatalogModule();
+        SeedHostCsprojReferencingCatalog();
+        var handler = CreateHandler();
+
+        await handler.ExecuteAsync("Catalog", Slnx, confirm: true, force: false);
+
+        _console.Lines.ShouldContain(l =>
+            l.Contains("Removed project reference") && l.Contains("EShop.WebApi") && l.Contains("Catalog.Infrastructure"));
+    }
+
+    [Fact]
+    public async Task RemoveModule_dry_run_previews_host_reference_removal_without_mutating()
+    {
+        SeedModulusSolution();
+        SeedCatalogModule();
+        SeedHostCsprojReferencingCatalog();
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync("Catalog", Slnx, confirm: false, force: false);
+
+        result.ShouldBe(0);
+        _console.Lines.ShouldContain(l => l.Contains("Remove project reference") && l.Contains("Catalog.Infrastructure"));
+        _fs.ReadAllText(HostCsprojPath).ShouldContain("Catalog.Infrastructure.csproj");
+    }
+
+    [Fact]
+    public async Task RemoveModule_host_reference_alone_does_not_require_force()
+    {
+        // The host reference is machinery add-module wired; it must not be treated as a
+        // --force-gated "still referenced" dependency the way a sibling module's is.
+        SeedModulusSolution();
+        SeedCatalogModule();
+        SeedHostCsprojReferencingCatalog();
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync("Catalog", Slnx, confirm: true, force: false);
+
+        result.ShouldBe(0);
+        _console.ErrorLines.ShouldNotContain(l => l.Contains("still referenced"));
+    }
+
+    [Fact]
+    public async Task RemoveModule_without_host_reference_succeeds_without_mentioning_it()
+    {
+        SeedModulusSolution();
+        SeedCatalogModule();
+        // No host csproj seeded at all — must degrade gracefully, not throw.
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync("Catalog", Slnx, confirm: true, force: false);
+
+        result.ShouldBe(0);
+        _console.Lines.ShouldNotContain(l => l.Contains("Removed project reference"));
+    }
+
+    [Fact]
+    public async Task RemoveModule_host_reference_removal_is_idempotent_when_already_absent()
+    {
+        SeedModulusSolution();
+        SeedCatalogModule();
+        // Host csproj exists but does not reference Catalog — e.g. a --no-endpoints module the
+        // host wiring failed for. Removal must not error trying to "un-wire" a reference that
+        // was never there.
+        _fs.SeedFile(HostCsprojPath,
+            "<Project Sdk=\"Microsoft.NET.Sdk.Web\">\n" +
+            "  <ItemGroup>\n" +
+            "    <ProjectReference Include=\"..\\BuildingBlocks.Application\\BuildingBlocks.Application.csproj\" />\n" +
+            "  </ItemGroup>\n" +
+            "</Project>\n");
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync("Catalog", Slnx, confirm: true, force: false);
+
+        result.ShouldBe(0);
+        _console.Lines.ShouldNotContain(l => l.Contains("Removed project reference"));
+        _fs.ReadAllText(HostCsprojPath).ShouldContain("BuildingBlocks.Application.csproj");
+    }
+
+    // ── H-CLI1: blocking scan now covers the host + non-module projects ──────────────────
+
+    [Fact]
+    public async Task RemoveModule_blocks_when_root_level_test_project_references_module()
+    {
+        SeedModulusSolution();
+        SeedCatalogModule();
+        var rootTestCsproj = @"C:\work\EShop\tests\EShop.Tests.Integration\EShop.Tests.Integration.csproj";
+        _fs.SeedFile(
+            rootTestCsproj,
+            "<Project Sdk=\"Microsoft.NET.Sdk\">\n" +
+            "  <ItemGroup>\n" +
+            "    <ProjectReference Include=\"..\\..\\src\\Modules\\Catalog\\src\\Catalog.Api\\Catalog.Api.csproj\" />\n" +
+            "  </ItemGroup>\n" +
+            "</Project>\n");
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync("Catalog", Slnx, confirm: true, force: false);
+
+        result.ShouldBe(1);
+        _console.ErrorLines.ShouldContain(l => l.Contains("still referenced"));
+        // The printed line is "{referencing project} -> {its own csproj path}" — it identifies who
+        // references the module being removed, not the specific target path inside that project.
+        _console.ErrorLines.ShouldContain(l => l.Contains("EShop.Tests.Integration") && l.Contains("EShop.Tests.Integration.csproj"));
+        _fs.DirectoryExists(ModuleRoot).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task RemoveModule_blocks_when_buildingblocks_project_references_module()
+    {
+        SeedModulusSolution();
+        SeedCatalogModule();
+        _fs.SeedFile(
+            @"C:\work\EShop\src\BuildingBlocks.Infrastructure\BuildingBlocks.Infrastructure.csproj",
+            "<Project Sdk=\"Microsoft.NET.Sdk\">\n" +
+            "  <ItemGroup>\n" +
+            "    <ProjectReference Include=\"..\\Modules\\Catalog\\src\\Catalog.Integration\\Catalog.Integration.csproj\" />\n" +
+            "  </ItemGroup>\n" +
+            "</Project>\n");
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync("Catalog", Slnx, confirm: true, force: false);
+
+        result.ShouldBe(1);
+        _console.ErrorLines.ShouldContain(l =>
+            l.Contains("BuildingBlocks.Infrastructure") && l.Contains("BuildingBlocks.Infrastructure.csproj"));
+    }
+
+    [Fact]
+    public async Task RemoveModule_root_level_reference_with_force_proceeds_and_is_left_dangling()
+    {
+        // Unlike the host's own registration reference, a hand-authored reference elsewhere in
+        // the solution is not auto-fixed — it is the user's dependency to resolve, exactly like
+        // the existing sibling-module --force behavior.
+        SeedModulusSolution();
+        SeedCatalogModule();
+        var rootTestCsproj = @"C:\work\EShop\tests\EShop.Tests.Integration\EShop.Tests.Integration.csproj";
+        _fs.SeedFile(
+            rootTestCsproj,
+            "<Project Sdk=\"Microsoft.NET.Sdk\">\n" +
+            "  <ItemGroup>\n" +
+            "    <ProjectReference Include=\"..\\..\\src\\Modules\\Catalog\\src\\Catalog.Api\\Catalog.Api.csproj\" />\n" +
+            "  </ItemGroup>\n" +
+            "</Project>\n");
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync("Catalog", Slnx, confirm: true, force: true);
+
+        result.ShouldBe(0);
+        _fs.ReadAllText(rootTestCsproj).ShouldContain("Catalog.Api.csproj");
     }
 }

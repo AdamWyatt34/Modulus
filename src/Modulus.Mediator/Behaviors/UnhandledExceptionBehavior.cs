@@ -18,6 +18,12 @@ public sealed class UnhandledExceptionBehavior<TRequest, TResponse>(
         {
             return await next();
         }
+        catch (OperationCanceledException)
+        {
+            // Cancellation is not an unexpected failure — let it propagate instead of
+            // converting it into a Result so callers can observe it as cancellation.
+            throw;
+        }
         catch (Exception ex)
         {
             var requestName = typeof(TRequest).Name;

@@ -183,7 +183,7 @@ public sealed class CreateProductHandler : ICommandHandler<CreateProduct, Guid>
     {
         var product = Product.Create(command.Name, command.Price);
         await _repository.AddAsync(product, cancellationToken);
-        await _unitOfWork.CommitAsync(cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         // Invalidate list cache
         await _cache.RemoveAsync("products:list:*", cancellationToken);

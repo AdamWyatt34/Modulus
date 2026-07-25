@@ -426,4 +426,150 @@ public class ModuleRegistrationGeneratorTests
         var errors = outputCompilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
         errors.ShouldBeEmpty();
     }
+
+    [Fact]
+    public void Generate_SingleModule_CallsKeepGlobalPrefix()
+    {
+        var moduleSource = BuildModuleSource("""
+            namespace Orders.Infrastructure
+            {
+                public sealed class OrdersModule : IModuleRegistration
+                {
+                    public static IServiceCollection ConfigureServices(
+                        IServiceCollection services, IConfiguration configuration)
+                        => services;
+                    public static IEndpointRouteBuilder ConfigureEndpoints(
+                        IEndpointRouteBuilder endpoints)
+                        => endpoints;
+                }
+            }
+            """);
+
+        var hostSource = "namespace TestHost { public class Marker { } }";
+
+        var (outputCompilation, _, runResult) = GeneratorTestHelper.RunModuleRegistrationGenerator(
+            hostSource, "TestHost", moduleSource);
+
+        var generated = GeneratorTestHelper.GetGeneratedSource(runResult, "GeneratedModuleRegistration.g.cs");
+
+        // Stripping `global::` lets a host-side namespace segment (e.g. a host type literally
+        // named `Orders`) shadow the module's own top-level namespace, producing CS0234.
+        generated.ShouldContain("global::Orders.Infrastructure.OrdersModule.ConfigureServices(services, configuration);");
+        generated.ShouldContain("global::Orders.Infrastructure.OrdersModule.ConfigureEndpoints(app);");
+
+        var errors = outputCompilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
+        errors.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Generate_ModuleDeclaredInHostAssembly_IsDiscovered()
+    {
+        // Single-assembly monolith: the module type lives directly in the current (host)
+        // compilation, not in a separately-referenced project. Scanning only referenced
+        // assemblies silently ignores it.
+        var hostSource = BuildModuleSource("""
+            namespace Orders.Infrastructure
+            {
+                public sealed class OrdersModule : IModuleRegistration
+                {
+                    public static IServiceCollection ConfigureServices(
+                        IServiceCollection services, IConfiguration configuration)
+                        => services;
+                    public static IEndpointRouteBuilder ConfigureEndpoints(
+                        IEndpointRouteBuilder endpoints)
+                        => endpoints;
+                }
+            }
+            """) + "\nnamespace TestHost { public class Marker { } }\n";
+
+        var (outputCompilation, _, runResult) = GeneratorTestHelper.RunModuleRegistrationGenerator(
+            hostSource, "TestHost");
+
+        var generated = GeneratorTestHelper.GetGeneratedSource(runResult, "GeneratedModuleRegistration.g.cs");
+
+        generated.ShouldContain("Orders.Infrastructure.OrdersModule.ConfigureServices(services, configuration);");
+        generated.ShouldContain("Orders.Infrastructure.OrdersModule.ConfigureEndpoints(app);");
+
+        var errors = outputCompilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
+        errors.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Generate_ModulusModuleAttributeWithWrongConfigureServicesSignature_EmitsMODGEN004AndSkips()
+    {
+        var moduleSource = SharedUsings
+            + "\nusing Modulus.Mediator.Abstractions;\n"
+            + ModulusModuleAttributeSource + "\n"
+            + """
+            namespace Broken.Infrastructure
+            {
+                [ModulusModule]
+                public sealed class BrokenModule
+                {
+                    // Wrong signature — ConfigureServices must be (IServiceCollection, IConfiguration).
+                    // Discovery must validate this instead of generating a non-compiling call.
+                    public static IServiceCollection ConfigureServices(IServiceCollection services)
+                        => services;
+
+                    public static IEndpointRouteBuilder ConfigureEndpoints(
+                        IEndpointRouteBuilder endpoints)
+                        => endpoints;
+                }
+            }
+            """;
+
+        var hostSource = "namespace TestHost { public class Marker { } }";
+
+        var (_, _, runResult) = GeneratorTestHelper.RunModuleRegistrationGenerator(
+            hostSource, "TestHost", moduleSource);
+
+        var generated = GeneratorTestHelper.GetGeneratedSource(runResult, "GeneratedModuleRegistration.g.cs");
+        generated.ShouldNotContain("BrokenModule");
+
+        var diagnostics = runResult.Results
+            .SelectMany(r => r.Diagnostics)
+            .Where(d => d.Id == "MODGEN004")
+            .ToList();
+        diagnostics.Count.ShouldBeGreaterThan(0);
+        diagnostics.ShouldContain(d => d.GetMessage().Contains("ConfigureServices"));
+    }
+
+    [Fact]
+    public void Generate_ModulusModuleAttributeWithNonPublicConfigureServices_EmitsMODGEN004AndSkips()
+    {
+        var moduleSource = SharedUsings
+            + "\nusing Modulus.Mediator.Abstractions;\n"
+            + ModulusModuleAttributeSource + "\n"
+            + """
+            namespace Broken.Infrastructure
+            {
+                [ModulusModule]
+                public sealed class BrokenModule
+                {
+                    // Not public — discovery must not generate a call to an inaccessible method.
+                    internal static IServiceCollection ConfigureServices(
+                        IServiceCollection services, IConfiguration configuration)
+                        => services;
+
+                    public static IEndpointRouteBuilder ConfigureEndpoints(
+                        IEndpointRouteBuilder endpoints)
+                        => endpoints;
+                }
+            }
+            """;
+
+        var hostSource = "namespace TestHost { public class Marker { } }";
+
+        var (_, _, runResult) = GeneratorTestHelper.RunModuleRegistrationGenerator(
+            hostSource, "TestHost", moduleSource);
+
+        var generated = GeneratorTestHelper.GetGeneratedSource(runResult, "GeneratedModuleRegistration.g.cs");
+        generated.ShouldNotContain("BrokenModule");
+
+        var diagnostics = runResult.Results
+            .SelectMany(r => r.Diagnostics)
+            .Where(d => d.Id == "MODGEN004")
+            .ToList();
+        diagnostics.Count.ShouldBeGreaterThan(0);
+    }
 }

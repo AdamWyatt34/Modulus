@@ -144,8 +144,49 @@ public class OutboxCommandTests
     }
 
     [Fact]
-    public void ResolveConnection_falls_back_to_appsettings_messaging_connection_string()
+    public void ResolveConnection_uses_ConnectionStrings_Default_when_present()
     {
+        // The outbox is an EF Core database wired the same way every scaffolded DbContext is —
+        // ConnectionStrings:Default — not the broker's Messaging:ConnectionString.
+        _fs.SetCurrentDirectory(@"C:\app");
+        _fs.SeedFile(@"C:\app\appsettings.json", """{ "ConnectionStrings": { "Default": "Server=default-db" } }""");
+
+        var handler = new OutboxHandler(_fs, _console, _ => throw new InvalidOperationException("not invoked"));
+
+        var connection = handler.ResolveConnection(connectionString: null, configPath: null, OutboxProvider.Sqlite);
+
+        connection.ShouldNotBeNull();
+        connection!.ConnectionString.ShouldBe("Server=default-db");
+        connection.Provider.ShouldBe(OutboxProvider.Sqlite);
+        _console.Lines.ShouldNotContain(l => l.Contains("Warning"));
+    }
+
+    [Fact]
+    public void ResolveConnection_prefers_ConnectionStrings_Default_over_legacy_messaging_connection_string()
+    {
+        _fs.SetCurrentDirectory(@"C:\app");
+        _fs.SeedFile(@"C:\app\appsettings.json", """
+            {
+              "ConnectionStrings": { "Default": "Server=default-db" },
+              "Messaging": { "ConnectionString": "amqp://broker" }
+            }
+            """);
+
+        var handler = new OutboxHandler(_fs, _console, _ => throw new InvalidOperationException("not invoked"));
+
+        var connection = handler.ResolveConnection(connectionString: null, configPath: null, OutboxProvider.SqlServer);
+
+        connection.ShouldNotBeNull();
+        connection!.ConnectionString.ShouldBe("Server=default-db");
+    }
+
+    [Fact]
+    public void ResolveConnection_falls_back_to_legacy_messaging_connection_string_with_warning()
+    {
+        // Older configs with no ConnectionStrings:Default at all still resolve (rather than
+        // hard-failing), but a warning steers the user toward adding the correct entry — the
+        // fallback value is the *broker* string, which is the wrong database connection string
+        // for every real SQL/Sqlite provider.
         _fs.SetCurrentDirectory(@"C:\app");
         _fs.SeedFile(@"C:\app\appsettings.json", """{ "Messaging": { "ConnectionString": "Server=from-config" } }""");
 
@@ -156,6 +197,21 @@ public class OutboxCommandTests
         connection.ShouldNotBeNull();
         connection!.ConnectionString.ShouldBe("Server=from-config");
         connection.Provider.ShouldBe(OutboxProvider.Sqlite);
+        _console.Lines.ShouldContain(l => l.Contains("Warning") && l.Contains("Messaging:ConnectionString"));
+    }
+
+    [Fact]
+    public void ResolveConnection_reports_missing_connection_strings_default_and_returns_null()
+    {
+        _fs.SetCurrentDirectory(@"C:\app");
+        _fs.SeedFile(@"C:\app\appsettings.json", "{}");
+
+        var handler = new OutboxHandler(_fs, _console, _ => throw new InvalidOperationException("not invoked"));
+
+        var connection = handler.ResolveConnection(connectionString: null, configPath: null, OutboxProvider.SqlServer);
+
+        connection.ShouldBeNull();
+        _console.ErrorLines.ShouldContain(l => l.Contains("ConnectionStrings:Default"));
     }
 
     [Fact]
@@ -169,6 +225,20 @@ public class OutboxCommandTests
 
         connection.ShouldBeNull();
         _console.ErrorLines.ShouldContain(l => l.Contains("not found"));
+    }
+
+    [Fact]
+    public async Task ListFailed_session_factory_failure_reports_friendly_error()
+    {
+        // The store/session construction must happen inside the try — a bad connection string
+        // (or any other failure while opening the outbox database) must produce a friendly
+        // message rather than an unhandled exception.
+        var handler = new OutboxHandler(_fs, _console, _ => throw new InvalidOperationException("bad connection string"));
+
+        var exit = await handler.ListFailedAsync(TestConnection, maxAttempts: 5);
+
+        exit.ShouldBe(1);
+        _console.ErrorLines.ShouldContain(l => l.Contains("bad connection string"));
     }
 
     private sealed class InMemoryOutboxAdminSession(OutboxDbContext context) : IOutboxAdminSession

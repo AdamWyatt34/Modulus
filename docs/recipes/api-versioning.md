@@ -44,12 +44,12 @@ var app = builder.Build();
 
 ### Step 3: Create Versioned Endpoint Groups
 
-Organize endpoint groups by version in your module's Api layer:
+Organize endpoint groups by version in the module's registration class (`CatalogModule.cs` in the Infrastructure layer -- `IModuleRegistration` uses static members), replacing the scaffolded `MapCatalogEndpoints()` call:
 
 ```csharp
-public class CatalogModuleRegistration : IModuleRegistration
+public sealed class CatalogModule : IModuleRegistration
 {
-    public void ConfigureEndpoints(IEndpointRouteBuilder app)
+    public static IEndpointRouteBuilder ConfigureEndpoints(IEndpointRouteBuilder app)
     {
         var versionSet = app.NewApiVersionSet()
             .HasApiVersion(new ApiVersion(1, 0))
@@ -70,6 +70,8 @@ public class CatalogModuleRegistration : IModuleRegistration
             .MapToApiVersion(new ApiVersion(2, 0));
 
         MapV2Endpoints(v2);
+
+        return app;
     }
 
     private static void MapV1Endpoints(RouteGroupBuilder group)

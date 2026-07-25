@@ -74,11 +74,11 @@ graph TB
         GEN[Modulus.Generators - Source Generators]
         ANZ[Modulus.Analyzers - Compile-time Analysis]
     end
-    API --> CA & OA
+    API --> CI & OI
     CA --> CAP --> CD
-    CA --> CI
+    CI --> CA
     OA --> OAP --> OD
-    OA --> OI
+    OI --> OA
     CI & OI --> MED & MSG
     CD & OD --> BB_D
     CAP & OAP --> BB_A
@@ -129,14 +129,14 @@ Every module includes a dedicated architecture test project that uses [NetArchTe
 
 ```csharp
 [Fact]
-public void Domain_Should_Not_Reference_Infrastructure()
+public void Domain_should_not_depend_on_Infrastructure()
 {
-    var result = Types.InAssembly(DomainAssembly)
+    Types.InAssembly(DomainAssembly)
         .ShouldNot()
-        .HaveDependencyOn("EShop.Modules.Catalog.Infrastructure")
-        .GetResult();
-
-    result.IsSuccessful.Should().BeTrue();
+        .HaveDependencyOn("EShop.Catalog.Infrastructure")
+        .GetResult()
+        .IsSuccessful
+        .ShouldBeTrue();
 }
 ```
 

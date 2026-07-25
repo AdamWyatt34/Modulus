@@ -59,7 +59,7 @@ public sealed record OrderStatusChangedEvent(
 ```
 
 ::: tip Use a base record for convenience
-If you find yourself repeating the `Id` and `OccurredOnUtc` boilerplate, consider creating a base record in your SharedKernel:
+Scaffolded solutions already ship one: `DomainEvent` in `BuildingBlocks.Domain` provides the `Id` and `OccurredOnUtc` defaults. If you are not using the scaffold, the same base record is a few lines:
 
 <!-- verify -->
 ```csharp
@@ -250,16 +250,24 @@ public async Task<Result<Guid>> Handle(
 }
 ```
 
+::: info Dispatch is by runtime type
+`Publish` resolves handlers from the event's **runtime** type, not the compile-time type of the variable. Publishing through an `IDomainEvent`-typed variable -- as in the loop above, where `order.DomainEvents` is a collection of `IDomainEvent` -- still reaches every handler registered for the concrete event type. The scaffolded `BaseDbContext` relies on exactly this loop to dispatch collected events after `SaveChangesAsync`.
+:::
+
 ## Error Handling Semantics
 
 When `mediator.Publish()` is called:
 
-1. All registered handlers for the event type are resolved from the DI container.
+1. All registered handlers for the event's runtime type are resolved from the DI container.
 2. All handlers are invoked.
 3. If one or more handlers throw an exception, the exceptions are collected and thrown as an `AggregateException` after all handlers have been given a chance to run.
 
 ::: warning Handlers do not short-circuit each other
 Unlike commands and queries, if one domain event handler fails, the remaining handlers still execute. All exceptions are aggregated. This ensures that a failure in one handler does not silently prevent other handlers from running.
+:::
+
+::: info Cancellation stops dispatch between handlers
+Cancellation is the exception to the run-everything rule: if the `CancellationToken` is cancelled, dispatch stops **between** handlers -- handlers that have not started yet are skipped and the cancellation propagates as a cancellation (it is not folded into the `AggregateException` as a handler failure).
 :::
 
 ## Domain Events vs Integration Events
@@ -270,14 +278,14 @@ Modulus distinguishes between domain events and integration events:
 |---|---|---|
 | **Scope** | In-process, within a single module or across modules in the same process | Cross-module, potentially cross-service via a message bus |
 | **Transport** | `IMediator.Publish()` -- direct in-memory dispatch | `IMessageBus` over the transport layer (InMemory, RabbitMQ, Azure Service Bus) |
-| **Delivery** | Synchronous (awaited), same transaction scope | Asynchronous, eventual consistency |
+| **Delivery** | Synchronous (awaited), in the caller's process and scope | Asynchronous, eventual consistency |
 | **Contract** | `IDomainEvent` | `IIntegrationEvent` |
 | **Coupling** | Handlers reference domain types directly | Handlers reference shared integration contracts |
 | **Failure model** | `AggregateException` thrown immediately | Retry policies, dead-letter queues, outbox pattern |
 
 **When to use domain events:**
 - Reacting to something that happened within the same bounded context
-- Side effects that should happen in the same transaction (e.g., updating a read model)
+- Side effects that should happen immediately and in-process (e.g., updating a read model); publish before `SaveChangesAsync` if the side effect must join the same transaction -- the scaffolded `BaseDbContext` dispatches collected events *after* the save
 - In-process event-driven workflows
 
 **When to use integration events:**

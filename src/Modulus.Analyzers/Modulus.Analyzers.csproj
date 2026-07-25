@@ -9,8 +9,12 @@
     <PackageId>ModulusKit.Analyzers</PackageId>
     <Description>Roslyn analyzers and code fixes for Modulus conventions.</Description>
     <PackageTags>analyzer;roslyn;code-fix</PackageTags>
-    <!-- RS2008: DiagnosticDescriptor missing helpLinkUri; RS1038: Workspaces ref needed for code fixes -->
-    <NoWarn>RS2008;RS1038</NoWarn>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <!-- RS2008: DiagnosticDescriptor missing helpLinkUri. RS1038 (Workspaces ref needed for code
+         fixes) no longer applies — code fixes live in the sibling Modulus.Analyzers.CodeFixes
+         project, so this assembly (the one csc actually loads as an analyzer) stays free of
+         Workspaces references entirely. -->
+    <NoWarn>RS2008</NoWarn>
     <MinVerTagPrefix>analyzers-v</MinVerTagPrefix>
     <MinVerDefaultPreReleaseIdentifiers>alpha.0</MinVerDefaultPreReleaseIdentifiers>
     <!-- Analyzer packaging: the DLL must live under analyzers/dotnet/cs, not lib/ —
@@ -23,9 +27,24 @@
     <IncludeSymbols>false</IncludeSymbols>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- Build-order dependency only: Modulus.Analyzers.CodeFixes' own compiled output is picked
+         up below via GetTargetPath and packed alongside this assembly (both under
+         analyzers/dotnet/cs in the same ModulusKit.Analyzers package). ReferenceOutputAssembly is
+         false so its Workspaces dependency never becomes a compile/manifest reference of this
+         (analyzer) assembly. -->
+    <ProjectReference Include="..\Modulus.Analyzers.CodeFixes\Modulus.Analyzers.CodeFixes.csproj"
+                       ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
   <Target Name="_AddAnalyzerAssetsToPackage">
+    <MSBuild Projects="..\Modulus.Analyzers.CodeFixes\Modulus.Analyzers.CodeFixes.csproj" Targets="GetTargetPath">
+      <Output TaskParameter="TargetOutputs" ItemName="_ModulusAnalyzersCodeFixesTargetPath" />
+    </MSBuild>
+
     <ItemGroup>
       <TfmSpecificPackageFile Include="$(OutputPath)\$(AssemblyName).dll" PackagePath="analyzers/dotnet/cs" />
+      <TfmSpecificPackageFile Include="@(_ModulusAnalyzersCodeFixesTargetPath)" PackagePath="analyzers/dotnet/cs" />
     </ItemGroup>
   </Target>
 
@@ -34,8 +53,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" PrivateAssets="all" />
     <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" PrivateAssets="all" />
     <PackageReference Include="MinVer" PrivateAssets="all" />
   </ItemGroup>

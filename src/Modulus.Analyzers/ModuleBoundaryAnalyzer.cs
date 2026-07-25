@@ -49,7 +49,7 @@ public sealed class ModuleBoundaryAnalyzer : DiagnosticAnalyzer
         if (usingName is null)
             return;
 
-        if (IsModuleBoundaryViolation(usingName, moduleInfo))
+        if (IsModuleBoundaryViolation(StripGlobalPrefix(usingName), moduleInfo))
         {
             var diagnostic = Diagnostic.Create(
                 DiagnosticDescriptors.ModuleBoundaryViolation,
@@ -61,6 +61,11 @@ public sealed class ModuleBoundaryAnalyzer : DiagnosticAnalyzer
         }
     }
 
+    private static string StripGlobalPrefix(string namespaceName) =>
+        namespaceName.StartsWith("global::", StringComparison.Ordinal)
+            ? namespaceName.Substring("global::".Length)
+            : namespaceName;
+
     private static bool IsModuleBoundaryViolation(string namespaceName, ModuleInfo moduleInfo)
     {
         // Must start with the same prefix
@@ -69,8 +74,9 @@ public sealed class ModuleBoundaryAnalyzer : DiagnosticAnalyzer
 
         var afterPrefix = namespaceName.Substring(moduleInfo.Prefix.Length + 1);
 
-        // Allow BuildingBlocks
-        if (afterPrefix.StartsWith("BuildingBlocks", StringComparison.Ordinal))
+        // Allow BuildingBlocks — require a dot-or-end boundary so a decoy like
+        // "BuildingBlocksEvil" (which merely prefix-matches "BuildingBlocks") is not exempted.
+        if (afterPrefix == "BuildingBlocks" || afterPrefix.StartsWith("BuildingBlocks.", StringComparison.Ordinal))
             return false;
 
         // Allow our own module

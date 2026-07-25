@@ -123,8 +123,10 @@ public sealed class MetricsBehaviorTests
     [Fact]
     public async Task Handle_MultipleRequests_AllMetersUseCorrectName()
     {
-        // Arrange — MetricsBehavior is transient; each mediator call creates a new behavior instance
-        // and calls IMeterFactory.Create once per instance.
+        // Arrange — MetricsBehavior is transient, so each mediator call creates a new behavior
+        // instance, but the Meter/Histogram pair is cached per IMeterFactory: IMeterFactory.Create
+        // must only be called once for the same factory instance, however many behavior instances
+        // (requests) share it.
         var meterFactory = new FakeMeterFactory();
         var services = new ServiceCollection();
         services.AddScoped<ICommandHandler<TestCommand>, TestCommandHandler>();
@@ -146,8 +148,8 @@ public sealed class MetricsBehaviorTests
             await mediator2.Send(new TestCommand("second"));
         }
 
-        // Assert — every meter created by any behavior instance uses the canonical meter name
-        meterFactory.CreatedMeters.ShouldNotBeEmpty();
+        // Assert — the meter is created once and reused, not once per behavior instance
+        meterFactory.CreatedMeters.Count.ShouldBe(1);
         meterFactory.CreatedMeters.ShouldAllBe(m => m.Name == "Modulus.Mediator");
     }
 }

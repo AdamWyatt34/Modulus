@@ -72,6 +72,8 @@ The inbox tracks processing at the `(eventId, handlerName)` level. If an event h
 
 A reservation is normally short-lived: claim, run the handler, mark processed. If the owning process crashes mid-handler, its reservation is left behind unprocessed. Such a reservation goes **stale** after `MessagingOptions.ConsumerReservationTimeout` (default 5 minutes) and is atomically taken over by whichever delivery encounters it next -- the broker's redelivery or a dead-letter replay. This preserves at-least-once semantics: a crash can never silently drop a handler execution.
 
+The timeout only matters for hard crashes. When a dispatch exhausts its in-process retries and the message is **dead-lettered**, the dispatcher releases the reservations it took (`ReleaseReservation`), so a prompt `modulus dlq replay` executes the outstanding handlers immediately instead of failing against a still-fresh reservation.
+
 ::: warning Size the timeout to your slowest handler
 `ConsumerReservationTimeout` must exceed the worst-case handler execution time. If a handler legitimately runs longer than the timeout, a concurrent delivery can treat its reservation as abandoned and execute the handler a second time.
 :::
@@ -95,6 +97,8 @@ public interface IInboxStore
     Task<bool> TryReserve(Guid messageId, string handlerName, TimeSpan staleAfter, CancellationToken cancellationToken = default);
 
     Task MarkConsumerProcessed(Guid messageId, string handlerName, CancellationToken cancellationToken = default);
+
+    Task ReleaseReservation(Guid messageId, string handlerName, CancellationToken cancellationToken = default);
 }
 ```
 
@@ -106,6 +110,7 @@ public interface IInboxStore
 | `HasBeenProcessed` | Checks if a specific handler has already **completed** a specific message (a live reservation does not count). |
 | `TryReserve` | Atomically claims the `(messageId, handlerName)` pair before execution. Returns `false` when already processed or when another delivery holds a reservation younger than `staleAfter`; takes over older unprocessed reservations. |
 | `MarkConsumerProcessed` | Marks a reserved pair as successfully processed. |
+| `ReleaseReservation` | Releases a reservation the caller holds for the pair, so a later delivery (e.g. a dead-letter replay) can reserve and execute immediately instead of waiting out the stale timeout. A no-op for already-processed pairs. |
 
 ## InboxMessage Model
 
@@ -264,9 +269,9 @@ The outbox and inbox patterns complement each other to provide reliable end-to-e
 
 ```mermaid
 flowchart LR
-    A[Command Handler] -->|Same TX| B[(Database)]
-    A -->|Same TX| C[Outbox Store]
-    C -->|Poll & Publish| D[OutboxProcessor]
+    A[Command Handler] -->|SaveChanges| B[(Database)]
+    A -->|Outbox row| C[Outbox Table]
+    C -->|Signal & Poll| D[OutboxProcessor]
     D -->|Publish| E[Broker]
     E -->|Deliver| F[ConsumerDispatcher]
     F -->|Check| G[Inbox Store]
@@ -276,7 +281,7 @@ flowchart LR
 
 | Layer | Pattern | Guarantee |
 |---|---|---|
-| **Publisher side** | Outbox | Messages are persisted atomically with domain changes and published at least once. |
+| **Publisher side** | Outbox | Messages are persisted as rows before publishing and published at least once. Atomic with the domain change when the outbox is [mapped into your application DbContext](./outbox-pattern#transactionality-the-two-configurations). |
 | **Consumer side** | Inbox | Messages are processed exactly once per handler, regardless of how many times they are delivered. |
 
 Together, they provide **effectively exactly-once processing**:

@@ -82,7 +82,7 @@ public class CreateOrderHandlerTests
         public Task MarkAsProcessed(IEnumerable<Guid> ids, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
 
-        public Task MarkAsFailed(Guid messageId, string error, CancellationToken cancellationToken = default)
+        public Task MarkAsFailed(Guid messageId, string error, DateTime? nextAttemptOnUtc = null, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
     }
 }

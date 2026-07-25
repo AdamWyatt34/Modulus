@@ -27,11 +27,17 @@ modulus outbox purge 8f3c2a1e-...
 
 | Option | Description |
 |---|---|
-| `--connection-string <VALUE>` | Database connection string. Default: `Messaging:ConnectionString` from `--config`. |
+| `--connection-string <VALUE>` | Database connection string. Default: `ConnectionStrings:Default` from `--config`. |
 | `--config <PATH>` | Path to appsettings.json (default: `./appsettings.json` in the current directory). |
 | `--provider <SqlServer\|Sqlite>` | EF Core provider for the outbox database (default: SqlServer). |
 
-Connection resolution order: `--connection-string` → `Messaging:ConnectionString` in the `--config` file → `./appsettings.json`.
+The outbox is an EF Core database — the same one every scaffolded module's `DbContext` uses — not the message broker. Connection resolution order:
+
+1. `--connection-string`, if passed.
+2. `ConnectionStrings:Default` in the `--config` file (default `./appsettings.json`).
+3. `Messaging:ConnectionString` in the same file, as a **legacy fallback only**, with a warning. That key is the *broker* connection string (`amqp://...`, a Service Bus namespace, ...); it happens to work here only because older scaffolds had nothing else to fall back to. Add `ConnectionStrings:Default` (or pass `--connection-string`) instead of relying on it.
+
+If none of these resolve, or the resolved connection string can't actually reach a database, the command reports a friendly error and exits `1` — it never lets an unhandled exception escape.
 
 ## Exit Codes
 

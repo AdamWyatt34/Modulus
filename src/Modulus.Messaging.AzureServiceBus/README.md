@@ -34,7 +34,7 @@ builder.Services.AddModulusAzureServiceBusTransport();
 | Subscription | `<EndpointName>` (50-char cap with stable hash suffix) | One per endpoint; replicas compete |
 | Dead-letter | built-in subscription DLQ | Messages that exhausted `ConsumerRetry` (reason `RetriesExhausted`) |
 
-Lock auto-renewal is capped at 5 minutes — keep the worst-case sum of `ConsumerRetry` delays below that. `AutoProvision` (default `true`) creates topics/subscriptions at startup and requires Manage rights; pre-create entities and set it to `false` for least-privilege deployments.
+Lock auto-renewal scales with your retry configuration: the processor's `MaxAutoLockRenewalDuration` is computed from the worst-case sum of `ConsumerRetry` delays plus a safety margin, so long retry budgets no longer lose the message lock mid-dispatch. Prefetch is disabled (`PrefetchCount = 0`) so buffered messages cannot expire their locks before processing starts. `AutoProvision` (default `true`) creates topics/subscriptions at startup and requires Manage rights; pre-create entities and set it to `false` for least-privilege deployments.
 
 ## Testing
 

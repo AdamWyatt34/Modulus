@@ -10,9 +10,9 @@ Implement a **process manager** (the orchestration flavor of the saga pattern) d
 
 - A **state entity** persisted with EF Core that records where each workflow instance is
 - One `IIntegrationEventHandler<TEvent>` per event that advances the workflow
-- The **transactional outbox** to publish the next step's event atomically with the state change
+- The **transactional outbox** to publish the next step's event reliably alongside the state change
 
-Each handler does the same three things: load the state for the correlated instance, transition it, and save the follow-up event to the outbox **in the same database transaction**. The outbox guarantees the state change and the next message either both happen or neither does; the [inbox pattern](/messaging/inbox-pattern) guarantees a redelivered event does not advance the workflow twice.
+Each handler does the same three things: load the state for the correlated instance, transition it, and save the follow-up event to the outbox. For the "state change and next message both happen or neither does" guarantee that a workflow needs, use the outbox's [same-transaction configuration](/messaging/outbox-pattern#transactionality-the-two-configurations) -- write the outbox row through the module `DbContext` (which already maps the outbox table via `BaseDbContext`) so it commits in the same `SaveChangesAsync` as the state. The [inbox pattern](/messaging/inbox-pattern) guarantees a redelivered event does not advance the workflow twice.
 
 ::: tip No framework required
 Earlier versions of this recipe used MassTransit state machines. The same workflow is expressed here as plain handlers and an EF-mapped state entity -- fewer concepts, no framework-specific saga types, and every step is testable like any other handler.
@@ -72,7 +72,7 @@ Deriving from the `IntegrationEvent` base record supplies `EventId`, `OccurredOn
 Create an entity that represents one workflow instance, correlated by `OrderId`:
 
 ```csharp
-namespace EShop.Modules.Orders.Infrastructure.Sagas;
+namespace EShop.Orders.Infrastructure.Sagas;
 
 public enum OrderSagaStatus
 {
@@ -139,7 +139,7 @@ The transition methods return `false` when the event arrives in the wrong state 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace EShop.Modules.Orders.Infrastructure.Sagas;
+namespace EShop.Orders.Infrastructure.Sagas;
 
 public class OrderSagaStateConfiguration : IEntityTypeConfiguration<OrderSagaState>
 {
@@ -160,12 +160,16 @@ Add `DbSet<OrderSagaState>` to the module's existing `DbContext` -- the state ri
 
 ### Step 4: Implement the Transition Handlers
 
-Each handler advances the workflow and hands the next event to the outbox within one `SaveChangesAsync`:
+Each handler advances the workflow and hands the next event to the outbox:
+
+::: warning Atomicity depends on your outbox configuration
+The handlers below call `IOutboxStore.Save`, which with the **default** standalone store commits through its own `OutboxDbContext` -- a separate transaction from the `dbContext.SaveChangesAsync` that persists the state (and since `Save` runs first here, a state save that then fails leaves an already-published "next step" event). For strict atomicity, replace the `outbox.Save(...)` calls with `dbContext.Set<OutboxMessage>().Add(...)` so the event row and the state commit in one `SaveChangesAsync` -- see [the same-transaction configuration](/messaging/outbox-pattern#transactionality-the-two-configurations) for the exact shape.
+:::
 
 ```csharp
 using Modulus.Messaging.Abstractions;
 
-namespace EShop.Modules.Orders.Infrastructure.Sagas;
+namespace EShop.Orders.Infrastructure.Sagas;
 
 public sealed class OrderSubmittedHandler(
     OrdersDbContext dbContext,

@@ -32,99 +32,70 @@ The `--command` and `--query` options are mutually exclusive. An endpoint can be
 
 ## Generated Output
 
-### Endpoint wired to a command
-
-Running `modulus add-endpoint CreateProduct --module Catalog --method POST --route / --command CreateProduct --result-type Guid` generates:
-
-`src/Modules/Catalog/EShop.Modules.Catalog.Api/Endpoints/CreateProductEndpoint.cs`
-
-```csharp
-using EShop.Modules.Catalog.Application.Commands.CreateProduct;
-using EShop.SharedKernel.Application;
-
-namespace EShop.Modules.Catalog.Api.Endpoints;
-
-public static class CreateProductEndpoint
-{
-    public static void Map(RouteGroupBuilder group)
-    {
-        group.MapPost("/", async (
-            CreateProductCommand command,
-            IMediator mediator,
-            CancellationToken cancellationToken) =>
-        {
-            Result<Guid> result = await mediator.Send(command, cancellationToken);
-
-            return result.IsSuccess
-                ? Results.Created($"/{result.Value}", result.Value)
-                : Results.BadRequest(result.Error);
-        });
-    }
-}
-```
+The command generates a single file: `src/Modules/{Module}/src/{Module}.Api/Endpoints/{EndpointName}.cs` -- an `IEndpoint` implementation. No other file changes are needed: the module's `{Module}EndpointRegistration` discovers every `IEndpoint` in the Api assembly by reflection and maps it inside the module's route group.
 
 ### Endpoint wired to a query
 
-Running `modulus add-endpoint GetProduct --module Catalog --method GET --route "/{id:guid}" --query GetProductById --result-type ProductDto` generates:
-
-`src/Modules/Catalog/EShop.Modules.Catalog.Api/Endpoints/GetProductEndpoint.cs`
+Running `modulus add-endpoint GetProducts --module Catalog --method GET --route /products --query ListProducts --result-type ProductListDto` generates `src/Modules/Catalog/src/Catalog.Api/Endpoints/GetProducts.cs`:
 
 ```csharp
-using EShop.Modules.Catalog.Application.Queries.GetProductById;
-using EShop.SharedKernel.Application;
+namespace EShop.Catalog.Api.Endpoints;
 
-namespace EShop.Modules.Catalog.Api.Endpoints;
-
-public static class GetProductEndpoint
+public sealed class GetProducts : IEndpoint
 {
-    public static void Map(RouteGroupBuilder group)
+    public void MapEndpoint(IEndpointRouteBuilder app)
     {
-        group.MapGet("/{id:guid}", async (
-            Guid id,
-            IMediator mediator,
-            CancellationToken cancellationToken) =>
+        app.MapGet("/products", async (IMediator mediator, CancellationToken ct) =>
         {
-            var query = new GetProductByIdQuery { Id = id };
-            Result<ProductDto> result = await mediator.Send(query, cancellationToken);
-
-            return result.IsSuccess
-                ? Results.Ok(result.Value)
-                : Results.NotFound(result.Error);
-        });
+            var result = await mediator.Query(new ListProducts(), ct);
+            return result.Match(Results.Ok, ApiResults.Problem);
+        })
+        .WithName("GetProducts")
+        .Produces<ProductListDto>(StatusCodes.Status200OK)
+        .ProducesProblem(StatusCodes.Status500InternalServerError);
     }
 }
 ```
+
+### Endpoint wired to a command
+
+Running `modulus add-endpoint CreateProductEndpoint --module Catalog --method POST --route / --command CreateProduct --result-type Guid` generates `Endpoints/CreateProductEndpoint.cs` with the same shape, dispatching `mediator.Send(new CreateProduct(), ct)` and returning `201 Created` via `result.Match(...)` (or `204 No Content` when `--result-type` is omitted). Give the endpoint a different name than the command -- inside a class named `CreateProduct`, the generated `new CreateProduct()` would resolve to the endpoint class itself.
+
+::: warning The generated lambda takes no request data
+The scaffolded endpoint constructs the command/query with `new CreateProduct()` -- it does not bind the request body or route parameters. After generating, add the binding yourself, e.g. change the lambda to `async (CreateProduct command, IMediator mediator, CancellationToken ct)` for body binding, or add route-parameter arguments and pass them into the query's constructor.
+:::
 
 ### Bare endpoint (no command or query)
 
 When neither `--command` nor `--query` is specified, a minimal stub is generated that you can fill in manually:
 
 ```csharp
-namespace EShop.Modules.Catalog.Api.Endpoints;
+namespace EShop.Catalog.Api.Endpoints;
 
-public static class HealthCheckEndpoint
+public sealed class HealthCheck : IEndpoint
 {
-    public static void Map(RouteGroupBuilder group)
+    public void MapEndpoint(IEndpointRouteBuilder app)
     {
-        group.MapGet("/health", () =>
+        app.MapGet("/health", async (CancellationToken ct) =>
         {
-            // TODO: Implement endpoint logic
+            // TODO: Wire up to a command or query
             return Results.Ok();
-        });
+        })
+        .WithName("HealthCheck");
     }
 }
 ```
 
 ### Route Registration
 
-The generated endpoint is automatically registered in the module's `CatalogModule.cs` file, which maps all endpoints under the module's route group prefix (e.g., `/api/catalog`).
+Nothing to register manually: `{Module}EndpointRegistration.Map{Module}Endpoints()` scans the Api assembly for `IEndpoint` implementations at startup and maps each one onto the module's route group, so the final route is the group prefix plus your `--route` (e.g. `/api/catalog/products`). The group itself is wired by `{Module}Module.ConfigureEndpoints`, which module auto-discovery invokes from the host.
 
 ## Examples
 
 **Create a POST endpoint wired to a command:**
 
 ```bash
-modulus add-endpoint CreateProduct --module Catalog --method POST --route / --command CreateProduct --result-type Guid
+modulus add-endpoint CreateProductEndpoint --module Catalog --method POST --route / --command CreateProduct --result-type Guid
 ```
 
 **Create a GET endpoint wired to a query:**
@@ -136,7 +107,7 @@ modulus add-endpoint GetProduct --module Catalog --method GET --route "/{id:guid
 **Create a DELETE endpoint wired to a command:**
 
 ```bash
-modulus add-endpoint CancelOrder --module Orders --method DELETE --route "/{id:guid}" --command CancelOrder
+modulus add-endpoint CancelOrderEndpoint --module Orders --method DELETE --route "/{id:guid}" --command CancelOrder
 ```
 
 **Create a bare endpoint stub:**

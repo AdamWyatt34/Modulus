@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Text;
 using Modulus.Cli.Handlers;
 using Modulus.Messaging.RabbitMq;
@@ -16,6 +17,8 @@ internal sealed class RabbitMqDlqBrowser(DlqConnection connection) : IDlqBrowser
 {
     private const string FirstDeathExchangeHeader = "x-first-death-exchange";
     private const string FirstDeathReasonHeader = "x-first-death-reason";
+    private const string DeathHeader = "x-death";
+    private const string DeathCountField = "count";
 
     private IConnection? _brokerConnection;
     private IChannel? _channel;
@@ -56,9 +59,9 @@ internal sealed class RabbitMqDlqBrowser(DlqConnection connection) : IDlqBrowser
             messages.Add(new DlqMessage(
                 result.BasicProperties.MessageId ?? "-",
                 result.BasicProperties.Type ?? "-",
-                EnqueuedAt: null,
+                ReadEnqueuedAt(result.BasicProperties),
                 ReadHeader(result.BasicProperties, FirstDeathReasonHeader),
-                DeliveryCount: (long)result.MessageCount + 1));
+                ReadDeathCount(result.BasicProperties)));
         }
 
         // Peek-by-get: hand every message back so nothing is consumed by listing.
@@ -136,6 +139,51 @@ internal sealed class RabbitMqDlqBrowser(DlqConnection connection) : IDlqBrowser
             {
                 byte[] bytes => Encoding.UTF8.GetString(bytes),
                 string s => s,
+                _ => null,
+            };
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Populates "enqueued at" from the AMQP timestamp property when the broker (or the
+    /// publisher) actually set one — it's an optional property, not always present.
+    /// </summary>
+    private static DateTimeOffset? ReadEnqueuedAt(IReadOnlyBasicProperties properties)
+        => properties.IsTimestampPresent()
+            ? DateTimeOffset.FromUnixTimeSeconds(properties.Timestamp.UnixTime)
+            : null;
+
+    /// <summary>
+    /// Reads the delivery count from the AMQP-native <c>x-death</c> header — the per-message
+    /// count of times *this* message has been dead-lettered for its most recent reason/queue —
+    /// rather than <c>BasicGetResult.MessageCount</c>, which is the dead-letter *queue's*
+    /// remaining depth at the moment of the get, not a per-message counter at all. Returns null
+    /// (rendered as "-" by callers) when the header is absent, which is possible if a message
+    /// was dead-lettered by a mechanism that doesn't populate it.
+    /// </summary>
+    private static long? ReadDeathCount(IReadOnlyBasicProperties properties)
+    {
+        if (properties.Headers is not { } headers
+            || !headers.TryGetValue(DeathHeader, out var raw)
+            || raw is not IEnumerable deaths)
+        {
+            return null;
+        }
+
+        foreach (var entry in deaths)
+        {
+            if (entry is not IDictionary table || !table.Contains(DeathCountField))
+                continue;
+
+            return table[DeathCountField] switch
+            {
+                long l => l,
+                int i => i,
+                short s => s,
+                byte b => b,
+                ulong ul => unchecked((long)ul),
                 _ => null,
             };
         }

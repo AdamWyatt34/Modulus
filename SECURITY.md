@@ -19,7 +19,7 @@ We will acknowledge receipt within five business days and provide a remediation 
 
 ## Supported Versions
 
-Only the latest published `ModulusKit.*` release line receives security updates. The project is pre-1.0; once 1.0 ships, the latest minor of the current major will be supported.
+The latest minor of the latest major receives security updates — currently the 2.1.x line. Older majors (1.x) and superseded minors (2.0.x) do not receive fixes; upgrade with `modulus upgrade --version <latest>` to stay supported. The nine `ModulusKit.*` packages are released as a coordinated set, so a security fix ships as a new version of the whole set.
 
 ## Dependency Hygiene
 

@@ -81,26 +81,26 @@ Create a new WebApi project for the extracted module. This becomes the module's 
 dotnet new web -n EShop.Catalog.WebApi -o src/EShop.Catalog.WebApi
 ```
 
-Set up `Program.cs` with the same module registration pattern used in the monolith:
+Set up `Program.cs` with the same module registration pattern used in the monolith. `IModuleRegistration` uses static members, so the module is wired by calling them directly (or, if the new host references the module's Infrastructure project and `ModulusKit.Generators`, the generated `AddAllModules`/`MapAllModuleEndpoints` work exactly as in the monolith):
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
 
-// Register the Catalog module
-var catalogModule = new CatalogModuleRegistration();
-catalogModule.ConfigureServices(builder.Services, builder.Configuration);
+// Register the Catalog module (static IModuleRegistration members)
+CatalogModule.ConfigureServices(builder.Services, builder.Configuration);
 
-// Register mediator, messaging, etc.
-builder.Services.AddModulusMediator(typeof(CatalogModuleRegistration).Assembly);
+// Register mediator, source-generated handlers, messaging, etc.
+builder.Services.AddModulusMediator();
+builder.Services.AddModulusHandlers(); // source-generated
 builder.Services.AddModulusRabbitMqTransport(); // from ModulusKit.Messaging.RabbitMq
 builder.Services.AddModulusMessaging(builder.Configuration, options =>
 {
-    options.Assemblies.Add(typeof(CatalogModuleRegistration).Assembly);
+    options.Assemblies.Add(typeof(CatalogModule).Assembly);
 });
 
 var app = builder.Build();
 
-catalogModule.ConfigureEndpoints(app);
+CatalogModule.ConfigureEndpoints(app);
 
 app.Run();
 ```
@@ -109,26 +109,26 @@ app.Run();
 
 Move (or reference) the four module projects into the new service's solution:
 
-- `EShop.Modules.Catalog.Api`
-- `EShop.Modules.Catalog.Application`
-- `EShop.Modules.Catalog.Domain`
-- `EShop.Modules.Catalog.Infrastructure`
+- `Catalog.Api`
+- `Catalog.Application`
+- `Catalog.Domain`
+- `Catalog.Infrastructure`
 
-The Integration project (`EShop.Modules.Catalog.Integration`) stays shared -- both solutions reference it so that the monolith can still consume the Catalog module's events.
+The Integration project (`Catalog.Integration`) stays shared -- both solutions reference it so that the monolith can still consume the Catalog module's events.
 
 ```
 EShop.Catalog/                           # New solution
 ├── EShop.Catalog.slnx
 ├── src/
 │   ├── EShop.Catalog.WebApi/            # New host
-│   ├── Modules/Catalog/                 # Moved from monolith
-│   │   ├── EShop.Modules.Catalog.Api/
-│   │   ├── EShop.Modules.Catalog.Application/
-│   │   ├── EShop.Modules.Catalog.Domain/
-│   │   └── EShop.Modules.Catalog.Infrastructure/
-│   └── BuildingBlocks/                  # Shared via NuGet or project reference
+│   ├── Modules/Catalog/src/             # Moved from monolith
+│   │   ├── Catalog.Api/
+│   │   ├── Catalog.Application/
+│   │   ├── Catalog.Domain/
+│   │   └── Catalog.Infrastructure/
+│   └── BuildingBlocks.*/                # Shared via NuGet or project reference
 └── shared/
-    └── EShop.Modules.Catalog.Integration/  # Referenced by both solutions
+    └── Catalog.Integration/             # Referenced by both solutions
 ```
 
 ### 3. Switch the Transport
@@ -175,17 +175,17 @@ The outbox already persists integration events to the database before publishing
 
 ### 5. Remove the Module from the Monolith
 
-Remove the Catalog module projects from the monolith solution and delete the module registration from the host's composition root. The monolith no longer serves Catalog endpoints directly.
+Use `modulus remove-module Catalog --confirm` (dry-run by default without `--confirm`), or remove the projects manually. Either way, also remove the host's `ProjectReference` to `Catalog.Infrastructure` -- module auto-discovery then stops registering the module, so there is no composition root file to edit. The monolith no longer serves Catalog endpoints directly.
 
 ```bash
-# Remove project references from the monolith solution
-dotnet sln EShop.slnx remove src/Modules/Catalog/EShop.Modules.Catalog.Api
-dotnet sln EShop.slnx remove src/Modules/Catalog/EShop.Modules.Catalog.Application
-dotnet sln EShop.slnx remove src/Modules/Catalog/EShop.Modules.Catalog.Domain
-dotnet sln EShop.slnx remove src/Modules/Catalog/EShop.Modules.Catalog.Infrastructure
+# Manual removal from the monolith solution
+dotnet sln EShop.slnx remove src/Modules/Catalog/src/Catalog.Api
+dotnet sln EShop.slnx remove src/Modules/Catalog/src/Catalog.Application
+dotnet sln EShop.slnx remove src/Modules/Catalog/src/Catalog.Domain
+dotnet sln EShop.slnx remove src/Modules/Catalog/src/Catalog.Infrastructure
 ```
 
-Keep the reference to `EShop.Modules.Catalog.Integration` so the remaining modules can still consume Catalog events.
+Keep the reference to `Catalog.Integration` so the remaining modules can still consume Catalog events.
 
 ## What Changes vs. What Stays the Same
 

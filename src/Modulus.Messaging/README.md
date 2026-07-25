@@ -93,7 +93,7 @@ await messageBus.Publish(new OrderShipped(orderId, DateTime.UtcNow));
 await outboxStore.Save(new OrderShipped(orderId, DateTime.UtcNow));
 ```
 
-When using the outbox, events are stored in your database within the same transaction as your business data. A background `OutboxProcessor` polls for pending messages and publishes them through the configured transport, retrying per `RetryPolicy` before dead-lettering.
+When using the outbox, events are stored as rows in the outbox table before being published. The default `IOutboxStore` commits through the package's own `OutboxDbContext`, in its own transaction — durable and broker-outage-safe, but **not** atomic with your business `SaveChanges`. For strict same-transaction atomicity, map `OutboxMessage` into your application `DbContext` (and attach `OutboxNotifyingInterceptor` to it) so business rows and outbox rows commit in one `SaveChanges` — see the [outbox documentation](https://adamwyatt34.github.io/Modulus/messaging/outbox-pattern) for both setups. A background `OutboxProcessor` dispatches pending messages through the configured transport, retrying per `RetryPolicy` before dead-lettering.
 
 ## Handling Events
 

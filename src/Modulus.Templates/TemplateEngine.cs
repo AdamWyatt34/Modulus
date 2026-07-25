@@ -153,9 +153,12 @@ public sealed class TemplateEngine
             "var builder = WebApplication.CreateBuilder(args);",
             "var builder = WebApplication.CreateBuilder(args);\n\nbuilder.AddServiceDefaults();");
 
+        // NOTE: the host template actually emits `app.MapAllModuleEndpoints();` (see
+        // Program.cs.template) — a prior version of this anchor read `app.MapModuleEndpoints();`,
+        // which never matches, so `--aspire` never injected `MapDefaultEndpoints()`.
         content = content.Replace(
-            "app.MapModuleEndpoints();",
-            "app.MapDefaultEndpoints();\n\napp.MapModuleEndpoints();");
+            "app.MapAllModuleEndpoints();",
+            "app.MapDefaultEndpoints();\n\napp.MapAllModuleEndpoints();");
 
         outputs[programIndex] = program with { Content = content };
     }

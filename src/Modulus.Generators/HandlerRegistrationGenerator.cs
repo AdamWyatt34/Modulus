@@ -34,8 +34,8 @@ public sealed class HandlerRegistrationGenerator : IIncrementalGenerator
                 transform: static (ctx, ct) => AnalyzeCandidate(ctx, ct));
 
         var handlerProvider = candidateProvider
-            .Where(static r => r.Registrations.Length > 0)
-            .SelectMany(static (r, _) => r.Registrations);
+            .Where(static r => !r.Registrations.IsEmpty)
+            .SelectMany(static (r, _) => r.Registrations.Array);
 
         var localHandlers = handlerProvider.Collect()
             .Select(static (arr, _) => new EquatableArray<HandlerRegistration>(arr));
@@ -62,19 +62,31 @@ public sealed class HandlerRegistrationGenerator : IIncrementalGenerator
         var assemblyName = context.CompilationProvider
             .Select(static (c, _) => c.AssemblyName);
 
+        // The generated file references IServiceCollection, so emit nothing in compilations
+        // without a DI reference — e.g. Domain projects that carry this generator solely for
+        // [StronglyTypedId]. Same gating pattern as the EF check in StronglyTypedIdGenerator.
+        var hasDependencyInjection = context.CompilationProvider
+            .Select(static (compilation, _) =>
+                compilation.GetTypeByMetadataName("Microsoft.Extensions.DependencyInjection.IServiceCollection") is not null);
+
         var namespaceInfo = rootNamespace.Combine(assemblyName);
-        var combined = collected.Combine(namespaceInfo);
+        var combined = collected.Combine(namespaceInfo).Combine(hasDependencyInjection);
 
         context.RegisterSourceOutput(combined, static (spc, data) =>
-            Execute(spc, data.Left, data.Right.Left, data.Right.Right));
+        {
+            if (!data.Right)
+                return;
+
+            Execute(spc, data.Left.Left, data.Left.Right.Left, data.Left.Right.Right);
+        });
 
         // Diagnostic pipeline — extract open generic diagnostics from the same scan
         var openGenericDiagnostics = candidateProvider
             .Where(static r => r.OpenGenericDiagnostic is not null)
-            .Select(static (r, _) => r.OpenGenericDiagnostic!);
+            .Select(static (r, _) => r.OpenGenericDiagnostic!.Value);
 
-        context.RegisterSourceOutput(openGenericDiagnostics, static (spc, diag) =>
-            spc.ReportDiagnostic(diag));
+        context.RegisterSourceOutput(openGenericDiagnostics, static (spc, diagInfo) =>
+            spc.ReportDiagnostic(diagInfo.ToDiagnostic()));
     }
 
     private static bool IsCandidate(SyntaxNode node)
@@ -114,7 +126,12 @@ public sealed class HandlerRegistrationGenerator : IIncrementalGenerator
         var symbol = context.SemanticModel.GetDeclaredSymbol(typeDecl, ct) as INamedTypeSymbol;
 
         if (symbol is null || symbol.IsAbstract || symbol.IsStatic)
-            return default;
+            return CandidateResult.Empty;
+
+        // A handler nested as private/protected (or declared `file`-local) cannot be named from
+        // the generated static class — registering it would produce CS0122/CS0246.
+        if (!IsAccessibleFromGeneratedCode(symbol))
+            return CandidateResult.Empty;
 
         // Open generic types get a diagnostic instead of registrations
         if (symbol.IsGenericType)
@@ -156,6 +173,32 @@ public sealed class HandlerRegistrationGenerator : IIncrementalGenerator
             null);
     }
 
+    /// <summary>
+    /// A type is only nameable from the generated top-level static class when every containing
+    /// type (and the type itself) is public or internal. <c>private</c>/<c>protected</c>/
+    /// <c>private protected</c> nesting and C# 11 <c>file</c>-local types are all invisible from
+    /// unrelated generated code, even though they satisfy <see cref="IsCandidate"/> at the syntax
+    /// level.
+    /// </summary>
+    private static bool IsAccessibleFromGeneratedCode(INamedTypeSymbol symbol)
+    {
+        if (symbol.IsFileLocal)
+            return false;
+
+        for (var type = symbol; type is not null; type = type.ContainingType)
+        {
+            switch (type.DeclaredAccessibility)
+            {
+                case Accessibility.Private:
+                case Accessibility.Protected:
+                case Accessibility.ProtectedAndInternal:
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
     private static EquatableArray<HandlerRegistration> FindHandlersInReferencedAssemblies(
         Compilation compilation, CancellationToken ct)
     {
@@ -164,6 +207,12 @@ public sealed class HandlerRegistrationGenerator : IIncrementalGenerator
         foreach (var assemblySymbol in compilation.SourceModule.ReferencedAssemblySymbols)
         {
             ct.ThrowIfCancellationRequested();
+
+            // Skip the BCL/framework closure and any assembly that couldn't possibly define a
+            // Modulus handler — the dominant cost of this walk otherwise (H-GEN5).
+            if (!ReferencedAssemblyFilter.ShouldWalk(assemblySymbol))
+                continue;
+
             CollectHandlersFromNamespace(assemblySymbol.GlobalNamespace, builder, ct);
         }
 
@@ -180,6 +229,13 @@ public sealed class HandlerRegistrationGenerator : IIncrementalGenerator
             ct.ThrowIfCancellationRequested();
 
             if (type.IsAbstract || type.IsStatic || type.IsGenericType)
+                continue;
+
+            // A handler in another assembly must be public (an internal type is inaccessible to
+            // the host assembly generating the registration, absent InternalsVisibleTo — CS0122)
+            // and must be a reference type (DI's `AddScoped<TService, TImplementation>` requires
+            // `TImplementation : class`, so a record struct would be CS0452).
+            if (type.DeclaredAccessibility != Accessibility.Public || type.TypeKind == TypeKind.Struct)
                 continue;
 
             var handlerFqn = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
@@ -234,7 +290,7 @@ public sealed class HandlerRegistrationGenerator : IIncrementalGenerator
                originalDef.ContainingNamespace?.ToDisplayString() == "FluentValidation";
     }
 
-    private static Diagnostic? GetOpenGenericDiagnostic(
+    private static DiagnosticInfo? GetOpenGenericDiagnostic(
         TypeDeclarationSyntax typeDecl,
         INamedTypeSymbol symbol)
     {
@@ -242,10 +298,10 @@ public sealed class HandlerRegistrationGenerator : IIncrementalGenerator
         {
             if (TryGetHandlerCategory(iface, out _))
             {
-                return Diagnostic.Create(
+                return DiagnosticInfo.FromDiagnostic(Diagnostic.Create(
                     DiagnosticDescriptors.OpenGenericHandlerSkipped,
                     typeDecl.Identifier.GetLocation(),
-                    symbol.Name);
+                    symbol.Name));
             }
         }
 
@@ -254,10 +310,10 @@ public sealed class HandlerRegistrationGenerator : IIncrementalGenerator
         {
             if (IsAbstractValidator(baseType))
             {
-                return Diagnostic.Create(
+                return DiagnosticInfo.FromDiagnostic(Diagnostic.Create(
                     DiagnosticDescriptors.OpenGenericHandlerSkipped,
                     typeDecl.Identifier.GetLocation(),
-                    symbol.Name);
+                    symbol.Name));
             }
             baseType = baseType.BaseType;
         }
@@ -287,9 +343,14 @@ public sealed class HandlerRegistrationGenerator : IIncrementalGenerator
         sb.AppendLine("    public static IServiceCollection AddModulusHandlers(this IServiceCollection services)");
         sb.AppendLine("    {");
 
-        if (registrations.Length > 0)
+        if (!registrations.IsEmpty)
         {
+            // Distinct — a partial-class handler shape can surface the same (handler, interface)
+            // pair more than once from the local syntax scan (once per partial declaration that
+            // carries the base list). Without this, the same handler is registered twice and a
+            // domain-event handler/validator resolved via `GetServices<T>()` runs twice per event.
             var grouped = registrations.Array
+                .Distinct()
                 .OrderBy(r => r.Category)
                 .ThenBy(r => r.HandlerFullyQualifiedName, StringComparer.Ordinal)
                 .GroupBy(r => r.Category);
@@ -345,15 +406,34 @@ internal enum HandlerCategory
     Validator
 }
 
-internal readonly struct CandidateResult
+internal readonly struct CandidateResult : IEquatable<CandidateResult>
 {
-    public ImmutableArray<HandlerRegistration> Registrations { get; }
-    public Diagnostic? OpenGenericDiagnostic { get; }
+    public static readonly CandidateResult Empty = new(ImmutableArray<HandlerRegistration>.Empty, null);
 
-    public CandidateResult(ImmutableArray<HandlerRegistration> registrations, Diagnostic? openGenericDiagnostic)
+    public EquatableArray<HandlerRegistration> Registrations { get; }
+    public DiagnosticInfo? OpenGenericDiagnostic { get; }
+
+    public CandidateResult(ImmutableArray<HandlerRegistration> registrations, DiagnosticInfo? openGenericDiagnostic)
     {
-        Registrations = registrations.IsDefault ? ImmutableArray<HandlerRegistration>.Empty : registrations;
+        Registrations = new EquatableArray<HandlerRegistration>(registrations);
         OpenGenericDiagnostic = openGenericDiagnostic;
+    }
+
+    public bool Equals(CandidateResult other) =>
+        Registrations.Equals(other.Registrations) &&
+        Equals(OpenGenericDiagnostic, other.OpenGenericDiagnostic);
+
+    public override bool Equals(object obj) =>
+        obj is CandidateResult other && Equals(other);
+
+    public override int GetHashCode()
+    {
+        unchecked
+        {
+            var hash = Registrations.GetHashCode();
+            hash = (hash * 397) ^ (OpenGenericDiagnostic?.GetHashCode() ?? 0);
+            return hash;
+        }
     }
 }
 

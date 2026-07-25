@@ -104,7 +104,8 @@ public class MessagingMetricsTests
 
         var durations = capture.For("modulus.messaging.consumer.handler.duration");
         durations.Count.ShouldBe(1);
-        durations[0].Tags["handler"].ShouldBe(nameof(TestOrderCreatedHandler));
+        // H-MSG1: the handler tag is the FullName, not the simple Name.
+        durations[0].Tags["handler"].ShouldBe(typeof(TestOrderCreatedHandler).FullName);
         durations[0].Tags["outcome"].ShouldBe("success");
     }
 
@@ -145,7 +146,7 @@ public class MessagingMetricsTests
 
         var dedup = capture.For("modulus.messaging.inbox.deduplicated");
         dedup.Count.ShouldBe(1);
-        dedup[0].Tags["handler"].ShouldBe(nameof(TestOrderCreatedHandler));
+        dedup[0].Tags["handler"].ShouldBe(typeof(TestOrderCreatedHandler).FullName);
     }
 
     [Fact]

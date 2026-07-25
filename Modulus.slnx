@@ -10,6 +10,7 @@
     <Project Path="src/Modulus.Templates/Modulus.Templates.csproj" />
     <Project Path="src/Modulus.Generators/Modulus.Generators.csproj" />
     <Project Path="src/Modulus.Analyzers/Modulus.Analyzers.csproj" />
+    <Project Path="src/Modulus.Analyzers.CodeFixes/Modulus.Analyzers.CodeFixes.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Modulus.Cli.Tests/Modulus.Cli.Tests.csproj" />

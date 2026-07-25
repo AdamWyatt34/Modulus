@@ -110,8 +110,41 @@ internal static class AnalyzerTestHelper
 
         var allDiagnostics = await compilationWithAnalyzers.GetAnalyzerDiagnosticsAsync();
 
+        ThrowIfAnalyzerCrashed(analyzer, allDiagnostics);
+
         return allDiagnostics
             .Where(d => d.Id.StartsWith("MOD"))
+            .ToImmutableArray();
+    }
+
+    /// <summary>
+    /// AD0001 means the analyzer itself threw during analysis. Silently filtering it out (as this
+    /// helper previously did, keeping only "MOD"-prefixed diagnostics) made a crashing analyzer
+    /// pass every "no diagnostic" test vacuously — the exact hole a real regression could hide in.
+    /// </summary>
+    private static void ThrowIfAnalyzerCrashed(DiagnosticAnalyzer analyzer, ImmutableArray<Diagnostic> diagnostics)
+    {
+        var crashes = diagnostics.Where(d => d.Id == "AD0001").ToList();
+        if (crashes.Count == 0)
+            return;
+
+        var messages = string.Join(Environment.NewLine, crashes.Select(d => d.GetMessage()));
+        throw new InvalidOperationException(
+            $"Analyzer '{analyzer.GetType().Name}' threw during analysis (AD0001):{Environment.NewLine}{messages}");
+    }
+
+    /// <summary>
+    /// Compiles arbitrary C# source (typically the output of <see cref="ApplyCodeFixAsync"/>) and
+    /// returns any error-severity diagnostics. Code fix tests that only assert on substrings of
+    /// the fixed text can pass even when the fix produces invalid code — this is how the MOD003
+    /// fix's CS0029/invalid-tree bugs shipped in the first place.
+    /// </summary>
+    public static ImmutableArray<Diagnostic> CompileAndGetErrors(string source, string? assemblyName = null)
+    {
+        var compilation = CreateCompilation(source, assemblyName);
+
+        return compilation.GetDiagnostics()
+            .Where(d => d.Severity == DiagnosticSeverity.Error)
             .ToImmutableArray();
     }
 
@@ -127,6 +160,7 @@ internal static class AnalyzerTestHelper
             ImmutableArray.Create(analyzer));
 
         var diagnostics = await compilationWithAnalyzers.GetAnalyzerDiagnosticsAsync();
+        ThrowIfAnalyzerCrashed(analyzer, diagnostics);
         var diagnostic = diagnostics.First(d => d.Id == diagnosticId);
 
         var tree = compilation.SyntaxTrees.First();

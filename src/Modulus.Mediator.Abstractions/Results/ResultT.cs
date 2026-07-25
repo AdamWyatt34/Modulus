@@ -31,7 +31,12 @@ public class Result<TValue> : Result
         : throw new InvalidOperationException("Cannot access Value on a failed result.");
 
     /// <summary>Creates a successful result with the specified value.</summary>
-    public static Result<TValue> Success(TValue value) => new(value);
+    /// <exception cref="ArgumentNullException"><paramref name="value"/> is <see langword="null"/>.</exception>
+    public static Result<TValue> Success(TValue value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        return new(value);
+    }
 
     /// <summary>Creates a failed result with the specified errors.</summary>
     public new static Result<TValue> Failure(params Error[] errors) => new(errors);
@@ -44,6 +49,7 @@ public class Result<TValue> : Result
         => IsSuccess ? onSuccess(Value) : onFailure(this);
 
     /// <summary>Implicitly converts a value to a successful <see cref="Result{TValue}"/>.</summary>
+    /// <exception cref="ArgumentNullException"><paramref name="value"/> is <see langword="null"/>.</exception>
     public static implicit operator Result<TValue>(TValue value) => Success(value);
 
     /// <summary>Implicitly converts an <see cref="Error"/> to a failed <see cref="Result{TValue}"/>.</summary>

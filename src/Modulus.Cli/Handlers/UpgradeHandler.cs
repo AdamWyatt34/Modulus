@@ -14,6 +14,18 @@ public sealed class UpgradeHandler(
     IConsoleOutput console,
     SolutionFinder solutionFinder)
 {
+    /// <summary>
+    /// A pragmatic NuGet version pattern: 2-4 numeric segments, an optional dot-separated
+    /// alphanumeric prerelease label, and an optional dot-separated alphanumeric build-metadata
+    /// label (NuGet allows 2-4 numeric segments, unlike strict three-segment SemVer). This is
+    /// deliberately restrictive rather than exhaustive: it exists to keep a hand-typed
+    /// <c>--version</c> value safe to splice into an XML attribute and a regex replacement
+    /// string, not to validate every technically-legal NuGet version string.
+    /// </summary>
+    private static readonly Regex NuGetVersionPattern = new(
+        @"^\d+(\.\d+){1,3}(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?(\+[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$",
+        RegexOptions.Compiled);
+
     public Task<int> ExecuteAsync(string? version, string? solutionPath, bool dryRun)
     {
         // Same default as `init`: the CLI's own MinVer-stamped version.
@@ -27,10 +39,16 @@ public sealed class UpgradeHandler(
             return Task.FromResult(1);
         }
 
+        if (!NuGetVersionPattern.IsMatch(targetVersion))
+        {
+            console.WriteError($"'{targetVersion}' is not a valid NuGet package version (expected e.g. '1.2.3' or '1.2.3-preview.1').");
+            return Task.FromResult(1);
+        }
+
         var slnxPath = solutionFinder.ResolveSolutionPath(solutionPath, fileSystem.GetCurrentDirectory());
         if (slnxPath is null)
         {
-            console.WriteError("Could not find a solution file. Use --solution to specify the path, or run from within a Modulus solution directory.");
+            console.WriteError(solutionFinder.DescribeResolutionFailure(solutionPath));
             return Task.FromResult(1);
         }
 
@@ -88,7 +106,13 @@ public sealed class UpgradeHandler(
             // Anchored to this package's own element so an identical version literal on a
             // non-ModulusKit line is never touched.
             var pattern = $"""(<PackageVersion\s+Include="{Regex.Escape(include)}"\s+Version=")[^"]*(")""";
-            var replaced = Regex.Replace(updated, pattern, $"${{1}}{targetVersion}${{2}}");
+
+            // A MatchEvaluator delegate is used (not a "$1{targetVersion}$2" replacement string)
+            // so targetVersion is spliced in verbatim: Regex.Replace's string-replacement overload
+            // treats "$" specially ($1, $$, $&, ...), and while NuGetVersionPattern above already
+            // rejects "$" in practice, this removes the failure mode entirely rather than relying
+            // on validation elsewhere never being loosened.
+            var replaced = Regex.Replace(updated, pattern, m => $"{m.Groups[1].Value}{targetVersion}{m.Groups[2].Value}");
 
             if (ReferenceEquals(replaced, updated) || replaced == updated)
             {

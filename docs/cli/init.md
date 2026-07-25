@@ -22,6 +22,7 @@ modulus init <solution-name> [options]
 | `--aspire` | Include .NET Aspire AppHost and ServiceDefaults projects for service discovery, telemetry, and the developer dashboard | Not included |
 | `--transport <transport>` | Messaging transport to configure: `inmemory`, `rabbitmq`, or `azureservicebus` | `inmemory` |
 | `--no-git` | Skip `git init` and the initial commit | Git initialized |
+| `--modulus-kit-version <version>` | Override the `ModulusKit.*` package version emitted into `Directory.Packages.props` -- useful for pinning a known-good library set when the CLI and libraries were released at different versions | CLI's own version |
 
 ## Generated Output
 
@@ -32,49 +33,49 @@ EShop/
 ├── EShop.slnx
 ├── Directory.Build.props
 ├── Directory.Packages.props
-├── global.json
+├── .editorconfig
 ├── .gitignore
 ├── src/
 │   ├── EShop.WebApi/
 │   │   ├── EShop.WebApi.csproj
 │   │   ├── Program.cs
-│   │   ├── ModuleRegistration.cs
-│   │   └── appsettings.json
-│   ├── EShop.SharedKernel/
-│   │   ├── EShop.SharedKernel.csproj
-│   │   ├── Domain/
-│   │   │   ├── Entity.cs
-│   │   │   ├── AggregateRoot.cs
-│   │   │   ├── StronglyTypedId.cs
-│   │   │   ├── IDomainEvent.cs
-│   │   │   └── IRepository.cs
-│   │   ├── Application/
-│   │   │   ├── ICommand.cs
-│   │   │   ├── IQuery.cs
-│   │   │   └── ICommandHandler.cs
-│   │   ├── Infrastructure/
-│   │   │   └── BaseDbContext.cs
-│   │   └── Messaging/
-│   │       ├── IIntegrationEvent.cs
-│   │       └── IntegrationEventHandler.cs
-│   ├── EShop.AppHost/              # only with --aspire
-│   │   ├── EShop.AppHost.csproj
-│   │   └── Program.cs
-│   └── EShop.ServiceDefaults/      # only with --aspire
-│       ├── EShop.ServiceDefaults.csproj
-│       └── Extensions.cs
+│   │   ├── appsettings.json
+│   │   ├── Extensions/            # ConfigurationExtensions, ResultExtensions
+│   │   ├── Middleware/            # GlobalExceptionHandler
+│   │   └── Properties/launchSettings.json
+│   ├── BuildingBlocks.Domain/
+│   │   ├── Entities/              # Entity, AggregateRoot, IAuditable, IHasDomainEvents
+│   │   ├── DomainEvents/          # IDomainEvent re-export, DomainEvent base record
+│   │   ├── Identifiers/          # StronglyTypedId<T>
+│   │   ├── ValueObjects/          # ValueObject
+│   │   └── Exceptions/            # DomainException
+│   ├── BuildingBlocks.Application/
+│   │   ├── Persistence/           # IRepository<T, TId>
+│   │   ├── Pagination/            # PaginationQuery, PagedResult<T>
+│   │   └── DependencyInjection/   # AddApplicationServices
+│   ├── BuildingBlocks.Infrastructure/
+│   │   ├── Persistence/           # BaseDbContext, EfRepository, AuditableEntityInterceptor
+│   │   ├── Endpoints/             # IEndpoint, ApiResults
+│   │   ├── Registration/          # IModuleRegistration
+│   │   ├── Outbox/                # Outbox EF configurations, IdempotentDomainEventHandler
+│   │   └── Inbox/                 # Inbox EF configurations
+│   └── BuildingBlocks.Integration/
+│       └── IntegrationEvents/     # IIntegrationEvent re-export
+├── aspire/                         # only with --aspire
+│   ├── EShop.AppHost/
+│   └── EShop.ServiceDefaults/
 └── tests/
-    └── EShop.ArchitectureTests/
-        ├── EShop.ArchitectureTests.csproj
-        └── ModuleBoundaryTests.cs
+    ├── EShop.Tests.Common/
+    ├── EShop.Tests.Architecture/
+    └── EShop.Tests.Integration/
 ```
 
 Key files:
 
 - **`EShop.slnx`** -- The XML-based solution file that all modules will be added to.
-- **`ModuleRegistration.cs`** -- The composition root where modules are registered. Updated automatically when you add modules.
-- **`Directory.Packages.props`** -- Central package management so all projects share the same NuGet package versions.
-- **`SharedKernel`** -- Common base types shared across all modules (entities, value objects, mediator abstractions).
+- **`Program.cs`** -- The host's composition root. It calls the source-generated `AddModulusHandlers()`, `AddAllModules(builder.Configuration)`, and `MapAllModuleEndpoints()`; modules added later are picked up by the generator, so this file does not need editing per module.
+- **`Directory.Packages.props`** -- Central package management so all projects share the same NuGet package versions; all `ModulusKit.*` packages are pinned to one version.
+- **BuildingBlocks projects** -- Common base types shared across all modules (entities, value objects, endpoint plumbing, module registration contracts).
 
 ## Examples
 

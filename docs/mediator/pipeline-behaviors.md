@@ -194,6 +194,23 @@ services.AddPipelineBehavior(typeof(MetricsBehavior<,>));
 
 **When it short-circuits:** Never -- it always calls `next()` and records the metric.
 
+### 5. TracingBehavior
+
+Opt-in distributed tracing: wraps each request in an `Activity` from the `Modulus.Mediator` `ActivitySource`.
+
+```csharp
+services.AddPipelineBehavior(typeof(TracingBehavior<,>));
+```
+
+**What it does:**
+- Starts an activity named after the request type
+- Tags `modulus.request_type` with the request's full name
+- On completion tags `modulus.outcome` (`success` / `failure` / `exception`), and for failures adds `modulus.error_count`, `modulus.error_code`, and sets the activity status to `Error`
+
+Subscribe in your OpenTelemetry configuration with `.AddSource("Modulus.Mediator")` (exposed as the `ActivitySourceName` constant on the behavior) -- see the [OpenTelemetry recipe](/recipes/opentelemetry).
+
+**When it short-circuits:** Never -- it always calls `next()`.
+
 ## Recommended Registration Order
 
 <!-- verify -->

@@ -32,9 +32,13 @@ internal sealed class EfOutboxStore(OutboxDbContext dbContext, IOutboxNotifier n
         int maxAttempts,
         CancellationToken cancellationToken = default)
     {
+        var utcNow = DateTime.UtcNow;
+
         return await dbContext.OutboxMessages
             .AsNoTracking()
-            .Where(m => m.ProcessedAt == null && m.Attempts < maxAttempts)
+            .Where(m => m.ProcessedAt == null
+                && m.Attempts < maxAttempts
+                && (m.NextAttemptOnUtc == null || m.NextAttemptOnUtc <= utcNow))
             .OrderBy(m => m.CreatedAt)
             .Take(batchSize)
             .ToListAsync(cancellationToken).ConfigureAwait(false);
@@ -68,6 +72,7 @@ internal sealed class EfOutboxStore(OutboxDbContext dbContext, IOutboxNotifier n
     public async Task MarkAsFailed(
         Guid messageId,
         string error,
+        DateTime? nextAttemptOnUtc,
         CancellationToken cancellationToken = default)
     {
         var message = await dbContext.OutboxMessages
@@ -78,6 +83,7 @@ internal sealed class EfOutboxStore(OutboxDbContext dbContext, IOutboxNotifier n
 
         message.Attempts += 1;
         message.LastError = error;
+        message.NextAttemptOnUtc = nextAttemptOnUtc;
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 }

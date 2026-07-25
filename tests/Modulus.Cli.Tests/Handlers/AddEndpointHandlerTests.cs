@@ -108,8 +108,10 @@ public class AddEndpointHandlerTests
     }
 
     [Fact]
-    public async Task AddEndpoint_with_wiring_adds_extensions_using()
+    public async Task AddEndpoint_with_wiring_does_not_reference_host_webapi_namespace()
     {
+        // H-CLI2: the module's Api project cannot reference the host WebApi project (MOD001 only
+        // allows the reverse direction), so this using never belonged here and doesn't compile.
         SeedModulusSolutionWithModule();
         var handler = CreateHandler();
 
@@ -117,7 +119,7 @@ public class AddEndpointHandlerTests
             "POST", "/", "CreateProduct", null, null);
 
         var content = _fs.ReadAllText(@"C:\work\EShop\src\Modules\Catalog\src\Catalog.Api\Endpoints\CreateProduct.cs");
-        content.ShouldContain("using EShop.WebApi.Extensions;");
+        content.ShouldNotContain("WebApi.Extensions");
     }
 
     [Fact]
@@ -242,6 +244,23 @@ public class AddEndpointHandlerTests
         content.ShouldContain("Status204NoContent");
     }
 
+    [Fact]
+    public async Task AddEndpoint_post_with_route_param_and_result_type_does_not_break_compilation()
+    {
+        // H-CLI2 regression: --route "/{id:guid}" used to interpolate straight into a generated
+        // $"..." string, so the compiler saw "{id" as an interpolation hole (CS0103).
+        SeedModulusSolutionWithModule();
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync("UpdateProduct", "Catalog", @"C:\work\EShop\EShop.slnx",
+            "POST", "/{id:guid}", "UpdateProduct", null, "Guid");
+
+        result.ShouldBe(0);
+        var content = _fs.ReadAllText(@"C:\work\EShop\src\Modules\Catalog\src\Catalog.Api\Endpoints\UpdateProduct.cs");
+        content.ShouldContain("Results.Created(\"/api/catalog/{id:guid}\", value)");
+        content.ShouldNotContain("Results.Created($\"");
+    }
+
     // ── Validation errors ────────────────────────────────────────
 
     [Fact]
@@ -281,6 +300,67 @@ public class AddEndpointHandlerTests
 
         result.ShouldBe(1);
         _console.ErrorLines.ShouldContain(l => l.Contains("--result-type"));
+    }
+
+    [Fact]
+    public async Task AddEndpoint_accepts_builtin_type_alias_as_result_type()
+    {
+        SeedModulusSolutionWithModule();
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync("GetStatusMessage", "Catalog", @"C:\work\EShop\EShop.slnx",
+            "GET", "/", null, "GetStatusMessage", "string");
+
+        result.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task AddEndpoint_rejects_invalid_result_type()
+    {
+        SeedModulusSolutionWithModule();
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync("GetProducts", "Catalog", @"C:\work\EShop\EShop.slnx",
+            "GET", "/", null, "GetProductList", "123Bad");
+
+        result.ShouldBe(1);
+        _console.ErrorLines.ShouldContain(l => l.Contains("123Bad"));
+    }
+
+    [Fact]
+    public async Task AddEndpoint_rejects_module_with_no_api_project()
+    {
+        // A module scaffolded with --no-endpoints has no .Api project at all; writing would
+        // otherwise throw a raw DirectoryNotFoundException against a real filesystem.
+        _fs.SetCurrentDirectory(@"C:\work\EShop");
+        _fs.SeedFile(@"C:\work\EShop\EShop.slnx", "<Solution></Solution>");
+        _fs.SeedFile(@"C:\work\EShop\src\EShop.WebApi\Program.cs", "// program");
+        _fs.SeedDirectory(@"C:\work\EShop\src\Modules\Catalog\src\Catalog.Domain");
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync("GetProducts", "Catalog", @"C:\work\EShop\EShop.slnx",
+            "GET", "/", null, null, null);
+
+        result.ShouldBe(1);
+        _console.ErrorLines.ShouldContain(l => l.Contains("Api project"));
+    }
+
+    [Fact]
+    public async Task AddEndpoint_creates_missing_endpoints_directory_before_writing()
+    {
+        // The Endpoints/ folder normally exists in a freshly scaffolded module, but the handler
+        // must not assume it does — it must create it rather than relying on WriteAllText to.
+        _fs.SetCurrentDirectory(@"C:\work\EShop");
+        _fs.SeedFile(@"C:\work\EShop\EShop.slnx", "<Solution></Solution>");
+        _fs.SeedFile(@"C:\work\EShop\src\EShop.WebApi\Program.cs", "// program");
+        _fs.SeedDirectory(@"C:\work\EShop\src\Modules\Catalog\src\Catalog.Api");
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync("GetProducts", "Catalog", @"C:\work\EShop\EShop.slnx",
+            "GET", "/", null, null, null);
+
+        result.ShouldBe(0);
+        _fs.FileExists(@"C:\work\EShop\src\Modules\Catalog\src\Catalog.Api\Endpoints\GetProducts.cs").ShouldBeTrue();
     }
 
     [Fact]

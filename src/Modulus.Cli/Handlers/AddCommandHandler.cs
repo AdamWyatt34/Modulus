@@ -27,7 +27,7 @@ public sealed class AddCommandHandler(
             return Task.FromResult(1);
         }
 
-        if (resultType is not null && !CSharpIdentifierValidator.IsValid(resultType))
+        if (resultType is not null && !CSharpIdentifierValidator.IsValidTypeName(resultType))
         {
             console.WriteError($"'{resultType}' is not a valid C# type name.");
             return Task.FromResult(1);
@@ -36,7 +36,7 @@ public sealed class AddCommandHandler(
         var slnxPath = solutionFinder.ResolveSolutionPath(solutionPath, fileSystem.GetCurrentDirectory());
         if (slnxPath is null)
         {
-            console.WriteError("Could not find a solution file. Use --solution to specify the path, or run from within a Modulus solution directory.");
+            console.WriteError(solutionFinder.DescribeResolutionFailure(solutionPath));
             return Task.FromResult(1);
         }
 

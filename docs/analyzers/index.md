@@ -33,7 +33,7 @@ If you scaffolded your solution with the Modulus CLI, analyzers are already conf
                   ReferenceOutputAssembly="false" />
 ```
 
-Both `ModulusKit.Analyzers` and `ModulusKit.Generators` are transitively included through `ModulusKit.Mediator.Abstractions`.
+`ModulusKit.Analyzers` is a development-dependency package, so it does **not** flow transitively through other `ModulusKit.*` packages or through project references -- add the reference to each project where the MOD rules should run.
 
 ## What's Next
 

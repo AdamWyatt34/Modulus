@@ -8,6 +8,7 @@
     <!-- NuGet equivalents: ModulusKit.Mediator, ModulusKit.Analyzers, ModulusKit.Generators PackageReferences -->
     <ProjectReference Include="..\..\..\..\src\Modulus.Mediator\Modulus.Mediator.csproj" />
     <ProjectReference Include="..\..\..\..\src\Modulus.Analyzers\Modulus.Analyzers.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\..\src\Modulus.Analyzers.CodeFixes\Modulus.Analyzers.CodeFixes.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\..\src\Modulus.Generators\Modulus.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     <PackageReference Include="FluentValidation" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />

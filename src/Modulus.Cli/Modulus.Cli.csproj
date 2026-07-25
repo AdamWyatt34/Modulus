@@ -10,6 +10,9 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <MinVerTagPrefix>cli-v</MinVerTagPrefix>
     <MinVerDefaultPreReleaseIdentifiers>alpha.0</MinVerDefaultPreReleaseIdentifiers>
+    <!-- Without this, `dotnet tool install -g ModulusKit.Cli` fails to launch on a machine whose
+         only installed runtime is a newer major than the one this tool targets. -->
+    <RollForward>LatestMajor</RollForward>
   </PropertyGroup>
 
   <ItemGroup>

@@ -75,6 +75,54 @@ public class EndpointGeneratorTests
     }
 
     [Fact]
+    public void Generate_PostCommandWithResult_DoesNotUseWebApiExtensionsUsing()
+    {
+        // H-CLI2: the module's Api project cannot reference the host WebApi project, and nothing
+        // generated here needs that using anyway.
+        var generator = new EndpointGenerator();
+
+        var output = generator.Generate(CreateOptions(
+            httpMethod: "POST",
+            route: "",
+            commandName: "CreateProduct",
+            resultType: "Guid"));
+
+        output.Content.ShouldNotContain("WebApi.Extensions");
+    }
+
+    [Fact]
+    public void Generate_PostCommandWithResult_RouteParam_EmitsPlainStringLiteralLocation()
+    {
+        // H-CLI2: a route containing "{param}" must never land inside a generated C#
+        // interpolated string ($"...") for the Location value — that turns the literal
+        // placeholder into an interpolation hole with no such variable in scope (CS0103).
+        var generator = new EndpointGenerator();
+
+        var output = generator.Generate(CreateOptions(
+            httpMethod: "POST",
+            route: "/items/{itemId}",
+            commandName: "CreateProduct",
+            resultType: "Guid"));
+
+        output.Content.ShouldContain("Results.Created(\"/api/catalog/items/{itemId}\", value)");
+        output.Content.ShouldNotContain("Results.Created($\"");
+    }
+
+    [Fact]
+    public void Generate_PostCommandWithResult_RouteParam_NotesRouteParamsAreUnbound()
+    {
+        var generator = new EndpointGenerator();
+
+        var output = generator.Generate(CreateOptions(
+            httpMethod: "POST",
+            route: "/items/{itemId}",
+            commandName: "CreateProduct",
+            resultType: "Guid"));
+
+        output.Content.ShouldContain("route parameters");
+    }
+
+    [Fact]
     public void Generate_VoidCommand_ReturnsNoContent()
     {
         var generator = new EndpointGenerator();

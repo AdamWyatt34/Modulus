@@ -9,6 +9,7 @@
     <PackageId>ModulusKit.Generators</PackageId>
     <Description>Incremental source generators for Modulus, including StronglyTypedId.</Description>
     <PackageTags>source-generator;strongly-typed-id;roslyn</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <DevelopmentDependency>true</DevelopmentDependency>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <NoWarn>RS2008</NoWarn>
@@ -21,6 +22,10 @@
     <!-- No build output in the package means no symbols package either (its NU5017). -->
     <IncludeSymbols>false</IncludeSymbols>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />

@@ -12,12 +12,13 @@ public sealed class FakeOutboxDispatcher : IOutboxDispatcher
 
     public int CallCount { get; private set; }
 
-    /// <summary>Queues fetched-count results for upcoming calls; once drained, calls return 0.</summary>
-    public void EnqueueResults(params int[] fetchedCounts)
+    /// <summary>Queues progress-count results (see <see cref="IOutboxDispatcher.DispatchPendingAsync"/>)
+    /// for upcoming calls; once drained, calls return 0.</summary>
+    public void EnqueueResults(params int[] progressCounts)
     {
         lock (_sync)
         {
-            foreach (var count in fetchedCounts)
+            foreach (var count in progressCounts)
                 _results.Enqueue(count);
         }
     }

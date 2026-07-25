@@ -59,7 +59,7 @@ If you publish a library at a different version than the CLI, users can pin a kn
 
 ### Release checklist
 
-1. `CHANGELOG.md`: move `[Unreleased]` into a versioned, dated section.
+1. `CHANGELOG.md`: write the release section. During development, accumulate notes under an `[Unreleased]` heading; at release time retitle it to `[<version>] - <date>` (or add the versioned, dated section directly if no `[Unreleased]` section was kept — releases in this repo are cut directly, so there is no permanent `[Unreleased]` section between releases). Add the matching `[<version>]: ...compare...` link reference at the bottom of the file.
 2. Push `main` and wait for a fully green CI run (the E2E job proves scaffolds build against HEAD-packed packages).
 3. Tag all nine prefixes at the release version from that green SHA and push the tags (each tag triggers a `publish` run for its package; `--skip-duplicate` makes partial re-runs safe).
 4. Verify all nine publish runs succeeded and the packages are indexed on nuget.org (indexing can lag ~15 minutes).

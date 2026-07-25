@@ -94,6 +94,52 @@ public class EntityGeneratorTests
     }
 
     [Fact]
+    public void Generate_UnitTest_HoistsPropertyDefaultsIntoLocalsSharedByCreateAndAssertion()
+    {
+        // H-CLI4 regression: a non-deterministic default (Guid.NewGuid(), DateTime.UtcNow) must
+        // be evaluated exactly once per test and reused for both the Create() argument and the
+        // ShouldBe() assertion — otherwise the assertion compares two independently generated
+        // values and the generated test permanently fails (Guid) or is flaky (DateTime).
+        var generator = new EntityGenerator();
+        var properties = new List<EntityProperty> { new("CustomerId", "Guid"), new("PlacedOn", "DateTime") };
+
+        // idType is deliberately non-Guid here: the default id expression is also
+        // "Guid.NewGuid()", which would otherwise inflate the CustomerId property's own
+        // occurrence count to two (once for `id`, once for `customerId`) and invalidate the
+        // "evaluated exactly once" assertion below without that meaning anything was wrong.
+        var outputs = generator.Generate(CreateOptions(idType: "int", properties: properties));
+
+        var test = outputs.Single(o => o.RelativePath.EndsWith("ProductTests.cs"));
+        var propertiesTestStart = test.Content.IndexOf("Create_should_set_properties", StringComparison.Ordinal);
+        propertiesTestStart.ShouldBeGreaterThan(-1);
+        var propertiesTestBody = test.Content[propertiesTestStart..];
+
+        propertiesTestBody.ShouldContain("var customerId = Guid.NewGuid();");
+        propertiesTestBody.ShouldContain("var placedOn = DateTime.UtcNow;");
+        propertiesTestBody.ShouldContain("Create(id, customerId, placedOn)");
+        propertiesTestBody.ShouldContain("entity.CustomerId.ShouldBe(customerId);");
+        propertiesTestBody.ShouldContain("entity.PlacedOn.ShouldBe(placedOn);");
+
+        // Each non-deterministic expression must appear exactly once — as the local's
+        // initializer — never a second time as a separately-evaluated assertion argument.
+        CountOccurrences(propertiesTestBody, "Guid.NewGuid()").ShouldBe(1);
+        CountOccurrences(propertiesTestBody, "DateTime.UtcNow").ShouldBe(1);
+    }
+
+    private static int CountOccurrences(string haystack, string needle)
+    {
+        var count = 0;
+        var index = 0;
+        while ((index = haystack.IndexOf(needle, index, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            index += needle.Length;
+        }
+
+        return count;
+    }
+
+    [Fact]
     public void Generate_CustomStronglyTypedId_AddsIdentifierOutput()
     {
         var generator = new EntityGenerator();

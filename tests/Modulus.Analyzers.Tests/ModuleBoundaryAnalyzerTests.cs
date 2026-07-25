@@ -285,6 +285,111 @@ public class ModuleBoundaryAnalyzerTests
     }
 
     [Fact]
+    public async Task ReferenceOtherModuleDomainViaGlobalAlias_ReportsDiagnostic()
+    {
+        const string referenceSource = """
+            namespace Acme.Catalog.Domain
+            {
+                public class Product
+                {
+                    public int Id { get; set; }
+                    public string Name { get; set; }
+                }
+            }
+            """;
+
+        // `global::` must not let a cross-module using bypass the boundary check.
+        const string source = """
+            using global::Acme.Catalog.Domain;
+
+            namespace Acme.Orders.Application
+            {
+                public class OrderService
+                {
+                    public void Process(Product product) { }
+                }
+            }
+            """;
+
+        var compilation = AnalyzerTestHelper.CreateCompilationWithReference(
+            source, "Acme.Orders.Application",
+            referenceSource, "Acme.Catalog.Domain");
+
+        var diagnostics = await AnalyzerTestHelper.GetDiagnosticsAsync(_analyzer, compilation);
+
+        diagnostics.ShouldNotBeEmpty();
+        diagnostics.ShouldAllBe(d => d.Id == "MOD001");
+    }
+
+    [Fact]
+    public async Task ReferenceModuleNamedBuildingBlocksEvil_ReportsDiagnostic()
+    {
+        const string referenceSource = """
+            namespace Acme.BuildingBlocksEvil.Domain
+            {
+                public class Product
+                {
+                    public int Id { get; set; }
+                }
+            }
+            """;
+
+        // "BuildingBlocksEvil" merely prefix-matches "BuildingBlocks" and must not be exempt —
+        // the allowance requires a dot-or-end boundary right after "BuildingBlocks".
+        const string source = """
+            using Acme.BuildingBlocksEvil.Domain;
+
+            namespace Acme.Orders.Application
+            {
+                public class OrderService
+                {
+                    public void Process(Product product) { }
+                }
+            }
+            """;
+
+        var compilation = AnalyzerTestHelper.CreateCompilationWithReference(
+            source, "Acme.Orders.Application",
+            referenceSource, "Acme.BuildingBlocksEvil.Domain");
+
+        var diagnostics = await AnalyzerTestHelper.GetDiagnosticsAsync(_analyzer, compilation);
+
+        diagnostics.ShouldNotBeEmpty();
+        diagnostics.ShouldAllBe(d => d.Id == "MOD001");
+    }
+
+    [Fact]
+    public async Task ReferenceBuildingBlocksViaGlobalAlias_NoDiagnostic()
+    {
+        const string referenceSource = """
+            namespace Acme.BuildingBlocks.Domain
+            {
+                public abstract class Entity<TId>
+                {
+                    public TId Id { get; set; }
+                }
+            }
+            """;
+
+        const string source = """
+            using global::Acme.BuildingBlocks.Domain;
+
+            namespace Acme.Orders.Domain
+            {
+                public class Order : Entity<int> { }
+            }
+            """;
+
+        var compilation = AnalyzerTestHelper.CreateCompilationWithReference(
+            source, "Acme.Orders.Domain",
+            referenceSource, "Acme.BuildingBlocks.Domain");
+
+        var diagnostics = await AnalyzerTestHelper.GetDiagnosticsAsync(_analyzer, compilation);
+
+        diagnostics.ShouldBeEmpty();
+    }
+
+    [Fact]
     public void ParseModuleInfo_ValidAssemblyName_ReturnsCorrectInfo()
     {
         var info = ModuleBoundaryAnalyzer.ParseModuleInfo("Acme.Orders.Domain");

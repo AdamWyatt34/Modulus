@@ -15,13 +15,22 @@ internal sealed class AsbDlqBrowser(DlqConnection connection) : IDlqBrowser
 {
     private static readonly TimeSpan ReceiveWait = TimeSpan.FromSeconds(3);
 
-    private readonly ServiceBusClient _client = new(connection.ConnectionString);
+    private ServiceBusClient? _client;
+
+    /// <summary>
+    /// Built lazily, on first actual use, rather than in the primary constructor: constructing a
+    /// <see cref="ServiceBusClient"/> parses (and can reject) the connection string, and
+    /// <c>DlqHandler</c> wraps both browser construction and every browser call in the same
+    /// try/catch. Laziness keeps that failure surfaced from wherever it's actually triggered —
+    /// and keeps this type trivially, side-effect-free constructible.
+    /// </summary>
+    private ServiceBusClient Client => _client ??= new ServiceBusClient(connection.ConnectionString);
 
     private string Topic => AzureServiceBusTopology.TopicName(connection.EventTypeName!);
     private string Subscription => AzureServiceBusTopology.SubscriptionName(connection.EndpointName);
 
     private ServiceBusReceiver CreateDlqReceiver()
-        => _client.CreateReceiver(Topic, Subscription, new ServiceBusReceiverOptions
+        => Client.CreateReceiver(Topic, Subscription, new ServiceBusReceiverOptions
         {
             SubQueue = SubQueue.DeadLetter,
             ReceiveMode = ServiceBusReceiveMode.PeekLock,
@@ -42,54 +51,95 @@ internal sealed class AsbDlqBrowser(DlqConnection connection) : IDlqBrowser
             .ToList();
     }
 
-    public async Task<bool> ReplayAsync(string messageId, int max, CancellationToken cancellationToken = default)
-        => await ReplayCoreAsync(messageId, max, cancellationToken).ConfigureAwait(false) > 0;
+    public Task<bool> ReplayAsync(string messageId, int max, CancellationToken cancellationToken = default)
+        => ReplaySingleAsync(messageId, max, cancellationToken);
 
     public Task<int> ReplayAllAsync(int max, CancellationToken cancellationToken = default)
-        => ReplayCoreAsync(messageId: null, max, cancellationToken);
+        => ReplayAllCoreAsync(max, cancellationToken);
 
-    private async Task<int> ReplayCoreAsync(string? messageId, int max, CancellationToken cancellationToken)
+    /// <summary>
+    /// Finds one message by id among up to <paramref name="max"/> dead-lettered messages.
+    /// Collects the whole scan window first and settles every examined message only after the
+    /// search completes — the same collect-then-settle shape as <c>RabbitMqDlqBrowser</c>.
+    /// Abandoning a non-matching message *mid-scan* (the previous shape) returns it to the head
+    /// of the sub-queue immediately, where the very next receive call can pick it right back up —
+    /// starving the scan from ever reaching messages deeper in the queue while inflating that
+    /// head message's DeliveryCount on every pass. Settling afterward guarantees forward progress
+    /// and touches each examined message's delivery count at most once. On a match, the matched
+    /// message is still sent to its destination and completed before anything is abandoned.
+    /// </summary>
+    private async Task<bool> ReplaySingleAsync(string messageId, int max, CancellationToken cancellationToken)
     {
         await using var receiver = CreateDlqReceiver();
-        await using var sender = _client.CreateSender(Topic);
+        await using var sender = Client.CreateSender(Topic);
 
-        var replayed = 0;
-        var examined = 0;
+        var received = new List<ServiceBusReceivedMessage>();
+        ServiceBusReceivedMessage? match = null;
 
-        while (examined < max)
+        while (received.Count < max)
         {
             var batch = await receiver
-                .ReceiveMessagesAsync(Math.Min(32, max - examined), ReceiveWait, cancellationToken)
+                .ReceiveMessagesAsync(Math.Min(32, max - received.Count), ReceiveWait, cancellationToken)
                 .ConfigureAwait(false);
 
             if (batch.Count == 0)
                 break;
 
-            foreach (var received in batch)
+            received.AddRange(batch);
+            match ??= batch.FirstOrDefault(m => string.Equals(m.MessageId, messageId, StringComparison.OrdinalIgnoreCase));
+
+            if (match is not null)
+                break;
+        }
+
+        try
+        {
+            if (match is null)
+                return false;
+
+            // The copy constructor carries body, MessageId, and application properties.
+            await sender.SendMessageAsync(new ServiceBusMessage(match), cancellationToken).ConfigureAwait(false);
+            await receiver.CompleteMessageAsync(match, cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+        finally
+        {
+            foreach (var candidate in received)
             {
-                examined++;
-
-                var isMatch = messageId is null
-                    || string.Equals(received.MessageId, messageId, StringComparison.OrdinalIgnoreCase);
-
-                if (!isMatch)
-                {
-                    await receiver.AbandonMessageAsync(received, cancellationToken: cancellationToken).ConfigureAwait(false);
+                if (ReferenceEquals(candidate, match))
                     continue;
-                }
 
-                // The copy constructor carries body, MessageId, and application properties.
-                await sender.SendMessageAsync(new ServiceBusMessage(received), cancellationToken).ConfigureAwait(false);
-                await receiver.CompleteMessageAsync(received, cancellationToken).ConfigureAwait(false);
+                await receiver.AbandonMessageAsync(candidate, cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
+        }
+    }
+
+    private async Task<int> ReplayAllCoreAsync(int max, CancellationToken cancellationToken)
+    {
+        await using var receiver = CreateDlqReceiver();
+        await using var sender = Client.CreateSender(Topic);
+
+        var replayed = 0;
+
+        while (replayed < max)
+        {
+            var batch = await receiver
+                .ReceiveMessagesAsync(Math.Min(32, max - replayed), ReceiveWait, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (batch.Count == 0)
+                break;
+
+            foreach (var message in batch)
+            {
+                await sender.SendMessageAsync(new ServiceBusMessage(message), cancellationToken).ConfigureAwait(false);
+                await receiver.CompleteMessageAsync(message, cancellationToken).ConfigureAwait(false);
                 replayed++;
-
-                if (messageId is not null)
-                    return replayed;
             }
         }
 
         return replayed;
     }
 
-    public ValueTask DisposeAsync() => _client.DisposeAsync();
+    public ValueTask DisposeAsync() => _client?.DisposeAsync() ?? ValueTask.CompletedTask;
 }

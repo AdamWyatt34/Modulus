@@ -26,18 +26,18 @@ EShop/
 ├── .editorconfig
 ├── .gitignore
 ├── src/
-│   ├── BuildingBlocks/
-│   │   ├── Domain/            # Entity, AggregateRoot, ValueObject, DomainEvent
-│   │   ├── Application/       # IUnitOfWork, IRepository, Pagination
-│   │   ├── Infrastructure/    # BaseDbContext, EfRepository, IModuleRegistration
-│   │   └── Integration/       # IIntegrationEvent base types
-│   ├── EShop.WebApi/          # Host application (Program.cs, endpoints)
-│   ├── EShop.AppHost/         # Aspire orchestrator (when --aspire used)
-│   └── EShop.ServiceDefaults/ # Aspire defaults (when --aspire used)
+│   ├── BuildingBlocks.Domain/          # Entity, AggregateRoot, ValueObject, DomainEvent
+│   ├── BuildingBlocks.Application/     # IRepository, Pagination
+│   ├── BuildingBlocks.Infrastructure/  # BaseDbContext, EfRepository, IModuleRegistration, IEndpoint
+│   ├── BuildingBlocks.Integration/     # IIntegrationEvent re-exports
+│   └── EShop.WebApi/                   # Host application (Program.cs)
+├── aspire/
+│   ├── EShop.AppHost/                  # Aspire orchestrator (when --aspire used)
+│   └── EShop.ServiceDefaults/          # Aspire defaults (when --aspire used)
 └── tests/
-    ├── EShop.Tests.Unit/
-    ├── EShop.Tests.Integration/
-    └── EShop.Tests.Architecture/
+    ├── EShop.Tests.Common/
+    ├── EShop.Tests.Architecture/
+    └── EShop.Tests.Integration/
 ```
 
 ::: tip Solution file format
@@ -46,11 +46,11 @@ Modulus generates an `.slnx` file, which is the modern XML-based solution format
 
 Key pieces of the scaffold:
 
-- **`Directory.Build.props`** and **`Directory.Packages.props`** -- Central package management so every project uses consistent dependency versions.
-- **BuildingBlocks** -- Shared base classes and interfaces used across all modules.
-- **EShop.WebApi** -- The single deployable host that composes all modules via `IModuleRegistration`.
-- **Aspire projects** -- `AppHost` and `ServiceDefaults` provide distributed tracing, health checks, and the developer dashboard.
-- **Test projects** -- Unit, integration, and architecture test projects are ready from day one.
+- **`Directory.Build.props`** and **`Directory.Packages.props`** -- Central package management so every project uses consistent dependency versions (all `ModulusKit.*` packages are pinned to one version).
+- **BuildingBlocks projects** -- Four shared projects (`BuildingBlocks.Domain/.Application/.Infrastructure/.Integration`) with the base classes and interfaces used across all modules.
+- **EShop.WebApi** -- The single deployable host that composes all modules via `IModuleRegistration` and the module auto-discovery source generator.
+- **Aspire projects** -- `AppHost` and `ServiceDefaults` (under `aspire/`) provide distributed tracing, health checks, and the developer dashboard.
+- **Solution-level test projects** -- `Tests.Common`, `Tests.Architecture`, and `Tests.Integration` at the solution root; each module later brings its own unit/integration/architecture test projects.
 
 Navigate into the solution directory for the remaining steps:
 
@@ -67,20 +67,20 @@ modulus add-module Catalog
 modulus add-module Orders
 ```
 
-Each module is created with five layers and three dedicated test projects:
+Each module is created with five layers and three dedicated test projects, all under the module's own directory (project names are `{Module}.{Layer}`; namespaces are `EShop.Catalog.{Layer}`):
 
 ```
 src/Modules/Catalog/
-├── EShop.Modules.Catalog.Api/             # Endpoints & module registration
-├── EShop.Modules.Catalog.Application/     # Commands, queries, handlers, DTOs
-├── EShop.Modules.Catalog.Domain/          # Entities, value objects, domain events
-├── EShop.Modules.Catalog.Infrastructure/  # EF Core, repositories, outbox
-└── EShop.Modules.Catalog.Integration/     # Integration events (shared contracts)
-
-tests/Modules/Catalog/
-├── EShop.Modules.Catalog.Tests.Unit/
-├── EShop.Modules.Catalog.Tests.Integration/
-└── EShop.Modules.Catalog.Tests.Architecture/
+├── src/
+│   ├── Catalog.Api/             # Endpoints & endpoint registration
+│   ├── Catalog.Application/     # Commands, queries, handlers, DTOs
+│   ├── Catalog.Domain/          # Entities, value objects, domain events
+│   ├── Catalog.Infrastructure/  # EF Core, CatalogModule.cs (module registration)
+│   └── Catalog.Integration/     # Integration events (shared contracts)
+└── tests/
+    ├── Catalog.Tests.Unit/
+    ├── Catalog.Tests.Integration/
+    └── Catalog.Tests.Architecture/
 ```
 
 ::: info Layer responsibilities
@@ -88,12 +88,12 @@ tests/Modules/Catalog/
 | --- | --- | --- |
 | **Domain** | Entities, aggregate roots, value objects, domain events | BuildingBlocks.Domain only |
 | **Application** | Commands, queries, handlers, DTOs, interfaces | Domain, BuildingBlocks.Application |
-| **Infrastructure** | EF Core DbContext, repositories, outbox, external services | Application, BuildingBlocks.Infrastructure |
-| **Api** | Minimal API endpoints, module registration | Application, Infrastructure |
+| **Infrastructure** | EF Core DbContexts, repositories, `CatalogModule` registration | Application, Domain, Api, BuildingBlocks.Infrastructure |
+| **Api** | Minimal API endpoints (`IEndpoint` classes) | Application, BuildingBlocks.Infrastructure |
 | **Integration** | Integration event contracts shared between modules | BuildingBlocks.Integration only |
 :::
 
-The Orders module follows the same structure. Both modules are automatically discovered at startup by the source generator -- no manual composition root file to maintain.
+The Orders module follows the same structure. `add-module` adds every project to the solution, wires a `ProjectReference` from `EShop.WebApi` to the module's Infrastructure project, and runs `dotnet restore` -- at startup the source generator discovers each `CatalogModule`/`OrdersModule` automatically, so there is no manual composition root file to maintain. Each fresh module already answers at `GET /api/catalog/sample` (a scaffolded sample query + endpoint).
 
 ## Step 3 -- Add an Entity
 
@@ -103,11 +103,15 @@ Scaffold a `Product` aggregate root in the Catalog module:
 modulus add-entity Product --module Catalog --aggregate --properties "Name:string,Price:decimal"
 ```
 
-This generates:
+This generates five files:
 
-- **`Product.cs`** in the Domain layer -- an `AggregateRoot` with the specified properties and a static `Create` factory method.
-- **`ProductConfiguration.cs`** in the Infrastructure layer -- an EF Core entity type configuration.
-- The entity is registered in the module's `DbContext`.
+- **`Product.cs`** in the Domain layer (`src/Modules/Catalog/src/Catalog.Domain/Entities/`) -- an `AggregateRoot` with the specified properties and a static `Create` factory method.
+- **`IProductRepository.cs`** in the Domain layer -- a repository interface for the aggregate.
+- **`ProductRepository.cs`** in the Infrastructure layer -- the EF Core implementation, built on `EfRepository<,>`.
+- **`ProductConfiguration.cs`** in the Infrastructure layer -- an EF Core entity type configuration, picked up automatically by the DbContext's `ApplyConfigurationsFromAssembly`.
+- **`ProductTests.cs`** in `src/Modules/Catalog/tests/Catalog.Tests.Unit/Domain/` -- a starter unit test for the factory method.
+
+The CLI prints the remaining manual steps: register `IProductRepository` in `CatalogModule.cs`, and optionally add a `DbSet<Product>` to `CatalogDbContext`.
 
 ::: tip Strongly Typed IDs
 For type-safe entity identifiers, use the `[StronglyTypedId]` attribute. The source generator automatically creates EF Core value converters, JSON converters, and type converters -- no manual boilerplate. See [Strongly Typed IDs](/generators/strongly-typed-ids) for details.
@@ -125,10 +129,12 @@ Generate a `CreateProduct` command with a `Guid` result type:
 modulus add-command CreateProduct --module Catalog --result-type Guid
 ```
 
-This produces two files in the Application layer:
+This produces four files -- three in the Application layer under `src/Modules/Catalog/src/Catalog.Application/Commands/CreateProduct/`, one in the unit test project:
 
 - **`CreateProduct.cs`** -- a record implementing `ICommand<Guid>`.
 - **`CreateProductHandler.cs`** -- a handler implementing `ICommandHandler<CreateProduct, Guid>` with a skeleton `Handle` method.
+- **`CreateProductValidator.cs`** -- a FluentValidation validator, auto-registered by the source generator.
+- **`CreateProductHandlerTests.cs`** -- a starter unit test in `src/Modules/Catalog/tests/Catalog.Tests.Unit/Commands/`.
 
 ## Step 5 -- Add a Query
 
@@ -138,40 +144,51 @@ Generate a `GetProductById` query:
 modulus add-query GetProductById --module Catalog --result-type ProductDto
 ```
 
-This produces:
+This produces, under `src/Modules/Catalog/src/Catalog.Application/Queries/GetProductById/` (plus a starter test in `src/Modules/Catalog/tests/Catalog.Tests.Unit/Queries/`):
 
 - **`GetProductById.cs`** -- a record implementing `IQuery<ProductDto>`.
 - **`GetProductByIdHandler.cs`** -- a handler implementing `IQueryHandler<GetProductById, ProductDto>` with a skeleton `Handle` method.
+
+Note that `ProductDto` itself is not generated -- define the record in the Application layer (queries reference whatever result type you name).
 
 ## Step 6 -- Add an Endpoint
 
 Wire the command to an HTTP endpoint:
 
 ```bash
-modulus add-endpoint CreateProduct --module Catalog --method POST --route / --command CreateProduct --result-type Guid
+modulus add-endpoint CreateProductEndpoint --module Catalog --method POST --route / --command CreateProduct --result-type Guid
 ```
 
-This generates a minimal API endpoint in the Api layer that:
+This generates `src/Modules/Catalog/src/Catalog.Api/Endpoints/CreateProductEndpoint.cs` -- an `IEndpoint` class that maps `POST /` inside the module's `/api/catalog` route group, sends the command through the mediator, and converts the `Result<Guid>` to an HTTP response with `Match` (201 Created on success, RFC 7807 problem details on failure).
 
-1. Accepts the `CreateProduct` command as the request body.
-2. Sends it through the mediator.
-3. Returns the result.
+The scaffolded endpoint dispatches `new CreateProduct()` without a request body -- the generated command record has no properties yet. You wire the body in the next step.
 
-## Step 7 -- Fill in Handler Logic
+## Step 7 -- Fill in the Slice
 
-The scaffolded handlers contain `TODO` placeholders. Open `CreateProductHandler.cs` in the Application layer and add the business logic:
+The scaffolded files contain `TODO` placeholders. Three small edits make the slice real.
+
+First, give the command its properties (`src/Modules/Catalog/src/Catalog.Application/Commands/CreateProduct/CreateProduct.cs`):
 
 ```csharp
-using EShop.Modules.Catalog.Domain;
+namespace EShop.Catalog.Application.Commands.CreateProduct;
 
-namespace EShop.Modules.Catalog.Application.Products.Commands.CreateProduct;
+public sealed record CreateProduct(string Name, decimal Price) : ICommand<Guid>;
+```
 
-public class CreateProductHandler : ICommandHandler<CreateProduct, Guid>
+Second, implement the handler (`CreateProductHandler.cs` in the same folder):
+
+```csharp
+using EShop.Catalog.Domain.Entities;
+using EShop.Catalog.Domain.Repositories;
+
+namespace EShop.Catalog.Application.Commands.CreateProduct;
+
+public sealed class CreateProductHandler : ICommandHandler<CreateProduct, Guid>
 {
-    private readonly IRepository<Product, Guid> _repository;
+    private readonly IProductRepository _repository;
     private readonly IUnitOfWork _unitOfWork;
 
-    public CreateProductHandler(IRepository<Product, Guid> repository, IUnitOfWork unitOfWork)
+    public CreateProductHandler(IProductRepository repository, IUnitOfWork unitOfWork)
     {
         _repository = repository;
         _unitOfWork = unitOfWork;
@@ -179,9 +196,9 @@ public class CreateProductHandler : ICommandHandler<CreateProduct, Guid>
 
     public async Task<Result<Guid>> Handle(
         CreateProduct command,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken = default)
     {
-        var product = Product.Create(command.Name, command.Price);
+        var product = Product.Create(Guid.NewGuid(), command.Name, command.Price);
 
         await _repository.AddAsync(product, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -191,38 +208,21 @@ public class CreateProductHandler : ICommandHandler<CreateProduct, Guid>
 }
 ```
 
-Similarly, fill in the `GetProductByIdHandler`:
+(Remember the CLI's next-steps output from Step 3: register `IProductRepository` against `ProductRepository` in `CatalogModule.ConfigureServices`, and make sure `CatalogModule` registers an `IUnitOfWork` for the context -- the scaffolded module already maps `IUnitOfWork` to its `DbContext`.)
+
+Third, bind the request body in the generated endpoint (`src/Modules/Catalog/src/Catalog.Api/Endpoints/CreateProductEndpoint.cs`) by adding the command parameter to the lambda:
 
 ```csharp
-namespace EShop.Modules.Catalog.Application.Products.Queries.GetProductById;
-
-public class GetProductByIdHandler : IQueryHandler<GetProductById, ProductDto>
+app.MapPost("/", async (CreateProduct command, IMediator mediator, CancellationToken ct) =>
 {
-    private readonly IRepository<Product, Guid> _repository;
-
-    public GetProductByIdHandler(IRepository<Product, Guid> repository)
-    {
-        _repository = repository;
-    }
-
-    public async Task<Result<ProductDto>> Handle(
-        GetProductById query,
-        CancellationToken cancellationToken)
-    {
-        var product = await _repository.GetByIdAsync(query.Id, cancellationToken);
-
-        if (product is null)
-        {
-            return Error.NotFound("Product.NotFound", "Product not found.");
-        }
-
-        return Result<ProductDto>.Success(new ProductDto(
-            product.Id,
-            product.Name,
-            product.Price));
-    }
-}
+    var result = await mediator.Send(command, ct);
+    return result.Match(
+        id => Results.Created($"/api/catalog/{id}", id),
+        ApiResults.Problem);
+})
 ```
+
+The same pattern applies to `GetProductByIdHandler` -- inject `IProductRepository`, return `Error.NotFound("Product.NotFound", "Product not found.")` when the id is unknown, and map the entity to your `ProductDto`.
 
 ::: warning Result pattern
 All handlers return `Result<T>` rather than throwing exceptions for expected failure cases. Use `Result<T>.Success(value)` for the happy path and return an `Error` factory value (e.g. `Error.NotFound(code, message)`) for known errors -- it converts implicitly to `Result<T>`. The pipeline and endpoint infrastructure handle the mapping to appropriate HTTP status codes.
@@ -240,22 +240,30 @@ dotnet run --project src/EShop.WebApi
 If you initialized with `--aspire`, you can run through the Aspire AppHost instead to get the developer dashboard, distributed tracing, and health check UI:
 
 ```bash
-dotnet run --project src/EShop.AppHost
+dotnet run --project aspire/EShop.AppHost
 ```
 
-The Aspire dashboard is available at `https://localhost:17222` by default.
+The dashboard URL (with its login token) is printed to the console on startup.
 :::
 
-Once running, test the endpoint:
+The host listens on `https://localhost:5001` (and `http://localhost:5000`) in Development, with the Scalar API reference at `/scalar/v1`. Module endpoints are grouped under `/api/{module}`. Test them:
 
 ```bash
-# Create a product
-curl -X POST https://localhost:5001/catalog \
+# The scaffolded sample endpoint works out of the box
+curl https://localhost:5001/api/catalog/sample
+# -> "Catalog module is running"
+
+# The endpoint you wired in Steps 6-7
+curl -X POST https://localhost:5001/api/catalog/ \
   -H "Content-Type: application/json" \
   -d '{"name": "Widget", "price": 9.99}'
 ```
 
 You should receive a `201 Created` response with the new product's ID.
+
+::: warning Database connection
+`CatalogModule` registers its `DbContext` with `UseSqlServer(configuration.GetConnectionString("Default"))`, so the create endpoint needs a reachable SQL Server and a `ConnectionStrings:Default` value in `appsettings.json` (plus created tables -- e.g. `EnsureCreated`/migrations) before the POST succeeds end to end. The sample endpoint has no database dependency and works immediately.
+:::
 
 ## Summary
 

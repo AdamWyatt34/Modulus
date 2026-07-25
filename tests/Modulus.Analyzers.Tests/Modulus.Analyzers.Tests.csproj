@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Modulus.Analyzers\Modulus.Analyzers.csproj" />
+    <ProjectReference Include="..\..\src\Modulus.Analyzers.CodeFixes\Modulus.Analyzers.CodeFixes.csproj" />
     <ProjectReference Include="..\..\src\Modulus.Mediator.Abstractions\Modulus.Mediator.Abstractions.csproj" />
   </ItemGroup>
 

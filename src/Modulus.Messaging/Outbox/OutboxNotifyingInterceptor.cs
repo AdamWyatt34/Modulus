@@ -140,7 +140,15 @@ public sealed class OutboxNotifyingInterceptor(IOutboxNotifier notifier)
         if (context is null || !_state.TryGetValue(context, out var state))
             return;
 
-        var shouldNotify = state.NotifyOnCommit;
+        // For EF's own implicit relational transaction (opened when a save needs more than
+        // one command and no ambient transaction exists), TransactionCommitted fires BEFORE
+        // SavedChanges — so NotifyOrDefer has not run yet and NotifyOnCommit is still false
+        // even though the save is, at this point, fully committed and visible. Treating a
+        // still-pending HasNewOutboxRows as notify-eligible here catches that case; the
+        // explicit-transaction case (NotifyOnCommit set by an earlier SavedChanges) keeps
+        // working exactly as before. ClearAll below then makes the later SavedChanges call for
+        // this same save a no-op (state is gone), so this never double-notifies.
+        var shouldNotify = state.NotifyOnCommit || state.HasNewOutboxRows;
         ClearAll(context);
 
         if (shouldNotify)

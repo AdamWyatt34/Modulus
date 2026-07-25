@@ -92,3 +92,87 @@ public class PreDeclaredTopologyHandler : IIntegrationEventHandler<PreDeclaredTo
         return Task.CompletedTask;
     }
 }
+
+// Three distinct event types published concurrently by the H-TR1 regression test: each is a
+// first-publish for its own exchange, so publishing all three (and repeats of each) in parallel
+// races RabbitMqTransport's declared-exchange cache across concurrent publishes.
+
+public record ConcurrentPublishEventA : IntegrationEvent
+{
+    public required int Value { get; init; }
+}
+
+public class ConcurrentPublishHandlerA : IIntegrationEventHandler<ConcurrentPublishEventA>
+{
+    public static ConcurrentQueue<ConcurrentPublishEventA> Handled { get; } = [];
+
+    public Task Handle(ConcurrentPublishEventA @event, CancellationToken cancellationToken = default)
+    {
+        Handled.Enqueue(@event);
+        return Task.CompletedTask;
+    }
+}
+
+public record ConcurrentPublishEventB : IntegrationEvent
+{
+    public required int Value { get; init; }
+}
+
+public class ConcurrentPublishHandlerB : IIntegrationEventHandler<ConcurrentPublishEventB>
+{
+    public static ConcurrentQueue<ConcurrentPublishEventB> Handled { get; } = [];
+
+    public Task Handle(ConcurrentPublishEventB @event, CancellationToken cancellationToken = default)
+    {
+        Handled.Enqueue(@event);
+        return Task.CompletedTask;
+    }
+}
+
+public record ConcurrentPublishEventC : IntegrationEvent
+{
+    public required int Value { get; init; }
+}
+
+public class ConcurrentPublishHandlerC : IIntegrationEventHandler<ConcurrentPublishEventC>
+{
+    public static ConcurrentQueue<ConcurrentPublishEventC> Handled { get; } = [];
+
+    public Task Handle(ConcurrentPublishEventC @event, CancellationToken cancellationToken = default)
+    {
+        Handled.Enqueue(@event);
+        return Task.CompletedTask;
+    }
+}
+
+public record SlowEvent : IntegrationEvent
+{
+    public required int Value { get; init; }
+}
+
+/// <summary>
+/// Simulates a handler still doing real work when StopConsumingAsync is called, so the H-TR3
+/// drain test can assert the transport waits for it instead of abandoning it mid-flight.
+/// </summary>
+public class SlowHandler : IIntegrationEventHandler<SlowEvent>
+{
+    private static volatile bool _started;
+    private static volatile bool _completed;
+
+    public static bool Started => _started;
+
+    public static bool Completed => _completed;
+
+    public static void Reset()
+    {
+        _started = false;
+        _completed = false;
+    }
+
+    public async Task Handle(SlowEvent @event, CancellationToken cancellationToken = default)
+    {
+        _started = true;
+        await Task.Delay(TimeSpan.FromSeconds(2), CancellationToken.None);
+        _completed = true;
+    }
+}
