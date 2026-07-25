@@ -140,19 +140,21 @@ public sealed class ExceptionThrowingInHandlerAnalyzer : DiagnosticAnalyzer
         if (handleMethod is null)
             return false;
 
-        // Find the containing class
-        var classNode = handleMethod.Parent;
-        while (classNode is not null && classNode is not ClassDeclarationSyntax)
-            classNode = classNode.Parent;
+        // Find the containing type — a `class`, `record class`, or `record struct` (via the
+        // common TypeDeclarationSyntax base) can all implement a handler interface, so a plain
+        // ClassDeclarationSyntax check missed record handlers entirely.
+        var typeNode = handleMethod.Parent;
+        while (typeNode is not null && typeNode is not TypeDeclarationSyntax)
+            typeNode = typeNode.Parent;
 
-        if (classNode is not ClassDeclarationSyntax classDeclaration)
+        if (typeNode is not TypeDeclarationSyntax typeDeclaration)
             return false;
 
-        var classSymbol = context.SemanticModel.GetDeclaredSymbol(classDeclaration, context.CancellationToken);
-        if (classSymbol is null)
+        var typeSymbol = context.SemanticModel.GetDeclaredSymbol(typeDeclaration, context.CancellationToken) as INamedTypeSymbol;
+        if (typeSymbol is null)
             return false;
 
-        return ImplementsHandlerInterface(classSymbol);
+        return ImplementsHandlerInterface(typeSymbol);
     }
 
     private static bool ImplementsHandlerInterface(INamedTypeSymbol typeSymbol)

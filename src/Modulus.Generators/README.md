@@ -67,6 +67,8 @@ Control initialization order with `[ModuleOrder(n)]`.
 | MODGEN002 | Error | `[StronglyTypedId]` target must be a `record struct` |
 | MODGEN003 | Info | Open generic handler skipped for registration |
 | MODGEN004 | Warning | `IModuleRegistration` missing required static methods |
+| MODGEN005 | Error | `[StronglyTypedId]` backing type is unsupported (only `Guid`, `int`, `long`) |
+| MODGEN006 | Error | `[StronglyTypedId]` target must be a top-level type |
 
 ## Learn More
 

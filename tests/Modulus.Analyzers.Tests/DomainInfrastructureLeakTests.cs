@@ -183,6 +183,25 @@ public class DomainInfrastructureLeakTests
     }
 
     [Fact]
+    public async Task EfCoreUsingViaGlobalAlias_InDomainAssembly_ReportsDiagnostic()
+    {
+        const string source = """
+            using global::Microsoft.EntityFrameworkCore;
+
+            public class Order
+            {
+                public int Id { get; set; }
+            }
+            """;
+
+        var diagnostics = await AnalyzerTestHelper.GetDiagnosticsAsync(
+            _analyzer, source, "Acme.Orders.Domain");
+
+        diagnostics.Length.ShouldBe(1);
+        diagnostics[0].Id.ShouldBe("MOD004");
+    }
+
+    [Fact]
     public async Task NewtonsoftUsing_InDomainAssembly_ReportsDiagnostic()
     {
         const string source = """

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Immutable;
 using System.Linq;
 using Microsoft.CodeAnalysis;
@@ -76,9 +77,13 @@ public sealed class DomainInfrastructureLeakAnalyzer : DiagnosticAnalyzer
         if (usingName is null)
             return;
 
+        var normalizedUsingName = usingName.StartsWith("global::", StringComparison.Ordinal)
+            ? usingName.Substring("global::".Length)
+            : usingName;
+
         foreach (var prefix in ForbiddenUsingPrefixes)
         {
-            if (usingName == prefix || usingName.StartsWith(prefix + "."))
+            if (normalizedUsingName == prefix || normalizedUsingName.StartsWith(prefix + "."))
             {
                 var diagnostic = Diagnostic.Create(
                     DiagnosticDescriptors.DomainInfrastructureLeak,

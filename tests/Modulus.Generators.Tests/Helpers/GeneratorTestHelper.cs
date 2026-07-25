@@ -43,14 +43,25 @@ internal static class GeneratorTestHelper
             references.Add(MetadataReference.CreateFromFile(location));
     }
 
-    public static (Compilation OutputCompilation, ImmutableArray<Diagnostic> Diagnostics, GeneratorDriverRunResult RunResult) RunGenerator(string source)
+    public static (Compilation OutputCompilation, ImmutableArray<Diagnostic> Diagnostics, GeneratorDriverRunResult RunResult) RunGenerator(
+        string source, bool includeEfCoreReference = true)
     {
         var syntaxTree = CSharpSyntaxTree.ParseText(source);
+
+        // Excluding the EF Core reference proves the generator's ValueConverter gate actually
+        // works — the default (true) reflects every other test in this file, since
+        // Modulus.Generators.Tests.csproj itself references EF Core, so TRUSTED_PLATFORM_ASSEMBLIES
+        // always includes it unless explicitly filtered out here.
+        var references = includeEfCoreReference
+            ? LazyReferences.Value
+            : LazyReferences.Value
+                .Where(r => r.Display is null || !r.Display.Contains("Microsoft.EntityFrameworkCore"))
+                .ToList();
 
         var compilation = CSharpCompilation.Create(
             "TestAssembly",
             [syntaxTree],
-            LazyReferences.Value,
+            references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
         var generator = new StronglyTypedIdGenerator();

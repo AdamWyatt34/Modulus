@@ -35,4 +35,20 @@ internal static class DiagnosticDescriptors
         category: "ModulusGenerator",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor UnsupportedBackingType = new(
+        id: "MODGEN005",
+        title: "Unsupported StronglyTypedId backing type",
+        messageFormat: "Type '{0}' specifies an unsupported [StronglyTypedId] backing type; supported types are Guid, int, and long",
+        category: "ModulusGenerator",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor NestedStronglyTypedId = new(
+        id: "MODGEN006",
+        title: "StronglyTypedId must be a top-level type",
+        messageFormat: "Type '{0}' must be a top-level type to use [StronglyTypedId]; nested types are not supported",
+        category: "ModulusGenerator",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }

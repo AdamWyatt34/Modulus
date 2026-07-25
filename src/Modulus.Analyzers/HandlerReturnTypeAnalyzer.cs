@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using Microsoft.CodeAnalysis;
@@ -35,6 +36,14 @@ public sealed class HandlerReturnTypeAnalyzer : DiagnosticAnalyzer
         if (typeSymbol.IsAbstract || typeSymbol.IsGenericType)
             return;
 
+        // A type can implement more than one handler interface (e.g. a command handler and a
+        // query handler side by side), each with its own "Handle" overload. Resolving via
+        // `GetMembers("Handle").First()` picked an arbitrary overload regardless of which
+        // interface was being checked, so it could check the wrong method — or the same method —
+        // for every interface. Track methods already checked so an offending method is only
+        // reported once even if it satisfies multiple interfaces.
+        HashSet<IMethodSymbol>? checkedMethods = null;
+
         foreach (var iface in typeSymbol.AllInterfaces)
         {
             var originalDef = iface.OriginalDefinition;
@@ -44,12 +53,16 @@ public sealed class HandlerReturnTypeAnalyzer : DiagnosticAnalyzer
             if (ns != MediatorNamespace || !HandlerMetadataNames.Contains(metadataName))
                 continue;
 
-            // Found a handler interface — check the Handle method
-            var handleMethod = typeSymbol.GetMembers("Handle")
-                .OfType<IMethodSymbol>()
-                .FirstOrDefault(m => !m.IsStatic);
+            var interfaceHandleMethod = iface.GetMembers("Handle").OfType<IMethodSymbol>().FirstOrDefault();
+            if (interfaceHandleMethod is null)
+                continue;
 
+            var handleMethod = ResolveHandleMethod(typeSymbol, interfaceHandleMethod);
             if (handleMethod is null)
+                continue;
+
+            checkedMethods ??= new HashSet<IMethodSymbol>(SymbolEqualityComparer.Default);
+            if (!checkedMethods.Add(handleMethod))
                 continue;
 
             if (!IsValidHandlerReturnType(handleMethod.ReturnType))
@@ -62,6 +75,45 @@ public sealed class HandlerReturnTypeAnalyzer : DiagnosticAnalyzer
                 context.ReportDiagnostic(diagnostic);
             }
         }
+    }
+
+    private static IMethodSymbol? ResolveHandleMethod(INamedTypeSymbol typeSymbol, IMethodSymbol interfaceHandleMethod)
+    {
+        // The common case: a correctly implemented (implicit or explicit) interface member. This
+        // correctly disambiguates a type implementing more than one handler interface, where a
+        // naive `GetMembers("Handle").First()` could pick an arbitrary — possibly unrelated —
+        // overload regardless of which interface was being checked.
+        if (typeSymbol.FindImplementationForInterfaceMember(interfaceHandleMethod) is IMethodSymbol implementation)
+            return implementation;
+
+        // No valid implementation exists — most commonly because the return type doesn't match
+        // `Task<Result>`/`Task<Result<T>>` at all, which is the exact violation this analyzer
+        // exists to catch (and is itself a compile error, since the interface then goes
+        // unimplemented). Fall back to matching by parameter shape only (ignoring return type) so
+        // that method is still found and reported instead of silently skipped.
+        foreach (var candidate in typeSymbol.GetMembers("Handle").OfType<IMethodSymbol>())
+        {
+            if (!candidate.IsStatic && ParametersMatch(candidate.Parameters, interfaceHandleMethod.Parameters))
+                return candidate;
+        }
+
+        return null;
+    }
+
+    private static bool ParametersMatch(
+        ImmutableArray<IParameterSymbol> candidateParameters,
+        ImmutableArray<IParameterSymbol> interfaceParameters)
+    {
+        if (candidateParameters.Length != interfaceParameters.Length)
+            return false;
+
+        for (var i = 0; i < candidateParameters.Length; i++)
+        {
+            if (!SymbolEqualityComparer.Default.Equals(candidateParameters[i].Type, interfaceParameters[i].Type))
+                return false;
+        }
+
+        return true;
     }
 
     private static bool IsValidHandlerReturnType(ITypeSymbol returnType)
