@@ -40,3 +40,19 @@ public class FailingOrderPlacedHandler : IDomainEventHandler<OrderPlacedEvent>
         throw new InvalidOperationException("Handler failed");
     }
 }
+
+// Cancels the shared CancellationTokenSource while handling, simulating a handler whose work
+// causes (or observes) cancellation partway through Publish's dispatch loop.
+public class CancelingOrderPlacedHandler : IDomainEventHandler<OrderPlacedEvent>
+{
+    private readonly CancellationTokenSource _cancellationTokenSource;
+
+    public CancelingOrderPlacedHandler(CancellationTokenSource cancellationTokenSource) =>
+        _cancellationTokenSource = cancellationTokenSource;
+
+    public Task Handle(OrderPlacedEvent domainEvent, CancellationToken cancellationToken = default)
+    {
+        _cancellationTokenSource.Cancel();
+        return Task.CompletedTask;
+    }
+}

@@ -20,13 +20,23 @@ internal sealed class Mediator(IServiceProvider serviceProvider) : IMediator
     private static readonly MethodInfo StreamInternalMethod =
         typeof(Mediator).GetMethod(nameof(StreamInternal), BindingFlags.NonPublic | BindingFlags.Instance)!;
 
+    private static readonly MethodInfo PublishInternalMethod =
+        typeof(Mediator).GetMethod(nameof(PublishInternal), BindingFlags.NonPublic | BindingFlags.Instance)!;
+
     private static readonly ConcurrentDictionary<Type, MethodInfo> SendCommandCache = new();
-    private static readonly ConcurrentDictionary<Type, MethodInfo> SendCommandWithResultCache = new();
-    private static readonly ConcurrentDictionary<Type, MethodInfo> QueryCache = new();
-    private static readonly ConcurrentDictionary<Type, MethodInfo> StreamCache = new();
+
+    // Keyed on (request type, TResult) — a type implementing two closed generic interfaces
+    // with different result types (e.g. IQuery<int> and IQuery<string>) must not share a cache entry.
+    private static readonly ConcurrentDictionary<(Type RequestType, Type ResultType), MethodInfo> SendCommandWithResultCache = new();
+    private static readonly ConcurrentDictionary<(Type RequestType, Type ResultType), MethodInfo> QueryCache = new();
+    private static readonly ConcurrentDictionary<(Type RequestType, Type ResultType), MethodInfo> StreamCache = new();
+
+    private static readonly ConcurrentDictionary<Type, MethodInfo> PublishCache = new();
 
     public Task<Result> Send(ICommand command, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(command);
+
         var commandType = command.GetType();
         var method = SendCommandCache.GetOrAdd(commandType,
             t => SendCommandInternalMethod.MakeGenericMethod(t));
@@ -46,9 +56,11 @@ internal sealed class Mediator(IServiceProvider serviceProvider) : IMediator
         ICommand<TResult> command,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(command);
+
         var commandType = command.GetType();
-        var method = SendCommandWithResultCache.GetOrAdd(commandType,
-            t => SendCommandWithResultInternalMethod.MakeGenericMethod(t, typeof(TResult)));
+        var method = SendCommandWithResultCache.GetOrAdd((commandType, typeof(TResult)),
+            key => SendCommandWithResultInternalMethod.MakeGenericMethod(key.RequestType, key.ResultType));
 
         try
         {
@@ -65,9 +77,11 @@ internal sealed class Mediator(IServiceProvider serviceProvider) : IMediator
         IQuery<TResult> query,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(query);
+
         var queryType = query.GetType();
-        var method = QueryCache.GetOrAdd(queryType,
-            t => QueryInternalMethod.MakeGenericMethod(t, typeof(TResult)));
+        var method = QueryCache.GetOrAdd((queryType, typeof(TResult)),
+            key => QueryInternalMethod.MakeGenericMethod(key.RequestType, key.ResultType));
 
         try
         {
@@ -87,9 +101,11 @@ internal sealed class Mediator(IServiceProvider serviceProvider) : IMediator
         IStreamQuery<TResult> query,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(query);
+
         var queryType = query.GetType();
-        var method = StreamCache.GetOrAdd(queryType,
-            t => StreamInternalMethod.MakeGenericMethod(t, typeof(TResult)));
+        var method = StreamCache.GetOrAdd((queryType, typeof(TResult)),
+            key => StreamInternalMethod.MakeGenericMethod(key.RequestType, key.ResultType));
 
         try
         {
@@ -102,7 +118,30 @@ internal sealed class Mediator(IServiceProvider serviceProvider) : IMediator
         }
     }
 
-    public async Task Publish<TEvent>(TEvent domainEvent, CancellationToken cancellationToken = default)
+    // Dispatches on the event's runtime type — the same GetType()/MakeGenericMethod pattern as
+    // Send/Query/Stream — so that publishing through a base-typed (e.g. IDomainEvent) variable
+    // still resolves the closed IDomainEventHandler<TConcreteEvent> registrations.
+    public Task Publish<TEvent>(TEvent domainEvent, CancellationToken cancellationToken = default)
+        where TEvent : IDomainEvent
+    {
+        ArgumentNullException.ThrowIfNull(domainEvent);
+
+        var eventType = domainEvent.GetType();
+        var method = PublishCache.GetOrAdd(eventType,
+            t => PublishInternalMethod.MakeGenericMethod(t));
+
+        try
+        {
+            return (Task)method.Invoke(this, [domainEvent, cancellationToken])!;
+        }
+        catch (TargetInvocationException ex) when (ex.InnerException is not null)
+        {
+            ExceptionDispatchInfo.Capture(ex.InnerException).Throw();
+            throw;
+        }
+    }
+
+    private async Task PublishInternal<TEvent>(TEvent domainEvent, CancellationToken cancellationToken)
         where TEvent : IDomainEvent
     {
         var handlers = serviceProvider.GetServices<IDomainEventHandler<TEvent>>();
@@ -110,9 +149,17 @@ internal sealed class Mediator(IServiceProvider serviceProvider) : IMediator
 
         foreach (var handler in handlers)
         {
+            // Stop dispatching further handlers once cancellation has been requested instead of
+            // burying it in the aggregate below.
+            cancellationToken.ThrowIfCancellationRequested();
+
             try
             {
                 await handler.Handle(domainEvent, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception ex)
             {

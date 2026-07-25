@@ -10,10 +10,18 @@ public class Result
     /// <summary>
     /// Initializes a new <see cref="Result"/>.
     /// </summary>
+    /// <exception cref="ArgumentNullException"><paramref name="errors"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException"><paramref name="isSuccess"/> is <see langword="false"/> and <paramref name="errors"/> is empty.</exception>
     protected Result(bool isSuccess, Error[] errors)
     {
+        ArgumentNullException.ThrowIfNull(errors);
+
+        if (!isSuccess && errors.Length == 0)
+            throw new ArgumentException("A failed result must have at least one error.", nameof(errors));
+
         IsSuccess = isSuccess;
-        _errors = errors;
+        // Defensive copy: the caller's array must not be able to mutate this result after construction.
+        _errors = (Error[])errors.Clone();
     }
 
     /// <summary>Gets a value indicating whether the operation succeeded.</summary>
