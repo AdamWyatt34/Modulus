@@ -96,7 +96,14 @@ public class TemplateEngineInitTests
 
         var packages = outputs.Single(o => o.RelativePath == "Directory.Packages.props");
         packages.Content.ShouldContain("<PackageVersion Include=\"Microsoft.OpenApi\" Version=\"2.9.0\" />");
-        packages.Content.ShouldContain("<CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>");
+
+        // The pin binds by promoting the transitive to a direct reference in the host —
+        // NOT via CentralPackageTransitivePinningEnabled, which turns any transitive above a
+        // central pin (Aspire's and ModulusKit's own Microsoft.Extensions.* requirements) into
+        // an NU1109 restore failure.
+        packages.Content.ShouldNotContain("<CentralPackageTransitivePinningEnabled>");
+        var webApi = outputs.Single(o => o.RelativePath.EndsWith(".WebApi.csproj"));
+        webApi.Content.ShouldContain("<PackageReference Include=\"Microsoft.OpenApi\" />");
     }
 
     [Fact]

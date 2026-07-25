@@ -13,6 +13,8 @@
   <ItemGroup>
     <PackageReference Include="ModulusKit.Generators" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <!-- Direct reference solely to pin the vulnerable transitive (GHSA-v5pm-xwqc-g5wc). -->
+    <PackageReference Include="Microsoft.OpenApi" />
     <PackageReference Include="Scalar.AspNetCore" />
   </ItemGroup>
 
