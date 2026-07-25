@@ -719,6 +719,31 @@ public class HandlerRegistrationGeneratorTests
         errors.ShouldBeEmpty();
     }
 
+    [Fact]
+    public void Generate_CompilationWithoutDependencyInjection_EmitsNothing()
+    {
+        // A Domain project references this generator solely for [StronglyTypedId] and has no
+        // Microsoft.Extensions.DependencyInjection — emitting the registrations file there
+        // produces CS0246 on IServiceCollection in generated code (E2E regression).
+        const string source = """
+            namespace TestApp.Domain;
+
+            public sealed class Product
+            {
+                public string Name { get; private set; } = string.Empty;
+            }
+            """;
+
+        var (outputCompilation, _, runResult) = GeneratorTestHelper.RunHandlerRegistrationGenerator(
+            source, dependencyInjectionReferences: false);
+
+        runResult.Results.ShouldAllBe(r => r.Exception == null);
+        runResult.GeneratedTrees.ShouldBeEmpty();
+
+        var errors = outputCompilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
+        errors.ShouldBeEmpty();
+    }
+
     private static int CountOccurrences(string text, string value)
     {
         var count = 0;

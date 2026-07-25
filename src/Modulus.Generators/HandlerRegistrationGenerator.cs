@@ -62,11 +62,23 @@ public sealed class HandlerRegistrationGenerator : IIncrementalGenerator
         var assemblyName = context.CompilationProvider
             .Select(static (c, _) => c.AssemblyName);
 
+        // The generated file references IServiceCollection, so emit nothing in compilations
+        // without a DI reference — e.g. Domain projects that carry this generator solely for
+        // [StronglyTypedId]. Same gating pattern as the EF check in StronglyTypedIdGenerator.
+        var hasDependencyInjection = context.CompilationProvider
+            .Select(static (compilation, _) =>
+                compilation.GetTypeByMetadataName("Microsoft.Extensions.DependencyInjection.IServiceCollection") is not null);
+
         var namespaceInfo = rootNamespace.Combine(assemblyName);
-        var combined = collected.Combine(namespaceInfo);
+        var combined = collected.Combine(namespaceInfo).Combine(hasDependencyInjection);
 
         context.RegisterSourceOutput(combined, static (spc, data) =>
-            Execute(spc, data.Left, data.Right.Left, data.Right.Right));
+        {
+            if (!data.Right)
+                return;
+
+            Execute(spc, data.Left.Left, data.Left.Right.Left, data.Left.Right.Right);
+        });
 
         // Diagnostic pipeline — extract open generic diagnostics from the same scan
         var openGenericDiagnostics = candidateProvider

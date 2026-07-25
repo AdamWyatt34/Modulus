@@ -75,14 +75,23 @@ internal static class GeneratorTestHelper
 
     public static (Compilation OutputCompilation, ImmutableArray<Diagnostic> Diagnostics, GeneratorDriverRunResult RunResult) RunHandlerRegistrationGenerator(
         string source,
-        string? rootNamespace = null)
+        string? rootNamespace = null,
+        bool dependencyInjectionReferences = true)
     {
         var syntaxTree = CSharpSyntaxTree.ParseText(source);
+
+        // dependencyInjectionReferences: false models a Domain project that carries the generator
+        // solely for [StronglyTypedId] and has no Microsoft.Extensions.DependencyInjection.
+        var references = dependencyInjectionReferences
+            ? (IReadOnlyList<MetadataReference>)LazyReferences.Value
+            : LazyReferences.Value
+                .Where(r => r.Display is null || !r.Display.Contains("Microsoft.Extensions.DependencyInjection"))
+                .ToList();
 
         var compilation = CSharpCompilation.Create(
             rootNamespace ?? "TestAssembly",
             [syntaxTree],
-            LazyReferences.Value,
+            references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
         var generator = new HandlerRegistrationGenerator();
