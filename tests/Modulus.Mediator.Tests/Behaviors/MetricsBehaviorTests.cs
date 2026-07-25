@@ -9,7 +9,7 @@ namespace Modulus.Mediator.Tests.Behaviors;
 
 public class MetricsBehaviorTests
 {
-    private readonly IMeterFactory _meterFactory;
+    private readonly TestMeterFactory _meterFactory;
 
     public MetricsBehaviorTests()
     {
@@ -25,7 +25,10 @@ public class MetricsBehaviorTests
         using var listener = new MeterListener();
         listener.InstrumentPublished = (instrument, meterListener) =>
         {
-            if (instrument.Name == "modulus.mediator.handler.duration")
+            // Filter to THIS test's factory: the histogram cache keeps instruments alive across
+            // tests and the sibling MetricsBehaviorTests class runs in a parallel collection, so
+            // name-only matching records other tests' measurements (flaky on 2-core CI runners).
+            if (instrument.Name == "modulus.mediator.handler.duration" && _meterFactory.Owns(instrument.Meter))
                 meterListener.EnableMeasurementEvents(instrument);
         };
         listener.SetMeasurementEventCallback<double>((instrument, measurement, tags, state) =>
@@ -56,7 +59,10 @@ public class MetricsBehaviorTests
         using var listener = new MeterListener();
         listener.InstrumentPublished = (instrument, meterListener) =>
         {
-            if (instrument.Name == "modulus.mediator.handler.duration")
+            // Filter to THIS test's factory: the histogram cache keeps instruments alive across
+            // tests and the sibling MetricsBehaviorTests class runs in a parallel collection, so
+            // name-only matching records other tests' measurements (flaky on 2-core CI runners).
+            if (instrument.Name == "modulus.mediator.handler.duration" && _meterFactory.Owns(instrument.Meter))
                 meterListener.EnableMeasurementEvents(instrument);
         };
         listener.SetMeasurementEventCallback<double>((instrument, measurement, tags, state) =>
@@ -84,7 +90,10 @@ public class MetricsBehaviorTests
         using var listener = new MeterListener();
         listener.InstrumentPublished = (instrument, meterListener) =>
         {
-            if (instrument.Name == "modulus.mediator.handler.duration")
+            // Filter to THIS test's factory: the histogram cache keeps instruments alive across
+            // tests and the sibling MetricsBehaviorTests class runs in a parallel collection, so
+            // name-only matching records other tests' measurements (flaky on 2-core CI runners).
+            if (instrument.Name == "modulus.mediator.handler.duration" && _meterFactory.Owns(instrument.Meter))
                 meterListener.EnableMeasurementEvents(instrument);
         };
         listener.SetMeasurementEventCallback<double>((instrument, measurement, tags, state) =>
@@ -109,10 +118,17 @@ public class MetricsBehaviorTests
     {
         private readonly List<Meter> _meters = [];
 
+        public bool Owns(Meter meter)
+        {
+            lock (_meters)
+                return _meters.Contains(meter);
+        }
+
         public Meter Create(MeterOptions options)
         {
             var meter = new Meter(options);
-            _meters.Add(meter);
+            lock (_meters)
+                _meters.Add(meter);
             return meter;
         }
 
