@@ -19,46 +19,45 @@ modulus add-query <query-name> [options]
 | Option | Description | Default |
 |---|---|---|
 | `--module, -m <name>` | **(Required)** Target module where the query will be created. | -- |
-| `--result-type, -r <type>` | **(Required)** The return type wrapped in `Result<T>`. Every query must declare what it returns. | -- |
+| `--result-type, -r <type>` | **(Required)** The return type wrapped in `Result<T>`. Every query must declare what it returns. Must be a single type identifier (e.g. `ProductDto`); generic types like `List<ProductDto>` are not accepted -- define a wrapper DTO (e.g. `ProductListDto`) instead. | -- |
 | `--solution, -s <path>` | Path to the `.slnx` solution file. | Auto-discovered |
 
 ## Generated Output
 
-Running `modulus add-query GetProductById --module Catalog --result-type ProductDto` generates two files:
+Running `modulus add-query GetProductById --module Catalog --result-type ProductDto` generates three files -- the query record and handler under `src/Catalog.Application/Queries/GetProductById/`, plus a starter unit test in `tests/Catalog.Tests.Unit/Queries/`. The record and handler are named exactly after the query (no `Query` suffix is appended):
 
 ### Query record
 
-`src/Modules/Catalog/EShop.Modules.Catalog.Application/Queries/GetProductById/GetProductByIdQuery.cs`
+`src/Modules/Catalog/src/Catalog.Application/Queries/GetProductById/GetProductById.cs`
 
 ```csharp
-using EShop.SharedKernel.Application;
+using Modulus.Mediator.Abstractions;
 
-namespace EShop.Modules.Catalog.Application.Queries.GetProductById;
+namespace EShop.Catalog.Application.Queries.GetProductById;
 
-public sealed record GetProductByIdQuery : IQuery<ProductDto>;
+public sealed record GetProductById : IQuery<ProductDto>;
 ```
 
 ### Handler class
 
-`src/Modules/Catalog/EShop.Modules.Catalog.Application/Queries/GetProductById/GetProductByIdQueryHandler.cs`
+`src/Modules/Catalog/src/Catalog.Application/Queries/GetProductById/GetProductByIdHandler.cs`
 
 ```csharp
-using EShop.SharedKernel.Application;
+using Modulus.Mediator.Abstractions;
 
-namespace EShop.Modules.Catalog.Application.Queries.GetProductById;
+namespace EShop.Catalog.Application.Queries.GetProductById;
 
-public sealed class GetProductByIdQueryHandler
-    : IQueryHandler<GetProductByIdQuery, ProductDto>
+public sealed class GetProductByIdHandler : IQueryHandler<GetProductById, ProductDto>
 {
-    public async Task<Result<ProductDto>> Handle(
-        GetProductByIdQuery query,
-        CancellationToken cancellationToken)
+    public Task<Result<ProductDto>> Handle(GetProductById query, CancellationToken cancellationToken = default)
     {
         // TODO: Implement query logic
         throw new NotImplementedException();
     }
 }
 ```
+
+The result type itself (`ProductDto` here) is not generated -- define it in the Application layer.
 
 ::: tip No Validator Generated
 Unlike commands, queries do not generate a validator class. Queries are read-only operations and typically do not require input validation beyond what the type system provides. If you need validation on a query, you can add a validator manually and it will be picked up by the validation pipeline behavior automatically.
@@ -72,16 +71,16 @@ Unlike commands, queries do not generate a validator class. Queries are read-onl
 modulus add-query GetProductById --module Catalog --result-type ProductDto
 ```
 
-**Create a query returning a list:**
+**Create a query returning a list (wrap the collection in a DTO -- generic result types are not accepted):**
 
 ```bash
-modulus add-query ListProducts --module Catalog --result-type "List<ProductDto>"
+modulus add-query ListProducts --module Catalog --result-type ProductListDto
 ```
 
-**Create a query returning a paginated result:**
+**Create a query returning a paginated result (same rule -- e.g. a record wrapping `PagedResult<OrderSummaryDto>`):**
 
 ```bash
-modulus add-query SearchOrders --module Orders --result-type "PagedResult<OrderSummaryDto>"
+modulus add-query SearchOrders --module Orders --result-type OrderSearchResultDto
 ```
 
 **Create a query with an explicit solution path:**

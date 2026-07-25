@@ -9,7 +9,7 @@ Modulus provides an in-house messaging transport layer for cross-module communic
 | **Swap transports freely** | Switch between InMemory, RabbitMQ, and Azure Service Bus by changing a single configuration value. No handler code changes required. |
 | **Clean handler interface** | Implement `IIntegrationEventHandler<TEvent>` -- no broker-specific consumer types or context ceremony. |
 | **Automatic idempotency** | The consumer pipeline enforces at-most-once execution per `(EventId, handlerName)` when the inbox store is registered. |
-| **Transactional outbox built-in** | Save domain state and outbox messages in the same database transaction. A background processor publishes them reliably to the broker. |
+| **Transactional outbox built-in** | Persist events as database rows and let a background processor publish them reliably to the broker. Map the outbox into your own DbContext for [same-transaction atomicity](/messaging/outbox-pattern#transactionality-the-two-configurations) with domain state. |
 | **Convention-based discovery** | Handlers are auto-discovered from the assemblies you specify -- no manual consumer registration. |
 | **No licensed dependencies** | The whole stack is MIT-licensed, built on the official broker client libraries. |
 

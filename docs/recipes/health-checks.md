@@ -158,7 +158,7 @@ Create custom health checks for module-specific concerns. For example, verify th
 ```csharp
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
-namespace EShop.Modules.Catalog.Infrastructure;
+namespace EShop.Catalog.Infrastructure;
 
 public class CatalogDatabaseHealthCheck : IHealthCheck
 {
@@ -204,12 +204,12 @@ public class CatalogDatabaseHealthCheck : IHealthCheck
 }
 ```
 
-Register the module health check in the module's registration class:
+Register the module health check in the module's registration class (`CatalogModule.cs` in the Infrastructure layer):
 
 ```csharp
-public class CatalogModuleRegistration : IModuleRegistration
+public sealed class CatalogModule : IModuleRegistration
 {
-    public void ConfigureServices(
+    public static IServiceCollection ConfigureServices(
         IServiceCollection services,
         IConfiguration configuration)
     {
@@ -219,6 +219,8 @@ public class CatalogModuleRegistration : IModuleRegistration
             .AddCheck<CatalogDatabaseHealthCheck>(
                 "catalog-database",
                 tags: ["ready", "catalog"]);
+
+        return services;
     }
 }
 ```

@@ -66,7 +66,7 @@ Inject `IMessageBus` into a handler and publish:
 await messageBus.Publish(new OrderPlaced(order.Id, order.Total), cancellationToken);
 ```
 
-With the outbox configured, the event is persisted in the same transaction as your business data and dispatched by the background outbox processor.
+With the outbox configured, saving the event via `IOutboxStore.Save` persists it as an outbox row that the background processor dispatches reliably. For strict same-transaction atomicity with your business data, write the outbox row through your own DbContext instead -- see [the outbox configurations](/messaging/outbox-pattern#transactionality-the-two-configurations).
 
 ## See Also
 

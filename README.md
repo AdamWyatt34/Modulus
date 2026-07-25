@@ -301,11 +301,13 @@ services.AddModulusMessaging(options =>
 
 ### Transactional Outbox
 
-The outbox pattern ensures events are published reliably even if the message broker is temporarily unavailable. Events are stored in your database within the same transaction as your business data, then a background processor publishes them:
+The outbox pattern ensures events are published reliably even if the message broker is temporarily unavailable. Events are stored as database rows first, then a background processor publishes them:
 
-1. Handler saves business data + outbox event in one transaction
-2. `OutboxProcessor` polls for pending events (default: every 5 seconds)
+1. Handler saves business data and calls `outboxStore.Save(...)`; the default store commits outbox rows through its own `OutboxDbContext`
+2. `OutboxProcessor` dispatches pending events (immediately via change notification, with polling as the fallback sweep)
 3. Events are published through the configured transport and marked as processed
+
+For strict atomicity between business rows and outbox rows, map `OutboxMessage` into your application `DbContext` so both commit in a single `SaveChanges` — see the [outbox documentation](https://adamwyatt34.github.io/Modulus/messaging/outbox-pattern) for both configurations and their trade-offs.
 
 ## Aspire Integration
 
@@ -434,7 +436,18 @@ No handler or business logic changes are needed — the mediator and messaging a
 | [`ModulusKit.Generators`](https://www.nuget.org/packages/ModulusKit.Generators) | Source generators for strongly typed IDs, handler registration, and module discovery |
 | [`ModulusKit.Analyzers`](https://www.nuget.org/packages/ModulusKit.Analyzers) | Roslyn analyzers enforcing modular architecture conventions |
 
-Both `ModulusKit.Generators` and `ModulusKit.Analyzers` are transitively included through `ModulusKit.Mediator.Abstractions`.
+`ModulusKit.Generators` and `ModulusKit.Analyzers` are development-dependency packages, so they do **not** flow transitively through other `ModulusKit.*` packages (or through `ProjectReference`s). Reference them explicitly in each project that needs them:
+
+```xml
+<!-- In every project that defines handlers, validators, or [StronglyTypedId] types,
+     and in the host project (for AddAllModules/MapAllModuleEndpoints): -->
+<PackageReference Include="ModulusKit.Generators" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+
+<!-- In projects where the MOD001–MOD005 rules should run: -->
+<PackageReference Include="ModulusKit.Analyzers" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+```
+
+Solutions scaffolded by `modulus init` / `modulus add-module` come with this wiring already in place.
 
 ## Contributing
 

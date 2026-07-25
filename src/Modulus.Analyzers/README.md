@@ -16,7 +16,7 @@ Or as an analyzer reference in your `.csproj`:
                   ReferenceOutputAssembly="false" />
 ```
 
-> **Note:** This package is transitively included through `ModulusKit.Mediator.Abstractions`. If you already reference that package, no additional setup is needed.
+> **Note:** This is a development-dependency (analyzer) package -- it does **not** flow transitively through other `ModulusKit.*` packages or through project references. Add the reference above to each project where the MOD rules should run. Solutions scaffolded by the `modulus` CLI have this wired up already.
 
 ## Rules
 
@@ -45,7 +45,7 @@ Suppress individual occurrences with `#pragma`:
 
 ```csharp
 #pragma warning disable MOD001
-using EShop.Modules.Catalog.Domain.Products;
+using EShop.Catalog.Domain.Products;
 #pragma warning restore MOD001
 ```
 

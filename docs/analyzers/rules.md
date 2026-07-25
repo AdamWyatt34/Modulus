@@ -20,7 +20,7 @@ Module isolation is the foundation of a modular monolith. If modules freely refe
 
 ```csharp
 // In Orders.Application project
-using EShop.Modules.Catalog.Domain.Products; // MOD001: boundary violation
+using EShop.Catalog.Domain.Products; // MOD001: boundary violation
 
 public class PlaceOrderHandler : ICommandHandler<PlaceOrder>
 {
@@ -36,7 +36,7 @@ public class PlaceOrderHandler : ICommandHandler<PlaceOrder>
 
 ```csharp
 // In Orders.Application project
-using EShop.Modules.Catalog.Integration.Events; // OK: Integration is allowed
+using EShop.Catalog.Integration.Events; // OK: Integration is allowed
 
 public class CatalogItemCreatedHandler : IIntegrationEventHandler<CatalogItemCreated>
 {
@@ -190,7 +190,7 @@ The Domain layer should be a pure model of your business rules with no knowledge
 using System.ComponentModel.DataAnnotations; // MOD004
 using Microsoft.EntityFrameworkCore; // MOD004
 
-namespace EShop.Modules.Catalog.Domain.Products;
+namespace EShop.Catalog.Domain.Products;
 
 public class Product : AggregateRoot<ProductId>
 {
@@ -204,7 +204,7 @@ public class Product : AggregateRoot<ProductId>
 
 ```csharp
 // In Catalog.Domain project
-namespace EShop.Modules.Catalog.Domain.Products;
+namespace EShop.Catalog.Domain.Products;
 
 public class Product : AggregateRoot<ProductId>
 {

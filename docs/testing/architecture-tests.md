@@ -17,31 +17,28 @@ Architecture tests solve this by turning architectural rules into executable ass
 When you run `modulus add-module Catalog`, the `Tests.Architecture` project includes a `LayerDependencyTests` class with the following structure:
 
 ```csharp
+using System.Reflection;
 using NetArchTest.Rules;
 using Shouldly;
+using Xunit;
+using EShop.Catalog.Api.Endpoints;
+using EShop.Catalog.Infrastructure.Persistence;
 
-namespace EShop.Modules.Catalog.Tests.Architecture;
+namespace EShop.Catalog.Tests.Architecture;
 
 public class LayerDependencyTests
 {
-    // Assembly references for each layer
-    private static readonly Assembly DomainAssembly =
-        typeof(Product).Assembly;
+    // Assembly references for each layer. Domain and Application expose an
+    // AssemblyReference class for this; Infrastructure and Api are anchored
+    // on well-known scaffolded types.
+    private static readonly Assembly DomainAssembly = Catalog.Domain.AssemblyReference.Assembly;
+    private static readonly Assembly ApplicationAssembly = Catalog.Application.AssemblyReference.Assembly;
+    private static readonly Assembly InfrastructureAssembly = typeof(CatalogDbContext).Assembly;
+    private static readonly Assembly ApiAssembly = typeof(CatalogEndpointRegistration).Assembly;
 
-    private static readonly Assembly ApplicationAssembly =
-        typeof(CreateProduct).Assembly;
-
-    private static readonly Assembly InfrastructureAssembly =
-        typeof(CatalogDbContext).Assembly;
-
-    private static readonly Assembly ApiAssembly =
-        typeof(CatalogModuleRegistration).Assembly;
-
-    // Namespace constants
-    private const string DomainNamespace = "EShop.Modules.Catalog.Domain";
-    private const string ApplicationNamespace = "EShop.Modules.Catalog.Application";
-    private const string InfrastructureNamespace = "EShop.Modules.Catalog.Infrastructure";
-    private const string ApiNamespace = "EShop.Modules.Catalog.Api";
+    // Namespace roots the rules are written against
+    private static readonly string RootNamespace = "EShop";
+    private static readonly string ModuleName = "Catalog";
 }
 ```
 
@@ -53,36 +50,36 @@ The Domain layer is the innermost ring. It contains business rules and entities 
 
 ```csharp
 [Fact]
-public void Domain_Should_Not_Depend_On_Application()
+public void Domain_should_not_depend_on_Application()
 {
-    var result = Types.InAssembly(DomainAssembly)
+    Types.InAssembly(DomainAssembly)
         .ShouldNot()
-        .HaveDependencyOn(ApplicationNamespace)
-        .GetResult();
-
-    result.IsSuccessful.ShouldBeTrue();
+        .HaveDependencyOn($"{RootNamespace}.{ModuleName}.Application")
+        .GetResult()
+        .IsSuccessful
+        .ShouldBeTrue();
 }
 
 [Fact]
-public void Domain_Should_Not_Depend_On_Infrastructure()
+public void Domain_should_not_depend_on_Infrastructure()
 {
-    var result = Types.InAssembly(DomainAssembly)
+    Types.InAssembly(DomainAssembly)
         .ShouldNot()
-        .HaveDependencyOn(InfrastructureNamespace)
-        .GetResult();
-
-    result.IsSuccessful.ShouldBeTrue();
+        .HaveDependencyOn($"{RootNamespace}.{ModuleName}.Infrastructure")
+        .GetResult()
+        .IsSuccessful
+        .ShouldBeTrue();
 }
 
 [Fact]
-public void Domain_Should_Not_Depend_On_Api()
+public void Domain_should_not_depend_on_Api()
 {
-    var result = Types.InAssembly(DomainAssembly)
+    Types.InAssembly(DomainAssembly)
         .ShouldNot()
-        .HaveDependencyOn(ApiNamespace)
-        .GetResult();
-
-    result.IsSuccessful.ShouldBeTrue();
+        .HaveDependencyOn($"{RootNamespace}.{ModuleName}.Api")
+        .GetResult()
+        .IsSuccessful
+        .ShouldBeTrue();
 }
 ```
 
@@ -92,87 +89,94 @@ The Application layer defines commands, queries, handlers, and interfaces. It de
 
 ```csharp
 [Fact]
-public void Application_Should_Not_Depend_On_Infrastructure()
+public void Application_should_not_depend_on_Infrastructure()
 {
-    var result = Types.InAssembly(ApplicationAssembly)
+    Types.InAssembly(ApplicationAssembly)
         .ShouldNot()
-        .HaveDependencyOn(InfrastructureNamespace)
-        .GetResult();
-
-    result.IsSuccessful.ShouldBeTrue();
+        .HaveDependencyOn($"{RootNamespace}.{ModuleName}.Infrastructure")
+        .GetResult()
+        .IsSuccessful
+        .ShouldBeTrue();
 }
 
 [Fact]
-public void Application_Should_Not_Depend_On_Api()
+public void Application_should_not_depend_on_Api()
 {
-    var result = Types.InAssembly(ApplicationAssembly)
+    Types.InAssembly(ApplicationAssembly)
         .ShouldNot()
-        .HaveDependencyOn(ApiNamespace)
-        .GetResult();
-
-    result.IsSuccessful.ShouldBeTrue();
+        .HaveDependencyOn($"{RootNamespace}.{ModuleName}.Api")
+        .GetResult()
+        .IsSuccessful
+        .ShouldBeTrue();
 }
 ```
 
-### 3. Infrastructure Must Not Depend on Api
+### 3. Infrastructure Must Not Depend on Api (Except the Module Class)
 
-Infrastructure implements the abstractions defined in Application. It should never reference the Api layer.
+Infrastructure implements the abstractions defined in Application and should not reach into the Api layer -- with one deliberate exception. The generated rule excludes types whose name ends in `Module`:
 
 ```csharp
 [Fact]
-public void Infrastructure_Should_Not_Depend_On_Api()
+public void Infrastructure_should_not_depend_on_Api()
 {
-    var result = Types.InAssembly(InfrastructureAssembly)
+    // Exclude the module registration class — it acts as the composition root
+    // and is the only Infrastructure type allowed to reference Api.
+    Types.InAssembly(InfrastructureAssembly)
+        .That()
+        .DoNotHaveNameEndingWith("Module")
         .ShouldNot()
-        .HaveDependencyOn(ApiNamespace)
-        .GetResult();
-
-    result.IsSuccessful.ShouldBeTrue();
+        .HaveDependencyOn($"{RootNamespace}.{ModuleName}.Api")
+        .GetResult()
+        .IsSuccessful
+        .ShouldBeTrue();
 }
 ```
 
 ::: info Module registration exception
-The `CatalogModuleRegistration` class lives in the Api layer and references Infrastructure to wire up services. This is intentional -- the registration class is the composition root for the module. The architecture test above validates that Infrastructure does not reach back into Api.
+`CatalogModule` (the `IModuleRegistration` implementation) lives in the **Infrastructure** layer and is the module's composition root: its `ConfigureServices` registers the DbContexts and services, and its `ConfigureEndpoints` calls the Api layer's `MapCatalogEndpoints()`. That endpoint call is why the Infrastructure project references the Api project -- and why the rule above carves out types named `*Module`. Everything else in Infrastructure must stay Api-free.
 :::
 
 ### 4. Cross-Module References Are Forbidden
 
 Modules must not reference each other's Domain, Application, Infrastructure, or Api projects. The only cross-module reference allowed is to another module's **Integration** project, which contains only shared event contracts.
 
+Rather than hard-coding a list of sibling modules, the generated test inspects the assembly's actual references and allows only same-module, BuildingBlocks, and `*.Integration` assemblies:
+
 ```csharp
 [Fact]
-public void Module_Should_Not_Depend_On_Other_Module_Internals()
+public void No_module_should_reference_other_module_internals()
 {
-    var otherModuleNamespaces = new[]
+    AssertNoCrossModuleDependencies(DomainAssembly);
+    AssertNoCrossModuleDependencies(ApplicationAssembly);
+    AssertNoCrossModuleDependencies(InfrastructureAssembly);
+    AssertNoCrossModuleDependencies(ApiAssembly);
+}
+
+private static void AssertNoCrossModuleDependencies(Assembly assembly)
+{
+    foreach (var referenced in assembly.GetReferencedAssemblies())
     {
-        "EShop.Modules.Orders.Domain",
-        "EShop.Modules.Orders.Application",
-        "EShop.Modules.Orders.Infrastructure",
-        "EShop.Modules.Orders.Api",
-        "EShop.Modules.Identity.Domain",
-        "EShop.Modules.Identity.Application",
-        "EShop.Modules.Identity.Infrastructure",
-        "EShop.Modules.Identity.Api",
-    };
+        if (referenced.Name is null) continue;
+        if (!referenced.Name.StartsWith(RootNamespace, StringComparison.Ordinal)) continue;
 
-    var result = Types.InAssembly(DomainAssembly)
-        .ShouldNot()
-        .HaveDependencyOnAny(otherModuleNamespaces)
-        .GetResult();
+        // Allow references within our own module
+        if (referenced.Name.StartsWith($"{RootNamespace}.{ModuleName}.", StringComparison.Ordinal)) continue;
 
-    result.IsSuccessful.ShouldBeTrue();
+        // Allow BuildingBlocks
+        if (referenced.Name.StartsWith($"{RootNamespace}.BuildingBlocks.", StringComparison.Ordinal)) continue;
 
-    result = Types.InAssembly(ApplicationAssembly)
-        .ShouldNot()
-        .HaveDependencyOnAny(otherModuleNamespaces)
-        .GetResult();
+        // Allow Integration assemblies from other modules
+        if (referenced.Name.EndsWith(".Integration", StringComparison.Ordinal)) continue;
 
-    result.IsSuccessful.ShouldBeTrue();
+        Assert.Fail(
+            $"Assembly '{assembly.GetName().Name}' has a forbidden reference to '{referenced.Name}'. " +
+            "Only cross-module Integration references are allowed.");
+    }
 }
 ```
 
-::: tip Update cross-module checks when adding modules
-When you add a new module to the solution, update the `otherModuleNamespaces` array in each existing module's architecture tests. This ensures the new module's boundaries are enforced from the start.
+::: tip No per-module maintenance needed
+Because the check walks the assembly's referenced-assembly list instead of a hard-coded namespace array, adding a new module to the solution requires no edits to existing modules' architecture tests.
 :::
 
 ## Reading Test Failures
@@ -187,7 +191,7 @@ True
 False
 
 Failing types:
-- EShop.Modules.Catalog.Domain.Products.Product
+- EShop.Catalog.Domain.Entities.Product
 ```
 
 This tells you exactly which type introduced the forbidden dependency, making it straightforward to fix.
@@ -229,7 +233,7 @@ public void Domain_Entities_Should_Inherit_Entity()
 {
     var result = Types.InAssembly(DomainAssembly)
         .That()
-        .ResideInNamespace(DomainNamespace)
+        .ResideInNamespace($"{RootNamespace}.{ModuleName}.Domain")
         .And()
         .AreClasses()
         .And()
@@ -279,7 +283,7 @@ public void Validators_Should_Reside_In_Application()
         .That()
         .Inherit(typeof(AbstractValidator<>))
         .Should()
-        .ResideInNamespace(ApplicationNamespace)
+        .ResideInNamespace($"{RootNamespace}.{ModuleName}.Application")
         .GetResult();
 
     result.IsSuccessful.ShouldBeTrue();

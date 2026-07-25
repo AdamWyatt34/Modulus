@@ -16,7 +16,7 @@ Or as an analyzer reference in your `.csproj`:
                   ReferenceOutputAssembly="false" />
 ```
 
-> **Note:** This package is transitively included through `ModulusKit.Mediator.Abstractions`. If you already reference that package, no additional setup is needed.
+> **Note:** This is a development-dependency (analyzer) package -- it does **not** flow transitively through other `ModulusKit.*` packages or through project references. Add the reference above to every project that defines handlers, validators, or `[StronglyTypedId]` types (and to the host, for module discovery). Solutions scaffolded by the `modulus` CLI have this wired up already.
 
 ## Strongly Typed IDs
 

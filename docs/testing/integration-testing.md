@@ -2,110 +2,70 @@
 
 Integration tests verify that your module works correctly when all the real pieces are wired together -- endpoints, handlers, database, and messaging. The scaffolded `Tests.Integration` project uses `WebApplicationFactory` to host the full application in-process and provides a test base class for clean, isolated test execution.
 
-## WebApplicationFactory Setup
+## The Scaffolded Test Base Class
 
-The generated integration test project includes a custom `WebApplicationFactory<T>` that configures the application for testing:
+`modulus add-module Catalog` generates `CatalogIntegrationTestBase`: it starts a SQL Server container with Testcontainers, hosts the app with `WebApplicationFactory<Program>`, and points the app at the container by overriding the `ConnectionStrings:Default` configuration value -- no service-collection surgery needed, because module DbContexts read their connection string from configuration:
 
 ```csharp
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Extensions.DependencyInjection;
-using Testcontainers.PostgreSql;
+using Microsoft.Extensions.Configuration;
+using Testcontainers.MsSql;
+using Xunit;
 
-namespace EShop.Modules.Catalog.Tests.Integration;
+namespace EShop.Catalog.Tests.Integration;
 
-public class CatalogApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
+public abstract class CatalogIntegrationTestBase : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _dbContainer = new PostgreSqlBuilder()
-        .WithImage("postgres:17")
-        .WithDatabase("eshop_test")
-        .WithUsername("test")
-        .WithPassword("test")
-        .Build();
+    private readonly MsSqlContainer _dbContainer =
+        new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-latest").Build();
 
-    protected override void ConfigureWebHost(IWebHostBuilder builder)
-    {
-        builder.ConfigureServices(services =>
-        {
-            // Remove the production database registration
-            var descriptor = services.SingleOrDefault(
-                d => d.ServiceType == typeof(DbContextOptions<CatalogDbContext>));
+    protected WebApplicationFactory<Program> Factory = null!;
+    protected HttpClient Client = null!;
 
-            if (descriptor is not null)
-            {
-                services.Remove(descriptor);
-            }
-
-            // Register test database using Testcontainers
-            services.AddDbContext<CatalogDbContext>(options =>
-                options.UseNpgsql(_dbContainer.GetConnectionString()));
-        });
-    }
-
-    public async Task InitializeAsync()
+    public virtual async Task InitializeAsync()
     {
         await _dbContainer.StartAsync();
+
+        Factory = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder =>
+            {
+                builder.ConfigureAppConfiguration((_, config) =>
+                {
+                    config.AddInMemoryCollection(new Dictionary<string, string?>
+                    {
+                        ["ConnectionStrings:Default"] = _dbContainer.GetConnectionString()
+                    });
+                });
+            });
+
+        Client = Factory.CreateClient();
     }
 
-    public new async Task DisposeAsync()
+    public virtual async Task DisposeAsync()
     {
+        Client.Dispose();
+        await Factory.DisposeAsync();
         await _dbContainer.DisposeAsync();
-        await base.DisposeAsync();
     }
 }
 ```
+
+Alongside it, the scaffold generates a starter `CatalogEndpointTests` class that makes a first HTTP request against the module's `/api/catalog` surface. The `Tests.Integration` project references the module's four source projects plus the WebApi host (for `Program`).
 
 ::: info Testcontainers requires Docker
-Integration tests use [Testcontainers](https://dotnet.testcontainers.org/) to spin up a real PostgreSQL instance in Docker. Ensure Docker Desktop (or a compatible runtime) is running before executing integration tests.
+Integration tests use [Testcontainers](https://dotnet.testcontainers.org/) to spin up a real SQL Server instance in Docker. Ensure Docker Desktop (or a compatible runtime) is running before executing integration tests.
 :::
 
-## Test Base Class
+### Optional: Share the Container with a Collection Fixture
 
-The test base class provides shared setup for all integration tests in a module. It creates the `HttpClient`, applies database migrations, and optionally resets the database between tests:
-
-```csharp
-namespace EShop.Modules.Catalog.Tests.Integration;
-
-[Collection("Catalog")]
-public abstract class IntegrationTestBase : IAsyncLifetime
-{
-    protected readonly HttpClient Client;
-    protected readonly CatalogApiFactory Factory;
-
-    protected IntegrationTestBase(CatalogApiFactory factory)
-    {
-        Factory = factory;
-        Client = factory.CreateClient();
-    }
-
-    public async Task InitializeAsync()
-    {
-        // Apply migrations before each test class
-        using var scope = Factory.Services.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<CatalogDbContext>();
-        await dbContext.Database.EnsureCreatedAsync();
-    }
-
-    public async Task DisposeAsync()
-    {
-        // Clean up the database after each test class
-        using var scope = Factory.Services.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<CatalogDbContext>();
-        await dbContext.Database.EnsureDeletedAsync();
-    }
-}
-```
-
-### Collection Fixture
-
-Use xUnit collection fixtures to share the `WebApplicationFactory` (and Docker container) across all tests in a module:
+The scaffolded base class starts one container per test class (via `IAsyncLifetime`). As your suite grows, promote the factory to an xUnit collection fixture so the container starts once per test run:
 
 ```csharp
 [CollectionDefinition("Catalog")]
 public class CatalogCollectionFixture : ICollectionFixture<CatalogApiFactory>;
 ```
 
-This ensures the PostgreSQL container starts once per test run, not once per test class. Each test class still gets a fresh database via `EnsureCreatedAsync` / `EnsureDeletedAsync` in the base class.
+where `CatalogApiFactory` is a `WebApplicationFactory<Program>` + `IAsyncLifetime` class you extract from the base class above. Each test class can then reset state between runs with `EnsureDeletedAsync` / `EnsureCreatedAsync` on the module `DbContext`.
 
 ## Testing Endpoints End-to-End
 
@@ -118,13 +78,10 @@ using System.Net;
 using System.Net.Http.Json;
 using Shouldly;
 
-namespace EShop.Modules.Catalog.Tests.Integration.Products;
+namespace EShop.Catalog.Tests.Integration;
 
-[Collection("Catalog")]
-public class ProductEndpointTests : IntegrationTestBase
+public class ProductEndpointTests : CatalogIntegrationTestBase
 {
-    public ProductEndpointTests(CatalogApiFactory factory) : base(factory) { }
-
     [Fact]
     public async Task CreateProduct_ValidRequest_Returns201WithId()
     {
@@ -137,7 +94,7 @@ public class ProductEndpointTests : IntegrationTestBase
         };
 
         // Act
-        var response = await Client.PostAsJsonAsync("/catalog", request);
+        var response = await Client.PostAsJsonAsync("/api/catalog", request);
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
@@ -159,12 +116,12 @@ public class ProductEndpointTests : IntegrationTestBase
         };
 
         // Act -- Create
-        var createResponse = await Client.PostAsJsonAsync("/catalog", createRequest);
+        var createResponse = await Client.PostAsJsonAsync("/api/catalog", createRequest);
         createResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
         var id = await createResponse.Content.ReadFromJsonAsync<Guid>();
 
         // Act -- Get
-        var getResponse = await Client.GetAsync($"/catalog/{id}");
+        var getResponse = await Client.GetAsync($"/api/catalog/{id}");
 
         // Assert
         getResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -178,7 +135,7 @@ public class ProductEndpointTests : IntegrationTestBase
     public async Task GetProduct_NonExistentId_Returns404()
     {
         // Act
-        var response = await Client.GetAsync($"/catalog/{Guid.NewGuid()}");
+        var response = await Client.GetAsync($"/api/catalog/{Guid.NewGuid()}");
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
@@ -196,7 +153,7 @@ public class ProductEndpointTests : IntegrationTestBase
         };
 
         // Act
-        var response = await Client.PostAsJsonAsync("/catalog", request);
+        var response = await Client.PostAsJsonAsync("/api/catalog", request);
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
@@ -212,24 +169,24 @@ public async Task DeleteProduct_ExistingProduct_Returns204()
 {
     // Arrange -- create a product first
     var createRequest = new { Name = "Widget", Price = 9.99m, Sku = "WDG-DEL" };
-    var createResponse = await Client.PostAsJsonAsync("/catalog", createRequest);
+    var createResponse = await Client.PostAsJsonAsync("/api/catalog", createRequest);
     var id = await createResponse.Content.ReadFromJsonAsync<Guid>();
 
     // Act
-    var deleteResponse = await Client.DeleteAsync($"/catalog/{id}");
+    var deleteResponse = await Client.DeleteAsync($"/api/catalog/{id}");
 
     // Assert
     deleteResponse.StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
     // Verify the product is gone
-    var getResponse = await Client.GetAsync($"/catalog/{id}");
+    var getResponse = await Client.GetAsync($"/api/catalog/{id}");
     getResponse.StatusCode.ShouldBe(HttpStatusCode.NotFound);
 }
 ```
 
 ## In-Memory Database Alternative
 
-For faster tests that do not require PostgreSQL-specific features, you can use the EF Core in-memory provider:
+For faster tests that do not require SQL Server-specific features, you can use the EF Core in-memory provider:
 
 ```csharp
 protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -251,7 +208,7 @@ protected override void ConfigureWebHost(IWebHostBuilder builder)
 ```
 
 ::: warning In-memory limitations
-The EF Core in-memory provider does not support transactions, raw SQL, database-specific features, or referential integrity constraints. Use it for quick smoke tests, but rely on Testcontainers with a real PostgreSQL instance for comprehensive integration testing.
+The EF Core in-memory provider does not support transactions, raw SQL, database-specific features, or referential integrity constraints. Use it for quick smoke tests, but rely on Testcontainers with a real SQL Server instance for comprehensive integration testing.
 :::
 
 ## Testing with InMemory Messaging
@@ -268,7 +225,7 @@ protected override void ConfigureWebHost(IWebHostBuilder builder)
 
 Handlers, publishers, and the outbox/inbox pipeline all run exactly as in production -- only the broker is replaced. Delivery on the InMemory transport is immediate, so no fixed delays are needed in tests.
 
-To verify that an integration event was published, assert against the outbox -- the event is stored there in the same transaction as the business data, which is the actual production guarantee:
+To verify that an integration event was published, assert against the outbox table -- an outbox row is the durable record that the event will be (or was) dispatched. How atomic that row is with the business data depends on your outbox configuration: with the outbox [mapped into the module's DbContext](/messaging/outbox-pattern#transactionality-the-two-configurations) it commits in the same transaction; with the default standalone store it commits separately.
 
 ```csharp
 [Fact]
@@ -278,9 +235,9 @@ public async Task CreateProduct_WritesCatalogItemCreatedEventToOutbox()
     var request = new { Name = "Widget", Price = 9.99m, Sku = "WDG-EVT" };
 
     // Act
-    await Client.PostAsJsonAsync("/catalog", request);
+    await Client.PostAsJsonAsync("/api/catalog", request);
 
-    // Assert -- the event was saved to the outbox atomically with the product
+    // Assert -- an outbox row exists for the event
     using var scope = Factory.Services.CreateScope();
     var outbox = scope.ServiceProvider.GetRequiredService<OutboxDbContext>();
 
@@ -308,7 +265,7 @@ public async Task CreateProduct_PersistsToDatabase()
     var request = new { Name = "Widget", Price = 9.99m, Sku = "WDG-DB" };
 
     // Act
-    var response = await Client.PostAsJsonAsync("/catalog", request);
+    var response = await Client.PostAsJsonAsync("/api/catalog", request);
     var id = await response.Content.ReadFromJsonAsync<Guid>();
 
     // Assert -- verify directly in the database
@@ -323,7 +280,7 @@ public async Task CreateProduct_PersistsToDatabase()
 
 ## Best Practices
 
-- **Use Testcontainers for database tests.** A real PostgreSQL instance catches issues that in-memory providers miss (e.g., migration errors, constraint violations, query translation differences).
+- **Use Testcontainers for database tests.** A real SQL Server instance catches issues that in-memory providers miss (e.g., migration errors, constraint violations, query translation differences).
 - **Share the factory across tests.** Use xUnit collection fixtures to start Docker containers once per test run, not once per test class.
 - **Reset state between tests.** Use `EnsureDeletedAsync` / `EnsureCreatedAsync` or a database cleanup strategy to ensure tests do not leak state.
 - **Test the HTTP contract.** Assert status codes, response headers (`Location` for 201), and response bodies. Integration tests verify the full request/response cycle.

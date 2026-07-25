@@ -1,6 +1,6 @@
 # Outbox Pattern
 
-The transactional outbox pattern solves the **dual-write problem** -- the challenge of atomically updating your database and publishing a message to a broker. Modulus provides a built-in outbox implementation that saves messages to your database within the same transaction as your domain changes, then reliably publishes them to the broker via a background processor.
+The transactional outbox pattern solves the **dual-write problem** -- the challenge of atomically updating your database and publishing a message to a broker. Modulus provides a built-in outbox implementation that saves messages as database rows, then reliably publishes them to the broker via a background processor. How atomic the save is with your business data depends on which of the two supported configurations you use -- see [Transactionality: the two configurations](#transactionality-the-two-configurations) below.
 
 ## The Problem
 
@@ -18,7 +18,7 @@ Several failure scenarios can occur:
 2. **Broker succeeds, database fails** -- The event is published but the order is not saved. Consumers process a phantom event.
 3. **Broker is temporarily unavailable** -- The entire operation fails even though the database write was valid.
 
-The outbox pattern eliminates these issues by writing the event to the same database in the same transaction as the domain change.
+The outbox pattern eliminates these issues by writing the event to the database as a row, decoupling the broker publish from the request path. With the outbox table mapped into your application `DbContext` (the recommended configuration for strict atomicity), the row commits in the **same transaction** as the domain change.
 
 ## How It Works
 
@@ -46,8 +46,8 @@ sequenceDiagram
     end
 ```
 
-1. **Command handler** saves the domain entity and an `OutboxMessage` in the **same database transaction**.
-2. The transaction commits atomically -- either both the entity and the outbox message are saved, or neither is.
+1. **Command handler** saves the domain entity and an `OutboxMessage` row. In the same-DbContext configuration shown in the diagram, both are part of one transaction; with the default standalone store, the outbox row commits separately (details [below](#transactionality-the-two-configurations)).
+2. The transaction commits -- in the same-DbContext configuration, atomically: either both the entity and the outbox message are saved, or neither is.
 3. The commit **wakes the OutboxProcessor immediately** via a change notification (see [Immediate Dispatch](#immediate-dispatch-change-notification)); a configurable polling sweep remains as the fallback for anything the signal cannot see.
 4. For each batch, it deserializes the events and publishes them through the configured transport.
 5. After successful publishing, the messages are marked as processed.
@@ -64,17 +64,17 @@ public interface IOutboxStore
     Task<IReadOnlyList<OutboxMessage>> GetPending(int batchSize, int maxAttempts, CancellationToken cancellationToken = default);
     Task<int> CountPending(int maxAttempts, CancellationToken cancellationToken = default);
     Task MarkAsProcessed(IEnumerable<Guid> ids, CancellationToken cancellationToken = default);
-    Task MarkAsFailed(Guid messageId, string error, CancellationToken cancellationToken = default);
+    Task MarkAsFailed(Guid messageId, string error, DateTime? nextAttemptOnUtc, CancellationToken cancellationToken = default);
 }
 ```
 
 | Method | Description |
 |---|---|
 | `Save` | Serializes and saves an integration event as an `OutboxMessage`. |
-| `GetPending` | Retrieves up to `batchSize` unprocessed messages whose attempt count is below `maxAttempts`, ordered by creation time. Dead-lettered rows are excluded so they do not starve newer rows. |
-| `CountPending` | Counts the same population `GetPending` draws from. Used by the backlog-depth health check. |
+| `GetPending` | Retrieves up to `batchSize` unprocessed messages whose attempt count is below `maxAttempts` and whose `NextAttemptOnUtc` is unset or has elapsed, ordered by creation time. Dead-lettered rows and rows still serving out a retry backoff are excluded so they do not starve newer rows or busy-loop the dispatcher. |
+| `CountPending` | Counts unprocessed, not-yet-dead-lettered messages. Used by the backlog-depth health check; intentionally includes rows currently in backoff, so backlog depth reflects true outstanding work. |
 | `MarkAsProcessed` | Marks the specified messages as processed so they are not picked up again. |
-| `MarkAsFailed` | Increments a message's attempt counter and records the failure message. |
+| `MarkAsFailed` | Increments a message's attempt counter, records the failure message, and sets `NextAttemptOnUtc` from the configured retry backoff (pass `null` for immediately-eligible). |
 
 ## OutboxMessage Model
 
@@ -91,6 +91,7 @@ public sealed class OutboxMessage
     public DateTime? ProcessedAt { get; set; }
     public int Attempts { get; set; }
     public string? LastError { get; set; }
+    public DateTime? NextAttemptOnUtc { get; set; }
 }
 ```
 
@@ -103,18 +104,82 @@ public sealed class OutboxMessage
 | `ProcessedAt` | `DateTime?` | When the message was successfully published. `null` while pending. |
 | `Attempts` | `int` | Number of failed publish attempts. Once it reaches `RetryPolicy.MaxAttempts` the message is dead-lettered. |
 | `LastError` | `string?` | Error message from the most recent failed publish attempt. |
+| `NextAttemptOnUtc` | `DateTime?` | When the row becomes eligible for another dispatch attempt (set from the retry backoff on failure). `null` if it never failed or is immediately eligible. |
 
 ## EfOutboxStore
 
-The `EfOutboxStore` is the built-in Entity Framework Core implementation of `IOutboxStore`. It uses your application's `DbContext` to persist outbox messages, which means the outbox write participates in the same EF Core transaction as your domain entity changes.
+The `EfOutboxStore` is the built-in Entity Framework Core implementation of `IOutboxStore` (registered by `AddModulusMessaging`, alongside the `OutboxProcessor` hosted service). It persists outbox messages through the package's own `OutboxDbContext` -- **not** through your application `DbContext` -- and each `Save` call commits immediately with its own `SaveChangesAsync`.
 
 ```csharp
-// The EfOutboxStore is registered automatically when you configure EF Core
-// with your DbContext. Just ensure your DbContext includes the OutboxMessage entity.
+// Registers OutboxDbContext (with the wake-signal interceptor attached).
+// EfOutboxStore and the OutboxProcessor are registered by AddModulusMessaging.
+builder.Services.AddModulusOutbox(o =>
+    o.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
 ```
 
-::: info Same DbContext, same transaction
-Because `EfOutboxStore` operates on the same `DbContext` as your repositories, calling `Save` on the outbox store and calling `SaveChangesAsync` on the `DbContext` are part of the same transaction. This is the key guarantee that makes the outbox pattern work.
+## Transactionality: The Two Configurations
+
+### Default: standalone `OutboxDbContext` (two transactions)
+
+Out of the box, `IOutboxStore.Save` commits through the messaging-owned `OutboxDbContext`, on its own connection, separately from your business `SaveChangesAsync`. You get durability and broker-outage resilience -- the row is on disk before any publish is attempted, and retries/dead-lettering apply -- but **not** atomicity with your business data. Two small failure windows exist:
+
+- **Crash between the two saves.** If the process dies after your business transaction commits but before `outboxStore.Save` commits, the event is lost -- the state changed and no event ever records it.
+- **Ghost event on rollback.** If `outboxStore.Save` runs first (or your business transaction later rolls back), the event is already committed -- and because `Save` signals the processor immediately, it can be on the wire within milliseconds -- describing a change that never happened.
+
+For many workloads (notifications, cache invalidation, analytics) these windows are acceptable. For workflows where an event must exactly mirror a committed state change, use the same-transaction configuration below.
+
+### Recommended for strict atomicity: map the outbox into your application DbContext
+
+Map the `OutboxMessage` entity into your own `DbContext` and write outbox rows through it -- business rows and outbox rows then commit in **one** `SaveChanges`, in one database transaction. Solutions scaffolded by the CLI are already set up for this: `BaseDbContext` applies `OutboxConfiguration` (in `BuildingBlocks.Infrastructure`), so every module `DbContext` maps the outbox table, and module contexts come pre-wired with `OutboxNotifyingInterceptor`.
+
+```csharp
+// 1. Map the outbox entity into your DbContext (scaffolded BaseDbContext does this already).
+protected override void OnModelCreating(ModelBuilder modelBuilder)
+{
+    base.OnModelCreating(modelBuilder);
+    modelBuilder.ApplyConfiguration(new OutboxConfiguration());
+}
+
+// 2. Attach the wake-signal interceptor so committed rows dispatch immediately
+//    (scaffolded module DbContexts do this already).
+builder.Services.AddDbContext<OrdersDbContext>((sp, options) =>
+{
+    options.UseSqlServer(connectionString);
+    var interceptor = sp.GetService<OutboxNotifyingInterceptor>();
+    if (interceptor is not null)
+        options.AddInterceptors(interceptor);
+});
+
+// 3. Point AddModulusOutbox at the same database so the processor reads
+//    the rows your context writes.
+builder.Services.AddModulusOutbox(o => o.UseSqlServer(connectionString));
+```
+
+Then write the outbox row through your own context instead of calling `IOutboxStore.Save`:
+
+```csharp
+public async Task<Result<Guid>> Handle(PlaceOrderCommand command, CancellationToken ct)
+{
+    var order = new Order(command.CustomerId, command.Items);
+    _dbContext.Orders.Add(order);
+
+    var @event = new OrderCreatedEvent(order.Id, command.CustomerId, order.Total);
+    _dbContext.Set<OutboxMessage>().Add(new OutboxMessage
+    {
+        Id = @event.EventId,
+        EventType = @event.GetType().AssemblyQualifiedName!,
+        Payload = JsonSerializer.Serialize(@event, @event.GetType()),
+        CreatedAt = @event.OccurredOn,
+    });
+
+    // One SaveChanges: order row and outbox row commit atomically, or neither does.
+    await _dbContext.SaveChangesAsync(ct);
+    return order.Id;
+}
+```
+
+::: warning Same database, same table
+The processor reads through `OutboxDbContext`, so your mapped entity must resolve to the same physical table: same database, same table name and schema. If your module `DbContext` calls `HasDefaultSchema(...)`, pin the outbox table's schema explicitly (e.g. `builder.ToTable("OutboxMessages")` in the configuration) so both contexts agree.
 :::
 
 ## OutboxProcessor
@@ -124,9 +189,9 @@ The `OutboxProcessor` is a `BackgroundService` that runs continuously in your ap
 **Processing flow (drain-then-wait):**
 
 1. Call `IOutboxStore.GetPending(batchSize)` to retrieve up to `OutboxBatchSize` (default: 100) pending messages.
-2. For each message, deserialize the `Payload` using the `EventType` to resolve the concrete type.
+2. For each message, deserialize the `Payload` using the `EventType` to resolve the concrete type. Rows that cannot be dispatched -- unknown event type or a payload that fails to deserialize -- are marked failed via `MarkAsFailed` rather than silently retried, so a poison row cannot wedge the head of the queue or starve newer rows.
 3. Publish each deserialized event through the configured transport. On RabbitMQ, publisher confirmations are enabled, so a publish only counts as successful once the broker confirms it.
-4. Call `IOutboxStore.MarkAsProcessed(ids)` for all successfully published messages.
+4. Call `IOutboxStore.MarkAsProcessed(ids)` for all successfully published messages; failed publishes are recorded with `MarkAsFailed` and retried with the configured `RetryPolicy` backoff until `MaxAttempts` dead-letters them.
 5. If the fetch returned a **full batch**, more rows are probably waiting -- dispatch again immediately.
 6. Otherwise wait until either a **wake signal** arrives (new rows committed -- dispatch immediately) or `OutboxPollInterval` (default: 5 seconds) elapses as the fallback sweep. Repeat.
 
@@ -201,11 +266,15 @@ public sealed class PostgresOutboxListener(IOutboxNotifier notifier) : Backgroun
 Only the application instance that wrote the row is woken. Other replicas, dedicated worker deployments where a different process runs the outbox, external writers, and transactions EF Core does not observe (an externally-owned transaction passed to `Database.UseTransaction`, or an ambient `TransactionScope`) all fall back to the `OutboxPollInterval` sweep. Delivery guarantees are unchanged in every case -- the signal only removes latency, it never carries correctness.
 :::
 
+::: warning Run a single logical dispatcher
+The outbox store has no cross-instance claim coordination (no `SKIP LOCKED`-style row leases). Every host that calls `AddModulusMessaging` runs an `OutboxProcessor`, and processors that poll the same outbox table concurrently can each pick up and publish the same pending rows. Delivery is **at-least-once** either way -- the [inbox](./inbox-pattern) deduplicates on the consumer side -- but to avoid routine duplicate publishes, run a **single logical dispatcher** per outbox table: either a single host instance with the outbox registered, or a dedicated worker process, with web replicas writing rows only.
+:::
+
 The `modulus.messaging.outbox.wakeups` metric (tag `reason`: `signal` / `poll` / `backlog`) shows whether wake signals are actually arriving in a deployment or the processor is effectively poll-only -- see the [OpenTelemetry recipe](../recipes/opentelemetry).
 
 ## Usage Example
 
-The typical pattern is to save your domain entities and write to the outbox within the same unit of work:
+With the default standalone store, the typical handler saves its domain entities and hands the event to `IOutboxStore`:
 
 ```csharp
 public sealed class PlaceOrderCommandHandler
@@ -231,26 +300,32 @@ public sealed class PlaceOrderCommandHandler
     {
         var order = new Order(command.CustomerId, command.Items);
 
-        // 1. Save the order
+        // 1. Stage the order in the business DbContext
         await _orderRepository.AddAsync(order, cancellationToken);
 
-        // 2. Save the integration event to the outbox (same DbContext)
+        // 2. Commit the business transaction
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        // 3. Save the integration event to the outbox. Note: the default store
+        //    commits this through its own OutboxDbContext — a second transaction.
+        //    See "Transactionality: The Two Configurations" for the failure windows
+        //    this leaves open and for the single-transaction alternative.
         await _outboxStore.Save(
             new OrderCreatedEvent(
                 order.Id,
                 command.CustomerId,
                 order.Total,
                 order.Items.Select(i =>
-                    new OrderItemDto(i.ProductId, i.Quantity)).ToList()));
-
-        // 3. Commit both in a single transaction
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+                    new OrderItemDto(i.ProductId, i.Quantity)).ToList()),
+            cancellationToken);
 
         // The OutboxProcessor will pick up the event and publish it
         return order.Id;
     }
 }
 ```
+
+For the strict single-transaction version of this handler -- adding the `OutboxMessage` row to your own `DbContext` and committing everything in one `SaveChanges` -- see [the same-transaction configuration](#recommended-for-strict-atomicity-map-the-outbox-into-your-application-dbcontext) above.
 
 ::: warning Do not publish directly when using the outbox
 When using the outbox pattern, save events to the outbox store instead of calling `IMessageBus.Publish()` directly. Calling `Publish` directly bypasses the outbox and reintroduces the dual-write problem.
@@ -260,10 +335,10 @@ When using the outbox pattern, save events to the outbox store instead of callin
 
 The outbox pattern is inherently resilient:
 
-- **Broker unavailable:** The `OutboxProcessor` catches publish failures and retries on the next polling cycle. Messages remain in the outbox until successfully published.
+- **Broker unavailable:** The `OutboxProcessor` catches publish failures, records them via `MarkAsFailed`, and retries with backoff on later cycles. Messages remain in the outbox until successfully published or dead-lettered after `RetryPolicy.MaxAttempts`.
 - **Application crash after commit:** The outbox messages are persisted in the database. When the application restarts, the `OutboxProcessor` picks up where it left off.
-- **Application crash before commit:** The transaction rolls back. Neither the domain entity nor the outbox message is persisted, which is the correct behavior.
-- **Duplicate publishing:** If the application crashes after publishing but before marking messages as processed, the same messages may be published again on the next cycle. Use the [Inbox Pattern](./inbox-pattern) on the consumer side to handle this.
+- **Application crash before commit:** In the same-DbContext configuration, the transaction rolls back and neither the domain entity nor the outbox message is persisted -- the correct behavior. With the default standalone store, the two commits are independent, so a crash between them can lose the event (see [the failure windows](#default-standalone-outboxdbcontext-two-transactions)).
+- **Duplicate publishing:** If the application crashes after publishing but before marking messages as processed, the same messages may be published again on the next cycle. Delivery is **at-least-once** by design; use the [Inbox Pattern](./inbox-pattern) on the consumer side to deduplicate.
 
 ```mermaid
 flowchart TD
@@ -274,13 +349,15 @@ flowchart TD
     D --> E{Publish succeeded?}
     E -->|Yes| F[Mark as processed]
     F --> A
-    E -->|No| G[Log error]
-    G --> A
+    E -->|No| G[MarkAsFailed: record attempt + error]
+    G --> H{Attempts < MaxAttempts?}
+    H -->|Yes, retry with backoff| A
+    H -->|No| I[Dead-lettered: visible in modulus outbox list-failed]
 ```
 
 ## Best Practices
 
-- **Always save to the outbox within the same transaction as your domain changes.** This is the entire point of the pattern. If you save the outbox message in a separate transaction, you lose the atomicity guarantee.
+- **For strict atomicity, save to the outbox within the same transaction as your domain changes.** That means the [same-DbContext configuration](#recommended-for-strict-atomicity-map-the-outbox-into-your-application-dbcontext): map `OutboxMessage` into your application `DbContext` and commit business rows and outbox rows in one `SaveChanges`. The default standalone store commits separately and leaves small crash/rollback windows -- know which configuration you are running.
 - **Treat `OutboxPollInterval` as a fallback, not the latency knob.** Rows saved through wired-up contexts dispatch immediately via the wake signal, so a longer interval (e.g. 30 seconds) cuts idle database queries without slowing delivery. Keep it short only when signals cannot reach the processor (multi-replica or dedicated-worker topologies).
 - **Monitor the outbox table.** If `ProcessedAt` is `null` for a large number of old messages, the processor may be failing silently. Set up alerts for outbox backlog.
 - **Pair with the inbox pattern.** The outbox guarantees at-least-once publishing. Use the [Inbox Pattern](./inbox-pattern) on the consumer side to achieve exactly-once processing.

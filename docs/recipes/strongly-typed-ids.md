@@ -20,14 +20,14 @@ In the Domain layer of your module, define a `readonly partial record struct` wi
 ```csharp
 using Modulus.Mediator.Abstractions;
 
-namespace EShop.Modules.Catalog.Domain.Products;
+namespace EShop.Catalog.Domain.Products;
 
 [StronglyTypedId]
 public readonly partial record struct ProductId;
 ```
 
 ```csharp
-namespace EShop.Modules.Orders.Domain.Orders;
+namespace EShop.Orders.Domain.Orders;
 
 [StronglyTypedId]
 public readonly partial record struct OrderId;

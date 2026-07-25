@@ -49,16 +49,24 @@ public class OrderShippedHandler : IIntegrationEventHandler<OrderShipped>
 
 ### Outbox Pattern
 
-The `IOutboxStore` interface enables the transactional outbox pattern — events are stored alongside your business data in the same transaction, then published reliably by a background processor.
+The `IOutboxStore` interface enables the transactional outbox pattern — events are stored as database rows, then published reliably by a background processor with per-row retry backoff and dead-lettering. (Whether the row commits in the same transaction as your business data depends on how the store is configured — see the [outbox documentation](https://adamwyatt34.github.io/Modulus/messaging/outbox-pattern) for the two supported setups.)
 
 ```csharp
 public interface IOutboxStore
 {
-    Task Save(IIntegrationEvent @event, CancellationToken ct = default);
-    Task<IReadOnlyList<OutboxMessage>> GetPending(int batchSize, CancellationToken ct = default);
-    Task MarkAsProcessed(IEnumerable<Guid> ids, CancellationToken ct = default);
+    Task Save(IIntegrationEvent @event, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<OutboxMessage>> GetPending(int batchSize, int maxAttempts, CancellationToken cancellationToken = default);
+
+    Task<int> CountPending(int maxAttempts, CancellationToken cancellationToken = default);
+
+    Task MarkAsProcessed(IEnumerable<Guid> ids, CancellationToken cancellationToken = default);
+
+    Task MarkAsFailed(Guid messageId, string error, DateTime? nextAttemptOnUtc, CancellationToken cancellationToken = default);
 }
 ```
+
+`GetPending` skips dead-lettered rows (`Attempts >= maxAttempts`) and rows whose `NextAttemptOnUtc` backoff has not elapsed; `MarkAsFailed` records the failure and the next-attempt time computed from the retry policy. The inbox counterpart, `IInboxStore`, provides per-handler idempotent consumption (reserve → execute → mark processed, with reservation release on dead-letter).
 
 ## Learn More
 

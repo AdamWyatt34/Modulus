@@ -183,14 +183,14 @@ Modulus makes a clear distinction between domain events and integration events. 
 | **Transport** | In-memory, same process | Message broker (InMemory, RabbitMQ, Azure Service Bus) |
 | **Delivery** | Synchronous, awaited | Asynchronous, eventual consistency |
 | **Scope** | Within a module or across modules in the same process | Cross-module, potentially cross-service |
-| **Transaction** | Same transaction as the caller | Separate transaction in the consumer |
+| **Transaction** | In the caller's process; can join the caller's transaction when published before the save | Separate transaction in the consumer |
 | **Failure model** | `AggregateException` thrown immediately | Retry policies, dead-letter queues, outbox/inbox |
 | **Handler** | `IDomainEventHandler<T>` | `IIntegrationEventHandler<T>` |
 
 ### When to Use Domain Events
 
 - Reacting to state changes within the same bounded context
-- Side effects that must happen in the same transaction
+- Side effects that must happen immediately, in-process (publish before `SaveChangesAsync` if they must join the same transaction)
 - In-process workflows where immediate consistency is required
 
 ### When to Use Integration Events

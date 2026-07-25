@@ -20,39 +20,36 @@ modulus add-command <command-name> [options]
 |---|---|---|
 | `--module, -m <name>` | **(Required)** Target module where the command will be created. | -- |
 | `--solution, -s <path>` | Path to the `.slnx` solution file. | Auto-discovered |
-| `--result-type, -r <type>` | Return type wrapped in `Result<T>`. Omit for a void `Result` (commands that return no value). | Void `Result` |
+| `--result-type, -r <type>` | Return type wrapped in `Result<T>`. Omit for a void `Result` (commands that return no value). Must be a single type identifier (e.g. `Guid`, `OrderConfirmation`); generic types like `List<T>` are not accepted -- define a wrapper DTO instead. | Void `Result` |
 
 ## Generated Output
 
-Running `modulus add-command CreateProduct --module Catalog --result-type Guid` generates three files:
+Running `modulus add-command CreateProduct --module Catalog --result-type Guid` generates four files -- the command record, handler, and validator under `src/Catalog.Application/Commands/CreateProduct/`, plus a starter unit test. The record and classes are named exactly after the command (no `Command` suffix is appended):
 
 ### Command record
 
-`src/Modules/Catalog/EShop.Modules.Catalog.Application/Commands/CreateProduct/CreateProductCommand.cs`
+`src/Modules/Catalog/src/Catalog.Application/Commands/CreateProduct/CreateProduct.cs`
 
 ```csharp
-using EShop.SharedKernel.Application;
+using Modulus.Mediator.Abstractions;
 
-namespace EShop.Modules.Catalog.Application.Commands.CreateProduct;
+namespace EShop.Catalog.Application.Commands.CreateProduct;
 
-public sealed record CreateProductCommand : ICommand<Guid>;
+public sealed record CreateProduct : ICommand<Guid>;
 ```
 
 ### Handler class
 
-`src/Modules/Catalog/EShop.Modules.Catalog.Application/Commands/CreateProduct/CreateProductCommandHandler.cs`
+`src/Modules/Catalog/src/Catalog.Application/Commands/CreateProduct/CreateProductHandler.cs`
 
 ```csharp
-using EShop.SharedKernel.Application;
+using Modulus.Mediator.Abstractions;
 
-namespace EShop.Modules.Catalog.Application.Commands.CreateProduct;
+namespace EShop.Catalog.Application.Commands.CreateProduct;
 
-public sealed class CreateProductCommandHandler
-    : ICommandHandler<CreateProductCommand, Guid>
+public sealed class CreateProductHandler : ICommandHandler<CreateProduct, Guid>
 {
-    public async Task<Result<Guid>> Handle(
-        CreateProductCommand command,
-        CancellationToken cancellationToken)
+    public Task<Result<Guid>> Handle(CreateProduct command, CancellationToken cancellationToken = default)
     {
         // TODO: Implement command logic
         throw new NotImplementedException();
@@ -62,24 +59,27 @@ public sealed class CreateProductCommandHandler
 
 ### Validator class
 
-`src/Modules/Catalog/EShop.Modules.Catalog.Application/Commands/CreateProduct/CreateProductCommandValidator.cs`
+`src/Modules/Catalog/src/Catalog.Application/Commands/CreateProduct/CreateProductValidator.cs`
 
 ```csharp
 using FluentValidation;
 
-namespace EShop.Modules.Catalog.Application.Commands.CreateProduct;
+namespace EShop.Catalog.Application.Commands.CreateProduct;
 
-public sealed class CreateProductCommandValidator
-    : AbstractValidator<CreateProductCommand>
+public sealed class CreateProductValidator : AbstractValidator<CreateProduct>
 {
-    public CreateProductCommandValidator()
+    public CreateProductValidator()
     {
         // TODO: Add validation rules
     }
 }
 ```
 
-When `--result-type` is omitted, the command implements `ICommand` (no generic parameter) and the handler returns `Result` instead of `Result<T>`.
+### Unit test
+
+`src/Modules/Catalog/tests/Catalog.Tests.Unit/Commands/CreateProductHandlerTests.cs` -- a starter test that constructs the handler directly. Both the handler and the validator are auto-registered by the source-generated `AddModulusHandlers()`.
+
+When `--result-type` is omitted, the command implements `ICommand` (no generic parameter) and the handler returns `Result` instead of `Result<T>` (with a `Result.Success()` placeholder body instead of `NotImplementedException`).
 
 ## Examples
 

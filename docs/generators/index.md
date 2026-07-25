@@ -31,7 +31,7 @@ Both generators and analyzers are delivered as NuGet analyzer references. If you
                   ReferenceOutputAssembly="false" />
 ```
 
-Both `ModulusKit.Generators` and `ModulusKit.Analyzers` are also transitively included when you reference `ModulusKit.Mediator.Abstractions`.
+Both are development-dependency packages, so they do **not** flow transitively through other `ModulusKit.*` packages or through project references -- add the analyzer reference to every project that defines handlers, validators, or `[StronglyTypedId]` types (and to the host, for module discovery).
 
 ## Generator Diagnostics
 

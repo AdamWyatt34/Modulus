@@ -1,6 +1,6 @@
 # modulus add-entity
 
-Scaffolds a domain entity or aggregate root inside a module's Domain layer. The generated entity includes a strongly-typed ID, optional properties, and follows Modulus domain conventions.
+Scaffolds a domain entity or aggregate root inside a module's Domain layer, together with its repository interface and EF Core plumbing. The ID can be a built-in type (`guid`, `int`, `long`, `string`) or a custom strongly-typed ID record that the command generates for you.
 
 ## Synopsis
 
@@ -26,58 +26,59 @@ modulus add-entity <entity-name> [options]
 
 ## Generated Output
 
-Running `modulus add-entity Product --module Catalog --aggregate --properties "Name:string,Price:decimal"` generates:
+Running `modulus add-entity Product --module Catalog --aggregate --properties "Name:string,Price:decimal"` generates five files under `src/Modules/Catalog/`:
+
+| File | Purpose |
+|---|---|
+| `src/Catalog.Domain/Entities/Product.cs` | The entity/aggregate class |
+| `src/Catalog.Domain/Repositories/IProductRepository.cs` | Repository interface (self-contained, Domain has no outward dependencies) |
+| `src/Catalog.Infrastructure/Persistence/Repositories/ProductRepository.cs` | EF Core repository (aggregates inherit `EfRepository<,>`) |
+| `src/Catalog.Infrastructure/Persistence/Configurations/ProductConfiguration.cs` | EF Core entity type configuration (auto-discovered by the DbContext) |
+| `tests/Catalog.Tests.Unit/Domain/ProductTests.cs` | Starter unit test for the factory method |
 
 ### Entity file
 
-`src/Modules/Catalog/EShop.Modules.Catalog.Domain/Entities/Product.cs`
+`src/Modules/Catalog/src/Catalog.Domain/Entities/Product.cs`
 
 ```csharp
-using EShop.SharedKernel.Domain;
+using EShop.BuildingBlocks.Domain.Entities;
 
-namespace EShop.Modules.Catalog.Domain.Entities;
+namespace EShop.Catalog.Domain.Entities;
 
-public class Product : AggregateRoot<ProductId>
+public class Product : AggregateRoot<Guid>
 {
-    public string Name { get; private set; }
-    public decimal Price { get; private set; }
+    public string Name { get; private set; } = default!;
+    public decimal Price { get; private set; } = default!;
 
-    private Product() { } // EF Core
+    private Product() { }
 
-    public static Product Create(string name, decimal price)
+    public static Product Create(Guid id, string name, decimal price)
     {
-        var product = new Product
-        {
-            Id = ProductId.New(),
-            Name = name,
-            Price = price
-        };
-
-        return product;
+        return new Product { Id = id, Name = name, Price = price };
     }
 }
 ```
 
-### Strongly-typed ID
+### Custom Strongly-typed ID
 
-`src/Modules/Catalog/EShop.Modules.Catalog.Domain/Entities/ProductId.cs`
+Passing a custom type name to `--id-type` (anything other than `guid`, `int`, `long`, `string`) additionally generates a Guid-backed ID record built on the scaffolded `StronglyTypedId<T>` base:
+
+`src/Modules/Catalog/src/Catalog.Domain/Identifiers/ProductId.cs`
 
 ```csharp
-using EShop.SharedKernel.Domain;
+using EShop.BuildingBlocks.Domain.Identifiers;
 
-namespace EShop.Modules.Catalog.Domain.Entities;
+namespace EShop.Catalog.Domain.Identifiers;
 
-public sealed class ProductId : StronglyTypedId<Guid>
+public sealed record ProductId(Guid Value) : StronglyTypedId<ProductId>(Value)
 {
-    public ProductId(Guid value) : base(value) { }
-
     public static ProductId New() => new(Guid.NewGuid());
 }
 ```
 
-### Other ID Types
+The entity then uses `AggregateRoot<ProductId>`, and the generated `ProductConfiguration` adds the `HasConversion` mapping for it.
 
-When you specify a different `--id-type`, the generated ID type adapts accordingly:
+### Other ID Types
 
 ```bash
 # Integer ID
@@ -86,8 +87,8 @@ modulus add-entity Order --module Orders --id-type int
 # String ID (e.g., for natural keys)
 modulus add-entity Tenant --module Identity --id-type string
 
-# Custom type
-modulus add-entity Invoice --module Billing --id-type Ulid
+# Custom strongly-typed ID (generates ProductId-style record)
+modulus add-entity Invoice --module Billing --id-type InvoiceId
 ```
 
 ## Examples

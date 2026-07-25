@@ -7,7 +7,7 @@ The Strongly Typed ID generator transforms a `readonly partial record struct` an
 ```csharp
 using Modulus.Mediator.Abstractions;
 
-namespace EShop.Modules.Catalog.Domain.Products;
+namespace EShop.Catalog.Domain.Products;
 
 [StronglyTypedId]
 public readonly partial record struct ProductId;

@@ -17,10 +17,6 @@
     <Project Path="src/Modules/Notifications/src/Notifications.Integration/Notifications.Integration.csproj" />
   </Folder>
   <Folder Name="/src/Modules/Orders/">
-    <Project Path="src/BuildingBlocks.Application/BuildingBlocks.Application.csproj" />
-    <Project Path="src/BuildingBlocks.Domain/BuildingBlocks.Domain.csproj" />
-    <Project Path="src/BuildingBlocks.Infrastructure/BuildingBlocks.Infrastructure.csproj" />
-    <Project Path="src/BuildingBlocks.Integration/BuildingBlocks.Integration.csproj" />
     <Project Path="src/Modules/Orders/src/Orders.Api/Orders.Api.csproj" />
     <Project Path="src/Modules/Orders/src/Orders.Application/Orders.Application.csproj" />
     <Project Path="src/Modules/Orders/src/Orders.Domain/Orders.Domain.csproj" />

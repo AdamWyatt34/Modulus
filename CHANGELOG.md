@@ -116,6 +116,7 @@ Coordinated release of all nine packages at 2.0.0 — the scaffolded `Directory.
   - Entity Framework Core outbox implementation (`EfOutboxStore`)
   - Automatic handler discovery and consumer adapter registration
 
+[2.1.0]: https://github.com/adamwyatt34/Modulus/compare/messaging-v2.0.0...messaging-v2.1.0
 [2.0.0]: https://github.com/adamwyatt34/Modulus/compare/v1.1.0...messaging-v2.0.0
 [1.1.0]: https://github.com/adamwyatt34/Modulus/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/adamwyatt34/Modulus/releases/tag/v1.0.0
