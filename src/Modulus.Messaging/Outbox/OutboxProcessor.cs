@@ -29,7 +29,12 @@ internal sealed class OutboxProcessor(
                 logger.LogError(ex, "Error processing outbox messages");
             }
 
-            // A full batch means more rows are probably waiting — drain before sleeping.
+            // A full batch of forward progress (published + durably failed-marked) means more
+            // rows are probably waiting — drain before sleeping. This still terminates for a
+            // batch of poison rows: each failed-marked row gets a NextAttemptOnUtc backoff, so
+            // it drops out of the next pass's GetPending population instead of being fetched
+            // (and counted) again — a persistently poisoned batch cannot masquerade as an
+            // ever-growing backlog.
             if (fetched >= options.OutboxBatchSize)
             {
                 metrics.OutboxWakeup("backlog");

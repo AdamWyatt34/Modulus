@@ -86,4 +86,18 @@ public class FakeInboxStore : IInboxStore
                 existing);
         }
     }
+
+    public Task ReleaseReservation(Guid messageId, string handlerName, CancellationToken cancellationToken = default)
+    {
+        if (_consumers.TryGetValue((messageId, handlerName), out var existing) && existing.ProcessedOnUtc is null)
+        {
+            // Conditional remove: only removes the exact (unprocessed) snapshot just read, so
+            // a concurrent MarkConsumerProcessed racing this call can never have its
+            // completion silently dropped.
+            _consumers.TryRemove(new KeyValuePair<(Guid MessageId, string HandlerName), ConsumerState>(
+                (messageId, handlerName), existing));
+        }
+
+        return Task.CompletedTask;
+    }
 }

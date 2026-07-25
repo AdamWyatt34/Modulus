@@ -124,7 +124,9 @@ public class ConsumerDispatcherTests
 
         handler.HandledEvents.Count.ShouldBe(1);
         inbox.ProcessedConsumers.Count.ShouldBe(1);
-        inbox.ProcessedConsumers[0].HandlerName.ShouldBe(nameof(TestOrderCreatedHandler));
+        // H-MSG1: the inbox key is the handler's FullName, not its simple Name — two modules
+        // each defining their own "OrderPlacedHandler" must not collide on one inbox key.
+        inbox.ProcessedConsumers[0].HandlerName.ShouldBe(typeof(TestOrderCreatedHandler).FullName);
     }
 
     [Fact]
@@ -232,9 +234,9 @@ public class ConsumerDispatcherTests
         var dispatcher = BuildDispatcher(services);
 
         var @event = new TestOrderCreatedEvent { OrderId = 8, CustomerName = "Crashed" };
-        (await inbox.TryReserve(@event.EventId, nameof(TestOrderCreatedHandler), TimeSpan.FromMinutes(5)))
+        (await inbox.TryReserve(@event.EventId, typeof(TestOrderCreatedHandler).FullName!, TimeSpan.FromMinutes(5)))
             .ShouldBeTrue();
-        inbox.AgeReservation(@event.EventId, nameof(TestOrderCreatedHandler), TimeSpan.FromMinutes(10));
+        inbox.AgeReservation(@event.EventId, typeof(TestOrderCreatedHandler).FullName!, TimeSpan.FromMinutes(10));
 
         var result = await dispatcher.DispatchAsync(EnvelopeFor(@event), CancellationToken.None);
 
@@ -256,13 +258,44 @@ public class ConsumerDispatcherTests
         var dispatcher = BuildDispatcher(services, FastRetryOptions(maxAttempts: 3));
 
         var @event = new TestOrderCreatedEvent { OrderId = 9, CustomerName = "Contended" };
-        (await inbox.TryReserve(@event.EventId, nameof(TestOrderCreatedHandler), TimeSpan.FromMinutes(5)))
+        (await inbox.TryReserve(@event.EventId, typeof(TestOrderCreatedHandler).FullName!, TimeSpan.FromMinutes(5)))
             .ShouldBeTrue();
 
         var result = await dispatcher.DispatchAsync(EnvelopeFor(@event), CancellationToken.None);
 
         result.ShouldBe(MessageDispatchResult.DeadLetter);
         handler.HandledEvents.ShouldBeEmpty();
+
+        // H-MSG4 must only release reservations this dispatch itself holds. It never
+        // successfully reserved this foreign pair, so the reservation must be left exactly as
+        // it was — still fresh, so a re-claim attempt still loses.
+        (await inbox.TryReserve(@event.EventId, typeof(TestOrderCreatedHandler).FullName!, TimeSpan.FromHours(1)))
+            .ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Dispatch_DeadLetters_ReleasesOwnReservationForPromptReplay()
+    {
+        // H-MSG4: retries exhaust in seconds while ConsumerReservationTimeout defaults to 5
+        // minutes, so without releasing, a prompt DLQ replay would deterministically fail
+        // every attempt with InboxReservationPendingException against this exhausted
+        // dispatch's own still-fresh reservation and dead-letter again — zero handler
+        // executions on replay. Releasing lets the replay reserve and execute immediately.
+        var handler = new FlakyOrderCreatedHandler(failuresBeforeSuccess: int.MaxValue);
+        var inbox = new FakeInboxStore();
+        var services = new ServiceCollection();
+        services.AddSingleton<IIntegrationEventHandler<TestOrderCreatedEvent>>(handler);
+        services.AddSingleton<IInboxStore>(inbox);
+        var dispatcher = BuildDispatcher(services, FastRetryOptions(maxAttempts: 3));
+
+        var @event = new TestOrderCreatedEvent { OrderId = 10, CustomerName = "Doomed" };
+        var result = await dispatcher.DispatchAsync(EnvelopeFor(@event), CancellationToken.None);
+
+        result.ShouldBe(MessageDispatchResult.DeadLetter);
+
+        // A replay reserving right away must succeed; a held reservation would return false.
+        (await inbox.TryReserve(@event.EventId, typeof(FlakyOrderCreatedHandler).FullName!, TimeSpan.FromMinutes(5)))
+            .ShouldBeTrue();
     }
 
     [Fact]

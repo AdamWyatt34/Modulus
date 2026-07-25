@@ -28,6 +28,10 @@ public sealed class EfOutboxAdminStore(OutboxDbContext dbContext) : IOutboxAdmin
 
         message.Attempts = 0;
         message.LastError = null;
+        // Clear any pending backoff too: a message an operator explicitly retries must be
+        // eligible for GetPending on the very next poll, not still serving out the wait from
+        // whatever attempt originally dead-lettered it.
+        message.NextAttemptOnUtc = null;
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return true;
     }

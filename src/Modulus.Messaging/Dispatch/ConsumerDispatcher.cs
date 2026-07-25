@@ -95,6 +95,14 @@ internal sealed class ConsumerDispatcher(
                         envelope.MessageType,
                         attempt);
                     metrics.ConsumerDeadLettered(envelope.MessageType);
+
+                    // Release this dispatch's own reservations so a prompt DLQ replay can
+                    // reserve and execute immediately instead of failing with
+                    // InboxReservationPendingException against a still-fresh reservation for
+                    // up to ConsumerReservationTimeout.
+                    await ReleaseReservationsAsync(integrationEvent.EventId, reservedByThisDispatch, cancellationToken)
+                        .ConfigureAwait(false);
+
                     return MessageDispatchResult.DeadLetter;
                 }
 
@@ -198,6 +206,41 @@ internal sealed class ConsumerDispatcher(
         {
             metrics.HandlerDuration(Stopwatch.GetElapsedTime(start).TotalMilliseconds, handler.Name, "failure");
             throw;
+        }
+    }
+
+    // Best-effort: releasing is a courtesy to a future replay, not a correctness requirement
+    // (the reservation would otherwise simply go stale after ConsumerReservationTimeout, same
+    // as before this dispatch existed). A release failure must not mask the dead-letter
+    // outcome already decided by the caller, so each handler's release is isolated.
+    private async Task ReleaseReservationsAsync(
+        Guid eventId,
+        IReadOnlyCollection<string> handlerNames,
+        CancellationToken cancellationToken)
+    {
+        if (handlerNames.Count == 0)
+            return;
+
+        using var scope = scopeFactory.CreateScope();
+        var inboxStore = scope.ServiceProvider.GetService<IInboxStore>();
+        if (inboxStore is null)
+            return;
+
+        foreach (var handlerName in handlerNames)
+        {
+            try
+            {
+                await inboxStore.ReleaseReservation(eventId, handlerName, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(
+                    ex,
+                    "Failed to release the inbox reservation for handler {HandlerName} on message {EventId} after dead-lettering. " +
+                    "It will remain reserved until the timeout elapses.",
+                    handlerName,
+                    eventId);
+            }
         }
     }
 }

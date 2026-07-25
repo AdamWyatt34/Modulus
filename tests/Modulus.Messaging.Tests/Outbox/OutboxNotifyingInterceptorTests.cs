@@ -77,6 +77,27 @@ public sealed class OutboxNotifyingInterceptorTests : IDisposable
     }
 
     [Fact]
+    public async Task SaveChangesAsync_BusinessRowAndOutboxRowNoExplicitTransaction_NotifiesExactlyOnce()
+    {
+        // H-MSG2 regression. This is the canonical scaffolded shape: one business-entity write
+        // plus one OutboxMessage write in the same SaveChangesAsync call, with no explicit
+        // transaction. Sqlite does not batch/elide this into a single command, so EF Core opens
+        // its own implicit relational transaction for the two inserts — and TransactionCommitted
+        // fires BEFORE SavedChanges for that implicit transaction. Before the fix, NotifyIfDeferred
+        // (called from TransactionCommitted) saw NotifyOnCommit still false — because
+        // NotifyOrDefer, which sets it, is called from SavedChanges and had not run yet — and
+        // cleared all interceptor state; the later SavedChanges call then found nothing to notify.
+        // The net effect was total silence: no notify at all, every time, for this exact shape.
+        await using var context = CreateContext();
+        context.Widgets.Add(new Widget());
+        context.OutboxMessages.Add(NewOutboxRow());
+
+        await context.SaveChangesAsync();
+
+        _notifier.NotifyCount.ShouldBe(1);
+    }
+
+    [Fact]
     public async Task SaveChangesAsync_UnrelatedEntityOnly_DoesNotNotify()
     {
         await using var context = CreateContext();

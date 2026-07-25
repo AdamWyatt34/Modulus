@@ -22,9 +22,11 @@ public sealed class OutboxDbContext : DbContext
             entity.Property(e => e.ProcessedAt);
             entity.Property(e => e.Attempts).IsRequired();
             entity.Property(e => e.LastError);
+            entity.Property(e => e.NextAttemptOnUtc);
 
-            // Polling query: WHERE ProcessedAt IS NULL ORDER BY CreatedAt.
-            entity.HasIndex(e => new { e.ProcessedAt, e.CreatedAt });
+            // Polling query: WHERE ProcessedAt IS NULL AND Attempts < N
+            //   AND (NextAttemptOnUtc IS NULL OR NextAttemptOnUtc <= @now) ORDER BY CreatedAt.
+            entity.HasIndex(e => new { e.ProcessedAt, e.NextAttemptOnUtc, e.CreatedAt });
         });
     }
 }

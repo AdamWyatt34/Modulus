@@ -100,6 +100,13 @@ public static class ServiceCollectionExtensions
         ValidateRetryPolicy(options.ConsumerRetry, nameof(MessagingOptions.ConsumerRetry));
         ValidateTransportConfiguration(options);
 
+        // Must run before anything below reads options.Assemblies (MessageTypeRegistry,
+        // DiscoverHandlers here, and OutboxDispatcher's own allowlist scan once resolved from
+        // this same singleton): a duplicate entry — e.g. two configure callbacks each adding
+        // typeof(Program).Assembly — would otherwise scan and register every handler and event
+        // mapping in it twice, silently double-invoking every handler for that assembly.
+        DeduplicateAssemblies(options);
+
         // Empty Assemblies is allowed: publish-only hosts use IMessageBus directly and need no consumers.
         services.AddSingleton(options);
 
@@ -245,6 +252,20 @@ public static class ServiceCollectionExtensions
                     options.Transport,
                     "Unsupported transport type.");
         }
+    }
+
+    // Mutates the same List<Assembly> instance MessagingOptions.Assemblies returns (its
+    // property getter is read-only, but the backing list is not), so every reader that holds
+    // a reference to this options instance — including one resolved later from DI — sees the
+    // deduped set without needing its own copy.
+    private static void DeduplicateAssemblies(MessagingOptions options)
+    {
+        var distinct = options.Assemblies.Distinct().ToList();
+        if (distinct.Count == options.Assemblies.Count)
+            return;
+
+        options.Assemblies.Clear();
+        options.Assemblies.AddRange(distinct);
     }
 
     private static List<HandlerRegistration> DiscoverHandlers(List<Assembly> assemblies)

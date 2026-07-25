@@ -1,5 +1,6 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Modulus.Messaging.Abstractions;
 using Modulus.Messaging.Inbox;
 using Shouldly;
@@ -74,6 +75,37 @@ public sealed class EfInboxStoreTests : IDisposable
         // Assert — only one record persisted
         var count = await _dbContext.InboxMessages.CountAsync();
         count.ShouldBe(1);
+    }
+
+    private sealed class ThrowingSaveChangesInterceptor : SaveChangesInterceptor
+    {
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+            => throw new DbUpdateException("Simulated failure unrelated to a duplicate row (e.g. a timeout or deadlock).");
+    }
+
+    [Fact]
+    public async Task Save_DbUpdateExceptionForReasonOtherThanDuplicate_Rethrows()
+    {
+        // EfInboxStore.cs:32-36 (pre-fix) swallowed every DbUpdateException as "a concurrent
+        // duplicate save", including timeouts and deadlocks that have nothing to do with the
+        // row already existing. The interceptor throws before SaveChangesAsync ever reaches
+        // the database, so the row is guaranteed to still be missing afterward — Save must
+        // see that via its re-check and rethrow instead of silently swallowing it.
+        var options = new DbContextOptionsBuilder<InboxDbContext>()
+            .UseSqlite(_connection)
+            .AddInterceptors(new ThrowingSaveChangesInterceptor())
+            .Options;
+        using var throwingContext = new InboxDbContext(options);
+        var throwingStore = new EfInboxStore(throwingContext);
+
+        var @event = new TestIntegrationEvent();
+
+        await Should.ThrowAsync<DbUpdateException>(() => throwingStore.Save(@event));
+
+        (await _dbContext.InboxMessages.AsNoTracking().AnyAsync(m => m.Id == @event.EventId)).ShouldBeFalse();
     }
 
     [Fact]
@@ -215,6 +247,41 @@ public sealed class EfInboxStoreTests : IDisposable
         // Assert
         first.ShouldBeTrue();
         second.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task ReleaseReservation_UnprocessedReservation_AllowsImmediateReReservation()
+    {
+        // H-MSG4: releasing must let a replay reserve right away — not merely age the
+        // reservation until ConsumerReservationTimeout elapses.
+        var messageId = Guid.NewGuid();
+        const string handlerName = "Handler";
+        (await _store.TryReserve(messageId, handlerName, TimeSpan.FromMinutes(5))).ShouldBeTrue();
+
+        await _store.ReleaseReservation(messageId, handlerName);
+
+        (await _store.TryReserve(messageId, handlerName, TimeSpan.FromMinutes(5))).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task ReleaseReservation_ProcessedPair_DoesNotUndoCompletion()
+    {
+        // A completed reservation must never be un-done, even if release is called on it
+        // (e.g. a caller racing its own success against a cancellation-driven cleanup path).
+        var messageId = Guid.NewGuid();
+        const string handlerName = "Handler";
+        (await _store.TryReserve(messageId, handlerName, TimeSpan.FromMinutes(5))).ShouldBeTrue();
+        await _store.MarkConsumerProcessed(messageId, handlerName);
+
+        await _store.ReleaseReservation(messageId, handlerName);
+
+        (await _store.HasBeenProcessed(messageId, handlerName)).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task ReleaseReservation_NoReservationExists_DoesNotThrow()
+    {
+        await Should.NotThrowAsync(() => _store.ReleaseReservation(Guid.NewGuid(), "NeverReserved"));
     }
 
     private sealed record TestIntegrationEvent : IIntegrationEvent

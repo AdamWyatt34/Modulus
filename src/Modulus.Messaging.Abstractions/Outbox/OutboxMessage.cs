@@ -25,4 +25,14 @@ public sealed class OutboxMessage
 
     /// <summary>Gets or sets the error message from the most recent failed publish attempt.</summary>
     public string? LastError { get; set; }
+
+    /// <summary>
+    /// Gets or sets the UTC time at which this message becomes eligible for another dispatch
+    /// attempt, or <see langword="null"/> if it has never failed or is immediately eligible.
+    /// Set by <see cref="IOutboxStore.MarkAsFailed"/> from the caller's configured retry
+    /// backoff, so a persistently failing row (including a poison row with an unrecognized
+    /// or undeserializable payload) does not busy-loop the dispatcher every pass until it
+    /// dead-letters.
+    /// </summary>
+    public DateTime? NextAttemptOnUtc { get; set; }
 }

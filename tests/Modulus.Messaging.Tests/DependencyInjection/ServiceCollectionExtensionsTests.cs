@@ -98,6 +98,48 @@ public class ServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public void AddModulusMessaging_DuplicateAssemblyEntries_DedupesAssembliesList()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddModulusMessaging(options =>
+        {
+            options.Transport = Transport.InMemory;
+            options.Assemblies.Add(typeof(TestOrderCreatedEvent).Assembly);
+            options.Assemblies.Add(typeof(TestOrderCreatedEvent).Assembly); // duplicate entry
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var resolvedOptions = provider.GetRequiredService<MessagingOptions>();
+
+        resolvedOptions.Assemblies.Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task AddModulusMessaging_DuplicateAssemblyEntries_RegistersEachHandlerOnce()
+    {
+        // Without the dedup fix, scanning the same assembly twice would register every
+        // handler type in it twice, causing every event of that type to be handled twice.
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddModulusMessaging(options =>
+        {
+            options.Transport = Transport.InMemory;
+            options.Assemblies.Add(typeof(TestOrderCreatedEvent).Assembly);
+            options.Assemblies.Add(typeof(TestOrderCreatedEvent).Assembly);
+        });
+
+        await using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        var handlers = scope.ServiceProvider
+            .GetServices<Abstractions.IIntegrationEventHandler<TestOrderCreatedEvent>>()
+            .ToList();
+
+        handlers.Count(h => h.GetType() == typeof(TestOrderCreatedHandler)).ShouldBe(1);
+    }
+
+    [Fact]
     public void PrefetchCount_OutOfRange_Throws()
     {
         var services = new ServiceCollection();

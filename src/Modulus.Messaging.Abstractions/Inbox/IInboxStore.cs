@@ -26,4 +26,14 @@ public interface IInboxStore
 
     /// <summary>Marks a reserved (message, handler) pair as successfully processed.</summary>
     Task MarkConsumerProcessed(Guid messageId, string handlerName, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Releases a reservation the caller holds for the (message, handler) pair, so a later
+    /// delivery — e.g. a dead-letter-queue replay — can immediately <see cref="TryReserve"/>
+    /// and execute it instead of waiting out the stale-reservation timeout that the exhausted
+    /// dispatch's own reservation would otherwise still be holding fresh. A no-op if the pair
+    /// has already been marked processed (a completed reservation must never be undone) or if
+    /// no reservation exists for the pair.
+    /// </summary>
+    Task ReleaseReservation(Guid messageId, string handlerName, CancellationToken cancellationToken = default);
 }

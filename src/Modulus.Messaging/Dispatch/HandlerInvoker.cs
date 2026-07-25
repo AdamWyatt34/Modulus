@@ -25,7 +25,11 @@ internal static class HandlerInvoker
         where TEvent : class, IIntegrationEvent
         => provider.GetServices<IIntegrationEventHandler<TEvent>>()
             .Select(handler => new HandlerDescriptor(
-                handler.GetType().Name,
+                // FullName, not the simple Name: two modules each defining their own
+                // "OrderPlacedHandler" — the natural naming in this architecture — would
+                // otherwise share one inbox idempotency key, so the first to complete marks
+                // it processed and the second is silently skipped forever.
+                handler.GetType().FullName ?? handler.GetType().Name,
                 (@event, cancellationToken) => handler.Handle((TEvent)@event, cancellationToken)))
             .ToList();
 }

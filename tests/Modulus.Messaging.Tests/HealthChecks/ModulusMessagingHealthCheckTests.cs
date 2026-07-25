@@ -54,7 +54,7 @@ public class ModulusMessagingHealthCheckTests
         public Task MarkAsProcessed(IEnumerable<Guid> ids, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
 
-        public Task MarkAsFailed(Guid messageId, string error, CancellationToken cancellationToken = default)
+        public Task MarkAsFailed(Guid messageId, string error, DateTime? nextAttemptOnUtc, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
     }
 
