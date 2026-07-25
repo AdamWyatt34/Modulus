@@ -1,3 +1,4 @@
+using System.Text;
 using Modulus.Messaging.Internals;
 
 namespace Modulus.Messaging.RabbitMq;
@@ -10,19 +11,41 @@ namespace Modulus.Messaging.RabbitMq;
 /// </summary>
 public static class RabbitMqTopology
 {
+    // RabbitMQ's hard limit on exchange and queue name length, in UTF-8 bytes.
+    private const int MaxNameLengthBytes = 255;
+
     /// <summary>Exchange name for an event type: the lower-cased stable wire name.</summary>
     public static string ExchangeName(string messageTypeName)
-        => messageTypeName.ToLowerInvariant();
+        => EnsureWithinLimit(messageTypeName.ToLowerInvariant(), "exchange");
 
     /// <summary>The endpoint's consume queue. Replicas sharing the name compete for messages.</summary>
     public static string QueueName(string endpointName)
-        => EndpointNameResolver.Sanitize(endpointName);
+        => EnsureWithinLimit(EndpointNameResolver.Sanitize(endpointName), "queue");
 
     /// <summary>The endpoint's dead-letter exchange, targeted via <c>x-dead-letter-exchange</c>.</summary>
     public static string DeadLetterExchangeName(string endpointName)
-        => $"{QueueName(endpointName)}.dlx";
+        => EnsureWithinLimit($"{QueueName(endpointName)}.dlx", "dead-letter exchange");
 
     /// <summary>The queue bound to the dead-letter exchange.</summary>
     public static string DeadLetterQueueName(string endpointName)
-        => $"{QueueName(endpointName)}.dead-letter";
+        => EnsureWithinLimit($"{QueueName(endpointName)}.dead-letter", "dead-letter queue");
+
+    /// <summary>
+    /// Guards against RabbitMQ's 255-UTF-8-byte limit on exchange and queue names, surfacing a
+    /// descriptive error at topology-resolution time instead of an opaque broker-side rejection
+    /// on the first <c>exchange.declare</c>/<c>queue.declare</c>.
+    /// </summary>
+    private static string EnsureWithinLimit(string name, string entityKind)
+    {
+        var byteCount = Encoding.UTF8.GetByteCount(name);
+        if (byteCount > MaxNameLengthBytes)
+        {
+            throw new InvalidOperationException(
+                $"RabbitMQ {entityKind} name '{name}' is {byteCount} UTF-8 bytes, exceeding the " +
+                $"broker's {MaxNameLengthBytes}-byte limit for exchange and queue names. Shorten " +
+                "the event type's namespace/name or MessagingOptions.EndpointName.");
+        }
+
+        return name;
+    }
 }

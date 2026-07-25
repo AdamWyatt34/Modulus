@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using Modulus.Messaging.Internals;
 using Modulus.Messaging.Transports;
@@ -11,18 +12,33 @@ namespace Modulus.Messaging.RabbitMq;
 /// per event type; one durable queue per endpoint bound to every subscribed exchange, with a
 /// per-endpoint dead-letter exchange and queue. Publishes use publisher confirmations, so a
 /// failed broker confirm surfaces as an exception the outbox turns into a retry.
+/// <see cref="StopConsumingAsync"/> drains in-flight dispatches before returning, and
+/// <see cref="CheckHealthAsync"/> reports unhealthy once consumption has started if the consume
+/// channel or consumer dies unexpectedly (queue deletion, a broker-side timeout close, etc.).
 /// </summary>
 internal sealed class RabbitMqTransport(
     MessagingOptions options,
     ILogger<RabbitMqTransport> logger) : IMessageTransport, ITransportHealthProbe
 {
+    /// <summary>Bounded wait for in-flight dispatches to finish once consumption is cancelled.</summary>
+    private static readonly TimeSpan ConsumerDrainTimeout = TimeSpan.FromSeconds(30);
+
     private readonly SemaphoreSlim _connectionLock = new(1, 1);
-    private readonly HashSet<string> _declaredExchanges = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, byte> _declaredExchanges = new(StringComparer.Ordinal);
 
     private IConnection? _connection;
     private IChannel? _publishChannel;
-    private IChannel? _consumeChannel;
+    private volatile IChannel? _consumeChannel;
     private string? _consumerTag;
+
+    // In-flight consumer dispatch tracking so StopConsumingAsync can drain before returning
+    // (see DrainInFlightDispatchesAsync), and consumer-health state so a dead consume
+    // channel/consumer is visible to CheckHealthAsync instead of reporting healthy forever.
+    private long _inFlightDispatches;
+    private volatile TaskCompletionSource? _drainSignal;
+    private volatile bool _consumingStarted;
+    private volatile bool _stoppingConsumer;
+    private volatile ConsumerFault? _consumerFault;
 
     private async Task<IConnection> GetConnectionAsync(CancellationToken cancellationToken)
     {
@@ -42,8 +58,27 @@ internal sealed class RabbitMqTransport(
                 TopologyRecoveryEnabled = true,
             };
 
-            _connection = await factory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
-            return _connection;
+            var previousConnection = _connection;
+            var connection = await factory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
+            _connection = connection;
+
+            if (previousConnection is not null)
+            {
+                // The prior connection is known dead here (the IsOpen fast-path above returns
+                // early while it's still open), so dispose it once the new one is safely wired
+                // in. Otherwise its auto-recovery timer and socket are orphaned for the rest of
+                // the process's lifetime every time the broker connection drops and reconnects.
+                try
+                {
+                    await previousConnection.DisposeAsync().ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Failed to dispose the previous RabbitMQ connection while reconnecting.");
+                }
+            }
+
+            return connection;
         }
         finally
         {
@@ -84,21 +119,33 @@ internal sealed class RabbitMqTransport(
         var channel = await GetPublishChannelAsync(cancellationToken).ConfigureAwait(false);
         var exchange = RabbitMqTopology.ExchangeName(envelope.MessageType);
 
-        if (options.AutoProvision && !_declaredExchanges.Contains(exchange))
+        if (options.AutoProvision && !_declaredExchanges.ContainsKey(exchange))
         {
             await channel.ExchangeDeclareAsync(
                 exchange, ExchangeType.Fanout, durable: true, autoDelete: false,
                 cancellationToken: cancellationToken).ConfigureAwait(false);
-            _declaredExchanges.Add(exchange);
+            _declaredExchanges.TryAdd(exchange, 0);
         }
 
-        await channel.BasicPublishAsync(
-            exchange,
-            routingKey: string.Empty,
-            mandatory: false,
-            basicProperties: RabbitMqEnvelopeMapper.ToBasicProperties(envelope),
-            body: envelope.Body,
-            cancellationToken: cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await channel.BasicPublishAsync(
+                exchange,
+                routingKey: string.Empty,
+                mandatory: false,
+                basicProperties: RabbitMqEnvelopeMapper.ToBasicProperties(envelope),
+                body: envelope.Body,
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // A deleted-out-of-band exchange surfaces here as a channel-level protocol
+            // exception; this client gives no cheap way to distinguish that from other publish
+            // failures, so evict unconditionally. The cost is one redundant, idempotent
+            // re-declare on the next attempt instead of failing against this exchange forever.
+            _declaredExchanges.TryRemove(exchange, out _);
+            throw;
+        }
     }
 
     public async Task StartConsumingAsync(
@@ -111,29 +158,51 @@ internal sealed class RabbitMqTransport(
         var queue = RabbitMqTopology.QueueName(endpointName);
         var deadLetterExchange = RabbitMqTopology.DeadLetterExchangeName(endpointName);
 
-        _consumeChannel = await connection.CreateChannelAsync(
+        _stoppingConsumer = false;
+
+        var consumeChannel = await connection.CreateChannelAsync(
             new CreateChannelOptions(
                 publisherConfirmationsEnabled: false,
                 publisherConfirmationTrackingEnabled: false,
                 consumerDispatchConcurrency: (ushort)Math.Clamp(options.PrefetchCount, 1, ushort.MaxValue)),
             cancellationToken).ConfigureAwait(false);
 
+        var previousConsumeChannel = _consumeChannel;
+        _consumeChannel = consumeChannel;
+        _consumerFault = null;
+
+        if (previousConsumeChannel is { IsOpen: true })
+        {
+            // A restart cycle (Stop then Start on the same transport instance): the previous
+            // channel was only cancelled, not closed, by StopConsumingAsync, so it must be
+            // disposed here explicitly or it leaks for the rest of the process's lifetime.
+            try
+            {
+                await previousConsumeChannel.DisposeAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(
+                    ex, "Failed to dispose the previous RabbitMQ consume channel while restarting consumption.");
+            }
+        }
+
         if (options.AutoProvision)
         {
-            await _consumeChannel.ExchangeDeclareAsync(
+            await consumeChannel.ExchangeDeclareAsync(
                 deadLetterExchange, ExchangeType.Fanout, durable: true, autoDelete: false,
                 cancellationToken: cancellationToken).ConfigureAwait(false);
 
-            await _consumeChannel.QueueDeclareAsync(
+            await consumeChannel.QueueDeclareAsync(
                 RabbitMqTopology.DeadLetterQueueName(endpointName),
                 durable: true, exclusive: false, autoDelete: false,
                 cancellationToken: cancellationToken).ConfigureAwait(false);
 
-            await _consumeChannel.QueueBindAsync(
+            await consumeChannel.QueueBindAsync(
                 RabbitMqTopology.DeadLetterQueueName(endpointName), deadLetterExchange, routingKey: string.Empty,
                 cancellationToken: cancellationToken).ConfigureAwait(false);
 
-            await _consumeChannel.QueueDeclareAsync(
+            await consumeChannel.QueueDeclareAsync(
                 queue, durable: true, exclusive: false, autoDelete: false,
                 arguments: new Dictionary<string, object?>
                 {
@@ -145,43 +214,58 @@ internal sealed class RabbitMqTransport(
             {
                 var exchange = RabbitMqTopology.ExchangeName(subscription.MessageTypeName);
 
-                await _consumeChannel.ExchangeDeclareAsync(
+                await consumeChannel.ExchangeDeclareAsync(
                     exchange, ExchangeType.Fanout, durable: true, autoDelete: false,
                     cancellationToken: cancellationToken).ConfigureAwait(false);
 
-                await _consumeChannel.QueueBindAsync(
+                await consumeChannel.QueueBindAsync(
                     queue, exchange, routingKey: string.Empty,
                     cancellationToken: cancellationToken).ConfigureAwait(false);
             }
         }
 
-        await _consumeChannel.BasicQosAsync(
+        await consumeChannel.BasicQosAsync(
             prefetchSize: 0,
             prefetchCount: (ushort)Math.Clamp(options.PrefetchCount, 1, ushort.MaxValue),
             global: false,
             cancellationToken).ConfigureAwait(false);
 
-        var consumer = new AsyncEventingBasicConsumer(_consumeChannel);
+        // Channel-level errors (consumer_timeout exceeded by an in-process retry cycle, a bad
+        // ack, etc.) are not connection-level and are not auto-recovered by the client, so a
+        // dead channel would otherwise go unnoticed until the next publish. The staleness check
+        // guards against this firing for a channel a later Start/restart has already replaced
+        // (e.g. the disposal above, on a restart cycle).
+        consumeChannel.ChannelShutdownAsync += (_, args) =>
+        {
+            if (!ReferenceEquals(_consumeChannel, consumeChannel))
+                return Task.CompletedTask;
+
+            RecordConsumerFault($"RabbitMQ consume channel closed: {args.ReplyText} (code {args.ReplyCode}).");
+            return Task.CompletedTask;
+        };
+
+        var consumer = new AsyncEventingBasicConsumer(consumeChannel);
+
         consumer.ReceivedAsync += async (_, delivery) =>
         {
-            var channel = _consumeChannel;
-            if (channel is null)
-                return;
-
+            Interlocked.Increment(ref _inFlightDispatches);
             try
             {
                 var envelope = RabbitMqEnvelopeMapper.ToEnvelope(delivery.BasicProperties, delivery.Body);
                 var result = await onMessage(envelope, delivery.CancellationToken).ConfigureAwait(false);
 
+                // Ack/nack via the channel that delivered this message (captured above), not a
+                // mutable field: a stop/restart cycle can otherwise ack against a channel this
+                // delivery never arrived on, which the broker closes with a 406.
                 if (result == MessageDispatchResult.Acknowledge)
                 {
-                    await channel.BasicAckAsync(delivery.DeliveryTag, multiple: false, delivery.CancellationToken)
+                    await consumeChannel.BasicAckAsync(delivery.DeliveryTag, multiple: false, delivery.CancellationToken)
                         .ConfigureAwait(false);
                 }
                 else
                 {
                     // requeue: false routes through the queue's dead-letter exchange.
-                    await channel.BasicNackAsync(delivery.DeliveryTag, multiple: false, requeue: false, delivery.CancellationToken)
+                    await consumeChannel.BasicNackAsync(delivery.DeliveryTag, multiple: false, requeue: false, delivery.CancellationToken)
                         .ConfigureAwait(false);
                 }
             }
@@ -192,10 +276,38 @@ internal sealed class RabbitMqTransport(
                     "Unexpected failure processing RabbitMQ delivery {DeliveryTag}; message will be redelivered.",
                     delivery.DeliveryTag);
             }
+            finally
+            {
+                if (Interlocked.Decrement(ref _inFlightDispatches) == 0)
+                    _drainSignal?.TrySetResult();
+            }
         };
 
-        _consumerTag = await _consumeChannel.BasicConsumeAsync(
+        // Fires both for a broker-initiated cancel (e.g. the queue was deleted) and for our own
+        // deliberate cancel in StopConsumingAsync — _stoppingConsumer distinguishes the two so a
+        // graceful stop isn't recorded as a fault.
+        consumer.UnregisteredAsync += (_, _) =>
+        {
+            if (_stoppingConsumer || !ReferenceEquals(_consumeChannel, consumeChannel))
+                return Task.CompletedTask;
+
+            RecordConsumerFault("RabbitMQ consumer was cancelled by the broker (e.g. the queue was deleted).");
+            return Task.CompletedTask;
+        };
+
+        _consumerTag = await consumeChannel.BasicConsumeAsync(
             queue, autoAck: false, consumer, cancellationToken).ConfigureAwait(false);
+
+        // Only flip to true once consumption has actually started successfully: an exception
+        // anywhere above (topology declare, QoS, BasicConsumeAsync) must not make CheckHealthAsync
+        // start inspecting consumer state for a consumer that never came up.
+        _consumingStarted = true;
+    }
+
+    private void RecordConsumerFault(string reason)
+    {
+        _consumerFault = new ConsumerFault(DateTimeOffset.UtcNow, reason);
+        logger.LogWarning("RabbitMQ consumer fault recorded: {Reason}", reason);
     }
 
     public async ValueTask<TransportHealth> CheckHealthAsync(CancellationToken cancellationToken = default)
@@ -205,9 +317,24 @@ internal sealed class RabbitMqTransport(
         try
         {
             var connection = await GetConnectionAsync(cancellationToken).ConfigureAwait(false);
-            return connection.IsOpen
-                ? new TransportHealth(true, "RabbitMQ connection is open.")
-                : new TransportHealth(false, "RabbitMQ connection is closed.");
+            if (!connection.IsOpen)
+                return new TransportHealth(false, "RabbitMQ connection is closed.");
+
+            if (_consumingStarted)
+            {
+                var fault = _consumerFault;
+                if (fault is not null)
+                {
+                    return new TransportHealth(
+                        false,
+                        $"RabbitMQ consumer stopped receiving at {fault.OccurredAtUtc:O}: {fault.Reason}");
+                }
+
+                if (_consumeChannel is not { IsOpen: true })
+                    return new TransportHealth(false, "RabbitMQ consume channel is closed.");
+            }
+
+            return new TransportHealth(true, "RabbitMQ connection is open.");
         }
         catch (Exception ex)
         {
@@ -215,12 +342,57 @@ internal sealed class RabbitMqTransport(
         }
     }
 
+    /// <summary>
+    /// Cancels the consumer, then awaits any dispatches already in flight (each possibly
+    /// mid-retry-sleep) so the host doesn't dispose the ServiceProvider out from under a running
+    /// handler — the drain <see cref="IMessageTransport.StopConsumingAsync"/> promises.
+    /// </summary>
     public async Task StopConsumingAsync(CancellationToken cancellationToken = default)
     {
         if (_consumeChannel is { IsOpen: true } channel && _consumerTag is not null)
         {
+            _stoppingConsumer = true;
             await channel.BasicCancelAsync(_consumerTag, cancellationToken: cancellationToken).ConfigureAwait(false);
             _consumerTag = null;
+        }
+
+        await DrainInFlightDispatchesAsync(cancellationToken).ConfigureAwait(false);
+        _consumingStarted = false;
+    }
+
+    /// <summary>
+    /// Waits for <see cref="_inFlightDispatches"/> to reach zero, bounded by
+    /// <see cref="ConsumerDrainTimeout"/> so a stuck handler can't hang shutdown forever.
+    /// </summary>
+    private async Task DrainInFlightDispatchesAsync(CancellationToken cancellationToken)
+    {
+        if (Interlocked.Read(ref _inFlightDispatches) == 0)
+            return;
+
+        var signal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _drainSignal = signal;
+
+        // Re-check after publishing the signal: a dispatch may have already reached zero between
+        // the check above and the write, in which case no decrement would ever observe it.
+        if (Interlocked.Read(ref _inFlightDispatches) == 0)
+            signal.TrySetResult();
+
+        try
+        {
+            await signal.Task.WaitAsync(ConsumerDrainTimeout, cancellationToken).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            logger.LogWarning(
+                "Timed out after {Seconds}s waiting for {Count} in-flight RabbitMQ dispatch(es) to drain during shutdown.",
+                ConsumerDrainTimeout.TotalSeconds,
+                Interlocked.Read(ref _inFlightDispatches));
+        }
+        catch (OperationCanceledException)
+        {
+            logger.LogWarning(
+                "Shutdown cancelled while waiting for {Count} in-flight RabbitMQ dispatch(es) to drain.",
+                Interlocked.Read(ref _inFlightDispatches));
         }
     }
 
@@ -237,4 +409,7 @@ internal sealed class RabbitMqTransport(
 
         _connectionLock.Dispose();
     }
+
+    /// <summary>An observed unexpected loss of consumption, surfaced by <see cref="CheckHealthAsync"/>.</summary>
+    private sealed record ConsumerFault(DateTimeOffset OccurredAtUtc, string Reason);
 }
