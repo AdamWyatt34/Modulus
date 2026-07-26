@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <EnforcePublicApi>true</EnforcePublicApi>
     <PackageId>ModulusKit.Messaging</PackageId>
     <Description>Messaging library for .NET modular monoliths with transactional outbox/inbox, consumer retry, and an in-memory transport. RabbitMQ and Azure Service Bus transports ship as ModulusKit.Messaging.RabbitMq and ModulusKit.Messaging.AzureServiceBus.</Description>
     <PackageTags>messaging;rabbitmq;azure-service-bus;outbox;inbox;modular-monolith</PackageTags>

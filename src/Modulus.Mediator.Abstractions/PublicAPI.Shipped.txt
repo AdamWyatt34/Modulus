@@ -1,0 +1,141 @@
+#nullable enable
+Modulus.Mediator.Abstractions.Error
+Modulus.Mediator.Abstractions.Error.Code.get -> string!
+Modulus.Mediator.Abstractions.Error.Code.init -> void
+Modulus.Mediator.Abstractions.Error.Deconstruct(out string! Code, out string! Description, out Modulus.Mediator.Abstractions.ErrorType Type) -> void
+Modulus.Mediator.Abstractions.Error.Description.get -> string!
+Modulus.Mediator.Abstractions.Error.Description.init -> void
+Modulus.Mediator.Abstractions.Error.Equals(Modulus.Mediator.Abstractions.Error other) -> bool
+Modulus.Mediator.Abstractions.Error.Error() -> void
+Modulus.Mediator.Abstractions.Error.Error(string! Code, string! Description, Modulus.Mediator.Abstractions.ErrorType Type = Modulus.Mediator.Abstractions.ErrorType.Failure) -> void
+Modulus.Mediator.Abstractions.Error.Type.get -> Modulus.Mediator.Abstractions.ErrorType
+Modulus.Mediator.Abstractions.Error.Type.init -> void
+Modulus.Mediator.Abstractions.ErrorType
+Modulus.Mediator.Abstractions.ErrorType.Conflict = 3 -> Modulus.Mediator.Abstractions.ErrorType
+Modulus.Mediator.Abstractions.ErrorType.Failure = 0 -> Modulus.Mediator.Abstractions.ErrorType
+Modulus.Mediator.Abstractions.ErrorType.Forbidden = 5 -> Modulus.Mediator.Abstractions.ErrorType
+Modulus.Mediator.Abstractions.ErrorType.NotFound = 2 -> Modulus.Mediator.Abstractions.ErrorType
+Modulus.Mediator.Abstractions.ErrorType.Unauthorized = 4 -> Modulus.Mediator.Abstractions.ErrorType
+Modulus.Mediator.Abstractions.ErrorType.Validation = 1 -> Modulus.Mediator.Abstractions.ErrorType
+Modulus.Mediator.Abstractions.ICommand
+Modulus.Mediator.Abstractions.ICommand<TResult>
+Modulus.Mediator.Abstractions.ICommandHandler<TCommand, TResult>
+Modulus.Mediator.Abstractions.ICommandHandler<TCommand, TResult>.Handle(TCommand command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TResult>!>!
+Modulus.Mediator.Abstractions.ICommandHandler<TCommand>
+Modulus.Mediator.Abstractions.ICommandHandler<TCommand>.Handle(TCommand command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result!>!
+Modulus.Mediator.Abstractions.IDomainEvent
+Modulus.Mediator.Abstractions.IDomainEvent.Id.get -> System.Guid
+Modulus.Mediator.Abstractions.IDomainEvent.OccurredOnUtc.get -> System.DateTime
+Modulus.Mediator.Abstractions.IDomainEventHandler<TEvent>
+Modulus.Mediator.Abstractions.IDomainEventHandler<TEvent>.Handle(TEvent domainEvent, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Modulus.Mediator.Abstractions.IMediator
+Modulus.Mediator.Abstractions.IMediator.Publish<TEvent>(TEvent domainEvent, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Modulus.Mediator.Abstractions.IMediator.Query<TResult>(Modulus.Mediator.Abstractions.IQuery<TResult>! query, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TResult>!>!
+Modulus.Mediator.Abstractions.IMediator.Send(Modulus.Mediator.Abstractions.ICommand! command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result!>!
+Modulus.Mediator.Abstractions.IMediator.Send<TResult>(Modulus.Mediator.Abstractions.ICommand<TResult>! command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TResult>!>!
+Modulus.Mediator.Abstractions.IMediator.Stream<TResult>(Modulus.Mediator.Abstractions.IStreamQuery<TResult>! query, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<TResult>!
+Modulus.Mediator.Abstractions.IPipelineBehavior<TRequest, TResponse>
+Modulus.Mediator.Abstractions.IPipelineBehavior<TRequest, TResponse>.Handle(TRequest request, Modulus.Mediator.Abstractions.RequestHandlerDelegate<TResponse>! next, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<TResponse>!
+Modulus.Mediator.Abstractions.IQuery<TResult>
+Modulus.Mediator.Abstractions.IQueryHandler<TQuery, TResult>
+Modulus.Mediator.Abstractions.IQueryHandler<TQuery, TResult>.Handle(TQuery query, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TResult>!>!
+Modulus.Mediator.Abstractions.IResultRequest
+Modulus.Mediator.Abstractions.IResultRequest<TResult>
+Modulus.Mediator.Abstractions.IStreamQuery<TResult>
+Modulus.Mediator.Abstractions.IStreamQueryHandler<TQuery, TResult>
+Modulus.Mediator.Abstractions.IStreamQueryHandler<TQuery, TResult>.Handle(TQuery query, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<TResult>!
+Modulus.Mediator.Abstractions.IUnitOfWork
+Modulus.Mediator.Abstractions.IUnitOfWork.SaveChangesAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Modulus.Mediator.Abstractions.ModuleOrderAttribute
+Modulus.Mediator.Abstractions.ModuleOrderAttribute.ModuleOrderAttribute(int order) -> void
+Modulus.Mediator.Abstractions.ModuleOrderAttribute.Order.get -> int
+Modulus.Mediator.Abstractions.ModulusModuleAttribute
+Modulus.Mediator.Abstractions.ModulusModuleAttribute.ModulusModuleAttribute() -> void
+Modulus.Mediator.Abstractions.ModulusModuleAttribute.Order.get -> int
+Modulus.Mediator.Abstractions.ModulusModuleAttribute.Order.init -> void
+Modulus.Mediator.Abstractions.RequestHandlerDelegate<TResponse>
+Modulus.Mediator.Abstractions.Result
+Modulus.Mediator.Abstractions.Result.Bind(System.Func<Modulus.Mediator.Abstractions.Result!>! next) -> Modulus.Mediator.Abstractions.Result!
+Modulus.Mediator.Abstractions.Result.Bind<TOut>(System.Func<Modulus.Mediator.Abstractions.Result<TOut>!>! next) -> Modulus.Mediator.Abstractions.Result<TOut>!
+Modulus.Mediator.Abstractions.Result.BindAsync(System.Func<System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result!>!>! next) -> System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result!>!
+Modulus.Mediator.Abstractions.Result.BindAsync<TOut>(System.Func<System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TOut>!>!>! next) -> System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TOut>!>!
+Modulus.Mediator.Abstractions.Result.Ensure(System.Func<bool>! predicate, Modulus.Mediator.Abstractions.Error error) -> Modulus.Mediator.Abstractions.Result!
+Modulus.Mediator.Abstractions.Result.Errors.get -> System.Collections.Generic.IReadOnlyList<Modulus.Mediator.Abstractions.Error>!
+Modulus.Mediator.Abstractions.Result.FirstError.get -> Modulus.Mediator.Abstractions.Error
+Modulus.Mediator.Abstractions.Result.IsFailure.get -> bool
+Modulus.Mediator.Abstractions.Result.IsSuccess.get -> bool
+Modulus.Mediator.Abstractions.Result.Map<TOut>(System.Func<TOut>! map) -> Modulus.Mediator.Abstractions.Result<TOut>!
+Modulus.Mediator.Abstractions.Result.MapAsync<TOut>(System.Func<System.Threading.Tasks.Task<TOut>!>! map) -> System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TOut>!>!
+Modulus.Mediator.Abstractions.Result.Match<TOut>(System.Func<TOut>! onSuccess, System.Func<Modulus.Mediator.Abstractions.Result!, TOut>! onFailure) -> TOut
+Modulus.Mediator.Abstractions.Result.MatchAsync<TOut>(System.Func<System.Threading.Tasks.Task<TOut>!>! onSuccess, System.Func<Modulus.Mediator.Abstractions.Result!, System.Threading.Tasks.Task<TOut>!>! onFailure) -> System.Threading.Tasks.Task<TOut>!
+Modulus.Mediator.Abstractions.Result.Result(bool isSuccess, Modulus.Mediator.Abstractions.Error[]! errors) -> void
+Modulus.Mediator.Abstractions.Result.Tap(System.Action! action) -> Modulus.Mediator.Abstractions.Result!
+Modulus.Mediator.Abstractions.Result.TapAsync(System.Func<System.Threading.Tasks.Task!>! action) -> System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result!>!
+Modulus.Mediator.Abstractions.Result<TValue>
+Modulus.Mediator.Abstractions.Result<TValue>.Bind(System.Func<TValue, Modulus.Mediator.Abstractions.Result!>! next) -> Modulus.Mediator.Abstractions.Result!
+Modulus.Mediator.Abstractions.Result<TValue>.Bind<TOut>(System.Func<TValue, Modulus.Mediator.Abstractions.Result<TOut>!>! next) -> Modulus.Mediator.Abstractions.Result<TOut>!
+Modulus.Mediator.Abstractions.Result<TValue>.BindAsync(System.Func<TValue, System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result!>!>! next) -> System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result!>!
+Modulus.Mediator.Abstractions.Result<TValue>.BindAsync<TOut>(System.Func<TValue, System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TOut>!>!>! next) -> System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TOut>!>!
+Modulus.Mediator.Abstractions.Result<TValue>.Ensure(System.Func<TValue, bool>! predicate, Modulus.Mediator.Abstractions.Error error) -> Modulus.Mediator.Abstractions.Result<TValue>!
+Modulus.Mediator.Abstractions.Result<TValue>.Ensure(System.Func<TValue, bool>! predicate, System.Func<TValue, Modulus.Mediator.Abstractions.Error>! errorFactory) -> Modulus.Mediator.Abstractions.Result<TValue>!
+Modulus.Mediator.Abstractions.Result<TValue>.Map<TOut>(System.Func<TValue, TOut>! map) -> Modulus.Mediator.Abstractions.Result<TOut>!
+Modulus.Mediator.Abstractions.Result<TValue>.MapAsync<TOut>(System.Func<TValue, System.Threading.Tasks.Task<TOut>!>! map) -> System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TOut>!>!
+Modulus.Mediator.Abstractions.Result<TValue>.Match<TOut>(System.Func<TValue, TOut>! onSuccess, System.Func<Modulus.Mediator.Abstractions.Result<TValue>!, TOut>! onFailure) -> TOut
+Modulus.Mediator.Abstractions.Result<TValue>.MatchAsync<TOut>(System.Func<TValue, System.Threading.Tasks.Task<TOut>!>! onSuccess, System.Func<Modulus.Mediator.Abstractions.Result<TValue>!, System.Threading.Tasks.Task<TOut>!>! onFailure) -> System.Threading.Tasks.Task<TOut>!
+Modulus.Mediator.Abstractions.Result<TValue>.Result(Modulus.Mediator.Abstractions.Error[]! errors) -> void
+Modulus.Mediator.Abstractions.Result<TValue>.Tap(System.Action<TValue>! action) -> Modulus.Mediator.Abstractions.Result<TValue>!
+Modulus.Mediator.Abstractions.Result<TValue>.TapAsync(System.Func<TValue, System.Threading.Tasks.Task!>! action) -> System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TValue>!>!
+Modulus.Mediator.Abstractions.Result<TValue>.Value.get -> TValue
+Modulus.Mediator.Abstractions.ResultExtensions
+Modulus.Mediator.Abstractions.StronglyTypedIdAttribute
+Modulus.Mediator.Abstractions.StronglyTypedIdAttribute.BackingType.get -> System.Type!
+Modulus.Mediator.Abstractions.StronglyTypedIdAttribute.StronglyTypedIdAttribute(System.Type? backingType = null) -> void
+Modulus.Mediator.Abstractions.ValidationResult
+Modulus.Mediator.Abstractions.ValidationResult<TValue>
+override Modulus.Mediator.Abstractions.Error.GetHashCode() -> int
+static Modulus.Mediator.Abstractions.Error.Conflict(string! code, string! description) -> Modulus.Mediator.Abstractions.Error
+static Modulus.Mediator.Abstractions.Error.Failure(string! code, string! description) -> Modulus.Mediator.Abstractions.Error
+static Modulus.Mediator.Abstractions.Error.Forbidden(string! code, string! description) -> Modulus.Mediator.Abstractions.Error
+static Modulus.Mediator.Abstractions.Error.NotFound(string! code, string! description) -> Modulus.Mediator.Abstractions.Error
+static Modulus.Mediator.Abstractions.Error.Unauthorized(string! code, string! description) -> Modulus.Mediator.Abstractions.Error
+static Modulus.Mediator.Abstractions.Error.Validation(string! code, string! description) -> Modulus.Mediator.Abstractions.Error
+static Modulus.Mediator.Abstractions.Error.operator !=(Modulus.Mediator.Abstractions.Error left, Modulus.Mediator.Abstractions.Error right) -> bool
+static Modulus.Mediator.Abstractions.Error.operator ==(Modulus.Mediator.Abstractions.Error left, Modulus.Mediator.Abstractions.Error right) -> bool
+static Modulus.Mediator.Abstractions.Result.Failure(System.Collections.Generic.IEnumerable<Modulus.Mediator.Abstractions.Error>! errors) -> Modulus.Mediator.Abstractions.Result!
+static Modulus.Mediator.Abstractions.Result.Failure(params Modulus.Mediator.Abstractions.Error[]! errors) -> Modulus.Mediator.Abstractions.Result!
+static Modulus.Mediator.Abstractions.Result.Success() -> Modulus.Mediator.Abstractions.Result!
+static Modulus.Mediator.Abstractions.Result.implicit operator Modulus.Mediator.Abstractions.Result!(Modulus.Mediator.Abstractions.Error error) -> Modulus.Mediator.Abstractions.Result!
+static Modulus.Mediator.Abstractions.Result<TValue>.Failure(System.Collections.Generic.IEnumerable<Modulus.Mediator.Abstractions.Error>! errors) -> Modulus.Mediator.Abstractions.Result<TValue>!
+static Modulus.Mediator.Abstractions.Result<TValue>.Failure(params Modulus.Mediator.Abstractions.Error[]! errors) -> Modulus.Mediator.Abstractions.Result<TValue>!
+static Modulus.Mediator.Abstractions.Result<TValue>.Success(TValue value) -> Modulus.Mediator.Abstractions.Result<TValue>!
+static Modulus.Mediator.Abstractions.Result<TValue>.implicit operator Modulus.Mediator.Abstractions.Result<TValue>!(Modulus.Mediator.Abstractions.Error error) -> Modulus.Mediator.Abstractions.Result<TValue>!
+static Modulus.Mediator.Abstractions.Result<TValue>.implicit operator Modulus.Mediator.Abstractions.Result<TValue>!(TValue value) -> Modulus.Mediator.Abstractions.Result<TValue>!
+static Modulus.Mediator.Abstractions.ResultExtensions.Bind(this System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result!>! resultTask, System.Func<Modulus.Mediator.Abstractions.Result!>! next) -> System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result!>!
+static Modulus.Mediator.Abstractions.ResultExtensions.Bind(this System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result!>! resultTask, System.Func<System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result!>!>! next) -> System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result!>!
+static Modulus.Mediator.Abstractions.ResultExtensions.Bind<TOut>(this System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result!>! resultTask, System.Func<Modulus.Mediator.Abstractions.Result<TOut>!>! next) -> System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TOut>!>!
+static Modulus.Mediator.Abstractions.ResultExtensions.Bind<TOut>(this System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result!>! resultTask, System.Func<System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TOut>!>!>! next) -> System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TOut>!>!
+static Modulus.Mediator.Abstractions.ResultExtensions.Bind<TValue, TOut>(this System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TValue>!>! resultTask, System.Func<TValue, Modulus.Mediator.Abstractions.Result<TOut>!>! next) -> System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TOut>!>!
+static Modulus.Mediator.Abstractions.ResultExtensions.Bind<TValue, TOut>(this System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TValue>!>! resultTask, System.Func<TValue, System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TOut>!>!>! next) -> System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TOut>!>!
+static Modulus.Mediator.Abstractions.ResultExtensions.Bind<TValue>(this System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TValue>!>! resultTask, System.Func<TValue, Modulus.Mediator.Abstractions.Result!>! next) -> System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result!>!
+static Modulus.Mediator.Abstractions.ResultExtensions.Bind<TValue>(this System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TValue>!>! resultTask, System.Func<TValue, System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result!>!>! next) -> System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result!>!
+static Modulus.Mediator.Abstractions.ResultExtensions.Ensure(this System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result!>! resultTask, System.Func<bool>! predicate, Modulus.Mediator.Abstractions.Error error) -> System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result!>!
+static Modulus.Mediator.Abstractions.ResultExtensions.Ensure<TValue>(this System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TValue>!>! resultTask, System.Func<TValue, bool>! predicate, Modulus.Mediator.Abstractions.Error error) -> System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TValue>!>!
+static Modulus.Mediator.Abstractions.ResultExtensions.Ensure<TValue>(this System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TValue>!>! resultTask, System.Func<TValue, bool>! predicate, System.Func<TValue, Modulus.Mediator.Abstractions.Error>! errorFactory) -> System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TValue>!>!
+static Modulus.Mediator.Abstractions.ResultExtensions.Map<TOut>(this System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result!>! resultTask, System.Func<System.Threading.Tasks.Task<TOut>!>! map) -> System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TOut>!>!
+static Modulus.Mediator.Abstractions.ResultExtensions.Map<TOut>(this System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result!>! resultTask, System.Func<TOut>! map) -> System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TOut>!>!
+static Modulus.Mediator.Abstractions.ResultExtensions.Map<TValue, TOut>(this System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TValue>!>! resultTask, System.Func<TValue, System.Threading.Tasks.Task<TOut>!>! map) -> System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TOut>!>!
+static Modulus.Mediator.Abstractions.ResultExtensions.Map<TValue, TOut>(this System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TValue>!>! resultTask, System.Func<TValue, TOut>! map) -> System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TOut>!>!
+static Modulus.Mediator.Abstractions.ResultExtensions.Match<TOut>(this System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result!>! resultTask, System.Func<System.Threading.Tasks.Task<TOut>!>! onSuccess, System.Func<Modulus.Mediator.Abstractions.Result!, System.Threading.Tasks.Task<TOut>!>! onFailure) -> System.Threading.Tasks.Task<TOut>!
+static Modulus.Mediator.Abstractions.ResultExtensions.Match<TOut>(this System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result!>! resultTask, System.Func<TOut>! onSuccess, System.Func<Modulus.Mediator.Abstractions.Result!, TOut>! onFailure) -> System.Threading.Tasks.Task<TOut>!
+static Modulus.Mediator.Abstractions.ResultExtensions.Match<TValue, TOut>(this System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TValue>!>! resultTask, System.Func<TValue, System.Threading.Tasks.Task<TOut>!>! onSuccess, System.Func<Modulus.Mediator.Abstractions.Result<TValue>!, System.Threading.Tasks.Task<TOut>!>! onFailure) -> System.Threading.Tasks.Task<TOut>!
+static Modulus.Mediator.Abstractions.ResultExtensions.Match<TValue, TOut>(this System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TValue>!>! resultTask, System.Func<TValue, TOut>! onSuccess, System.Func<Modulus.Mediator.Abstractions.Result<TValue>!, TOut>! onFailure) -> System.Threading.Tasks.Task<TOut>!
+static Modulus.Mediator.Abstractions.ResultExtensions.Tap(this System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result!>! resultTask, System.Action! action) -> System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result!>!
+static Modulus.Mediator.Abstractions.ResultExtensions.Tap(this System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result!>! resultTask, System.Func<System.Threading.Tasks.Task!>! action) -> System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result!>!
+static Modulus.Mediator.Abstractions.ResultExtensions.Tap<TValue>(this System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TValue>!>! resultTask, System.Action<TValue>! action) -> System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TValue>!>!
+static Modulus.Mediator.Abstractions.ResultExtensions.Tap<TValue>(this System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TValue>!>! resultTask, System.Func<TValue, System.Threading.Tasks.Task!>! action) -> System.Threading.Tasks.Task<Modulus.Mediator.Abstractions.Result<TValue>!>!
+static Modulus.Mediator.Abstractions.ValidationResult.WithErrors(params Modulus.Mediator.Abstractions.Error[]! errors) -> Modulus.Mediator.Abstractions.ValidationResult!
+static Modulus.Mediator.Abstractions.ValidationResult<TValue>.WithErrors(params Modulus.Mediator.Abstractions.Error[]! errors) -> Modulus.Mediator.Abstractions.ValidationResult<TValue>!
+static readonly Modulus.Mediator.Abstractions.Error.None -> Modulus.Mediator.Abstractions.Error
+virtual Modulus.Mediator.Abstractions.RequestHandlerDelegate<TResponse>.Invoke() -> System.Threading.Tasks.Task<TResponse>!
+~override Modulus.Mediator.Abstractions.Error.Equals(object obj) -> bool
+~override Modulus.Mediator.Abstractions.Error.ToString() -> string

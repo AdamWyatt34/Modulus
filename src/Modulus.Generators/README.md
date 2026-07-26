@@ -20,7 +20,7 @@ Or as an analyzer reference in your `.csproj`:
 
 ## Strongly Typed IDs
 
-Generate type-safe entity identifiers with EF Core, JSON, and model binding support:
+Generate type-safe entity identifiers with EF Core, JSON (including dictionary-key support), route/query binding, and comparison support:
 
 ```csharp
 using Modulus.Mediator.Abstractions;
@@ -30,11 +30,23 @@ public readonly partial record struct OrderId;
 
 [StronglyTypedId(typeof(int))]
 public readonly partial record struct SequenceNumber;
+
+[StronglyTypedId(typeof(string))]
+public readonly partial record struct TenantId;
 ```
 
-The generator produces: `Value` property, constructor, `New()` factory, `Empty`, plus `ValueConverter` (EF Core), `JsonConverter` (System.Text.Json), and `TypeConverter` (model binding).
+The generator produces: `Value` property, constructor, `New()` factory (Guid only), `Empty`, `IComparable<T>`, `IParsable<T>`/`Parse`/`TryParse` (minimal API route/query parameter binding), plus `ValueConverter` (EF Core), `JsonConverter` (System.Text.Json — including `ReadAsPropertyName`/`WriteAsPropertyName` for use as a `Dictionary<TId, TValue>` key), and `TypeConverter` (MVC model binding).
 
-Supported backing types: `Guid` (default), `int`, `long`.
+Supported backing types: `Guid` (default), `int`, `long`, `string`.
+
+### Bulk EF Core registration
+
+When the compilation references EF Core, the generator also emits `ModulusStronglyTypedIdConventions.UseModulusStronglyTypedIds(this ModelConfigurationBuilder)` — one call from `DbContext.ConfigureConventions` that registers every discovered ID's `ValueConverter` (local declarations plus public ones from referenced assemblies that were themselves built with an EF Core reference):
+
+```csharp
+protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    => configurationBuilder.UseModulusStronglyTypedIds();
+```
 
 ## Handler Registration
 
@@ -67,7 +79,7 @@ Control initialization order with `[ModuleOrder(n)]`.
 | MODGEN002 | Error | `[StronglyTypedId]` target must be a `record struct` |
 | MODGEN003 | Info | Open generic handler skipped for registration |
 | MODGEN004 | Warning | `IModuleRegistration` missing required static methods |
-| MODGEN005 | Error | `[StronglyTypedId]` backing type is unsupported (only `Guid`, `int`, `long`) |
+| MODGEN005 | Error | `[StronglyTypedId]` backing type is unsupported (only `Guid`, `int`, `long`, `string`) |
 | MODGEN006 | Error | `[StronglyTypedId]` target must be a top-level type |
 
 ## Learn More

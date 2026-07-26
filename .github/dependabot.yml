@@ -1,0 +1,22 @@
+# Weekly dependency PRs. NuGet updates are grouped so the coordinated package set moves in
+# one reviewable PR per week instead of a stream of single-pin bumps; GitHub Actions bumps
+# keep the pinned major tags honest.
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      nuget-dependencies:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5

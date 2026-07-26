@@ -38,4 +38,18 @@
     <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
   </ItemGroup>
 
+  <!-- Package hygiene (validation + baseline) lives in Directory.Build.targets: it must
+       evaluate after each csproj body so per-project opt-outs (NoPackageBaseline,
+       IsPackable, IsTestProject) are final. -->
+
+  <!-- Mechanical public-API tracking for the library packages: RS0016/RS0017 keep
+       PublicAPI.Shipped.txt / PublicAPI.Unshipped.txt in lockstep with the real surface,
+       so an accidental public-API change fails CI instead of shipping silently. Library
+       csprojs opt in with EnforcePublicApi=true. -->
+  <ItemGroup Condition="'$(EnforcePublicApi)' == 'true'">
+    <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" PrivateAssets="all" />
+    <AdditionalFiles Include="PublicAPI.Shipped.txt" />
+    <AdditionalFiles Include="PublicAPI.Unshipped.txt" />
+  </ItemGroup>
+
 </Project>

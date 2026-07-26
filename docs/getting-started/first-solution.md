@@ -262,7 +262,7 @@ curl -X POST https://localhost:5001/api/catalog/ \
 You should receive a `201 Created` response with the new product's ID.
 
 ::: warning Database connection
-`CatalogModule` registers its `DbContext` with `UseSqlServer(configuration.GetConnectionString("Default"))`, so the create endpoint needs a reachable SQL Server and a `ConnectionStrings:Default` value in `appsettings.json` (plus created tables -- e.g. `EnsureCreated`/migrations) before the POST succeeds end to end. The sample endpoint has no database dependency and works immediately.
+`CatalogModule` registers its `DbContext` with `UseSqlServer(configuration.GetConnectionString("Default"))`, so the create endpoint needs a reachable SQL Server and a `ConnectionStrings:Default` value in `appsettings.json` (plus created tables) before the POST succeeds end to end. Generate the schema with [`modulus add-migration InitialCreate --module Catalog`](/cli/add-migration) and apply it with `dotnet ef database update` (or `context.Database.MigrateAsync()` at startup). The sample endpoint has no database dependency and works immediately.
 :::
 
 ## Summary

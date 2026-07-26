@@ -164,8 +164,25 @@ builder.Services.AddModulusRabbitMqTransport();
 | Queue (per endpoint) | `{EndpointName}` | Durable; bound to every exchange the endpoint subscribes to; replicas sharing the name compete |
 | Dead-letter exchange | `{EndpointName}.dlx` | Targeted via the queue's `x-dead-letter-exchange` argument |
 | Dead-letter queue | `{EndpointName}.dead-letter` | Bound to the dead-letter exchange |
+| Retry queue | `{EndpointName}.retry` | Only with `ConsumerRetryMode.Broker`: failed messages park here with a per-message TTL and dead-letter straight back into the work queue when the backoff elapses |
+| Scheduled queue (per event type) | `{exchange}.scheduled` | Only used by `PublishScheduled`: messages park here with a per-message TTL and dead-letter into the event's exchange when due |
 
 When consumer retries are exhausted, the message is rejected without requeue and RabbitMQ routes it through `{EndpointName}.dlx` into `{EndpointName}.dead-letter`.
+
+### Broker-Native Consumer Retry
+
+By default, the consumer pipeline retries a failing handler **in process**: it sleeps out the backoff inside the delivery, which pins one of the endpoint's `PrefetchCount` concurrency slots for the whole retry budget (~53 s at the defaults) and loses the backoff state if the process crashes. Opting into broker-native retry moves the wait onto the broker:
+
+```csharp
+builder.Services.AddModulusMessaging(options =>
+{
+    options.ConsumerRetryMode = ConsumerRetryMode.Broker;
+});
+```
+
+In `Broker` mode each delivery gets **one** handler pass. On failure with attempts remaining, the transport publishes a copy of the message (attempt count in a `modulus-delivery-attempt` header) into `{EndpointName}.retry` with the backoff as its TTL and acknowledges the original — the slot frees immediately, and the redelivery survives restarts. When attempts are exhausted, dead-lettering is unchanged. The inbox reservation held by the failed pass is released so the redelivery executes immediately instead of colliding with it.
+
+Caveats: RabbitMQ expires messages only at the queue head, so a message with a longer TTL ahead of a shorter one delays it — with the default non-decreasing backoff this is bounded by `ConsumerRetry.MaxInterval`. With `AutoProvision=false`, pre-create `{EndpointName}.retry` with `x-dead-letter-exchange = ""` and `x-dead-letter-routing-key = {EndpointName}` (and, if you use `PublishScheduled`, `{exchange}.scheduled` with `x-dead-letter-exchange = {exchange}`) — copy publishes are mandatory, so a missing queue faults loudly instead of losing messages. In Broker mode a dead-lettered message is the final *copy*, so `modulus dlq list` shows its delivery count as 1 and first-death reason `expired`; `modulus dlq replay` handles this shape (it strips the attempt header so a replay gets the full retry budget again). Custom transports that don't handle `MessageDispatchResult.Retry` should stay on the default `InProcess` mode.
 
 ### Reliability
 
@@ -222,7 +239,9 @@ The topology is built on topics and subscriptions, which the **Basic** tier does
 
 - Each subscription is consumed with a `ServiceBusProcessor` with **auto-complete off** -- messages are completed only after the consumer pipeline succeeds, and dead-lettered when it gives up.
 - `MaxConcurrentCalls` is set to `PrefetchCount`.
-- Message **lock auto-renewal is capped at 5 minutes**. The worst-case sum of your `ConsumerRetry` delays (plus handler execution time) must stay below that cap, or the lock expires mid-retry and the message is redelivered. Tune `ConsumerRetry:MaxAttempts` / `ConsumerRetry:MaxInterval` accordingly.
+- Message **lock auto-renewal scales with your retry budget**: it is computed from the worst-case sum of `ConsumerRetry` delays plus a safety margin, so an in-process retry loop cannot outlive its lock. Extremely long-running handlers still need to fit inside the margin.
+
+**Broker-native consumer retry** (`ConsumerRetryMode.Broker`) uses Service Bus scheduled messages: on a failed pass with attempts remaining, a copy is scheduled onto the same topic with the backoff as its enqueue delay and a **fresh `MessageId`** (so a topic with duplicate detection cannot swallow it; consumer idempotency keys on the event body's `EventId`, which is unchanged), and the original is completed. Because topics cannot deliver to a single subscription, the copy fans out to every endpoint with a `modulus-redeliver-endpoint` property — Modulus endpoints it isn't meant for acknowledge it without running handlers (a small delivery cost per retry on multi-endpoint topics), but **non-Modulus subscribers sharing the topic will see the copies as ordinary messages** — keep them off shared topics or make them idempotent before enabling Broker mode. `PublishScheduled` maps directly to `ScheduledEnqueueTime` with no extra topology.
 
 **Connection string format:**
 

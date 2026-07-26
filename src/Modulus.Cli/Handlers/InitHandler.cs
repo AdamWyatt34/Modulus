@@ -12,17 +12,32 @@ public sealed class InitHandler(
     IProcessRunner processRunner,
     IConsoleOutput console)
 {
+    private static readonly HashSet<string> ValidCiProviders = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "github",
+    };
+
     public async Task<int> ExecuteAsync(
         string solutionName,
         string outputDirectory,
         bool includeAspire,
         string transport,
         bool noGit,
-        string? modulusKitVersion = null)
+        string? modulusKitVersion = null,
+        bool dryRun = false,
+        bool noRestore = false,
+        string? ci = null,
+        bool includeDockerfile = false)
     {
         if (!CSharpIdentifierValidator.IsValid(solutionName))
         {
             console.WriteError($"'{solutionName}' is not a valid C# identifier. Use PascalCase with letters, digits, and underscores.");
+            return 1;
+        }
+
+        if (ci is not null && !ValidCiProviders.Contains(ci))
+        {
+            console.WriteError($"Invalid --ci provider '{ci}'. Valid values: github.");
             return 1;
         }
 
@@ -45,6 +60,8 @@ public sealed class InitHandler(
             SolutionName = solutionName,
             IncludeAspire = includeAspire,
             Transport = transport,
+            Ci = ci,
+            IncludeDockerfile = includeDockerfile,
         };
 
         // Default from the CLI's own MinVer-stamped version, not InitOptions' fallback:
@@ -59,6 +76,35 @@ public sealed class InitHandler(
         }
 
         var outputs = engine.GenerateInit(initOptions);
+
+        if (dryRun)
+        {
+            console.WriteLine($"Dry run — no files were written and no processes were run. Solution '{solutionName}' would be created at {solutionRoot}:");
+
+            foreach (var output in outputs)
+            {
+                var previewPath = PathGuard.EnsureContained(solutionRoot, output.RelativePath);
+                console.WriteLine($"  create  {previewPath}");
+            }
+
+            console.WriteLine(!noRestore
+                ? $"  run     dotnet restore  (in {solutionRoot})"
+                : "  skip    dotnet restore  (--no-restore)");
+
+            if (!noGit)
+            {
+                console.WriteLine($"  run     git init  (in {solutionRoot})");
+                console.WriteLine($"  run     git add .  (in {solutionRoot})");
+                console.WriteLine("  run     git commit -m \"Initial commit from Modulus\"");
+            }
+            else
+            {
+                console.WriteLine("  skip    git init / git add / git commit  (--no-git)");
+            }
+
+            console.WriteLine("Re-run without --dry-run to apply.");
+            return 0;
+        }
 
         var fileCount = 0;
         foreach (var output in outputs)
@@ -80,10 +126,19 @@ public sealed class InitHandler(
 
         console.WriteLine($"Created solution '{solutionName}' with {fileCount} files.");
 
-        var restoreResult = await processRunner.RunAsync("dotnet", ["restore"], solutionRoot);
-        if (restoreResult != 0)
+        var restoreStatus = "Skipped (--no-restore)";
+        if (!noRestore)
         {
-            console.WriteError($"Warning: dotnet restore failed with exit code {restoreResult}. You may need to run it manually.");
+            var restoreResult = await processRunner.RunAsync("dotnet", ["restore"], solutionRoot);
+            if (restoreResult != 0)
+            {
+                console.WriteError($"Warning: dotnet restore failed with exit code {restoreResult}. You may need to run it manually.");
+                restoreStatus = $"Failed (exit code {restoreResult})";
+            }
+            else
+            {
+                restoreStatus = "OK";
+            }
         }
 
         var gitStatus = "Skipped";
@@ -123,6 +178,9 @@ public sealed class InitHandler(
         console.WriteSuccess($"Solution '{solutionName}' created successfully at {solutionRoot}");
         console.WriteLine($"  Aspire: {(includeAspire ? "Yes" : "No")}");
         console.WriteLine($"  Transport: {transport}");
+        console.WriteLine($"  CI: {(ci is null ? "None" : ci)}");
+        console.WriteLine($"  Dockerfile: {(includeDockerfile ? "Yes" : "No")}");
+        console.WriteLine($"  Restore: {restoreStatus}");
         console.WriteLine($"  Git: {gitStatus}");
 
         return 0;

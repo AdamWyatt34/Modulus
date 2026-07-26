@@ -20,6 +20,7 @@ internal sealed class MessagingMetrics
     private readonly Counter<long> _inboxDeduplicated;
     private readonly Counter<long> _consumerRetries;
     private readonly Counter<long> _consumerDeadLettered;
+    private readonly Counter<long> _retentionPurged;
 
     /// <summary>The owning meter instance — lets tests scope a listener to this instance
     /// rather than every same-named meter in the process.</summary>
@@ -59,6 +60,11 @@ internal sealed class MessagingMetrics
             "modulus.messaging.consumer.dead_lettered",
             unit: "{message}",
             description: "Messages handed back to the transport for dead-lettering.");
+
+        _retentionPurged = meter.CreateCounter<long>(
+            "modulus.messaging.retention.purged",
+            unit: "{row}",
+            description: "Rows deleted by the retention sweep, by store.");
     }
 
     /// <summary>Outcomes: published, skipped_unknown_type, deserialize_failed, retry_pending, dead_lettered.</summary>
@@ -83,4 +89,8 @@ internal sealed class MessagingMetrics
 
     public void ConsumerDeadLettered(string messageType)
         => _consumerDeadLettered.Add(1, new KeyValuePair<string, object?>("message_type", messageType));
+
+    /// <summary>Stores: outbox, inbox.</summary>
+    public void RetentionPurged(string store, long count)
+        => _retentionPurged.Add(count, new KeyValuePair<string, object?>("store", store));
 }

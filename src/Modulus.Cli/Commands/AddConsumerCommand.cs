@@ -31,12 +31,18 @@ public static class AddConsumerCommand
             Description = "Name of the module that owns the event. Use to disambiguate when the same event name exists in multiple modules.",
         };
 
+        var dryRunOption = new Option<bool>("--dry-run")
+        {
+            Description = "Print what would be created/changed without writing any files.",
+        };
+
         var command = new Command("add-consumer", "Add an integration event handler to a module and wire the cross-module reference")
         {
             eventNameArg,
             moduleOption,
             solutionOption,
             eventModuleOption,
+            dryRunOption,
         };
 
         command.SetAction(async parseResult =>
@@ -45,10 +51,11 @@ public static class AddConsumerCommand
             var moduleName = parseResult.GetValue(moduleOption)!;
             var solution = parseResult.GetValue(solutionOption);
             var eventModule = parseResult.GetValue(eventModuleOption);
+            var dryRun = parseResult.GetValue(dryRunOption);
 
             var solutionFinder = new SolutionFinder(fileSystem);
             var handler = new AddConsumerHandler(fileSystem, console, solutionFinder);
-            return await handler.ExecuteAsync(eventName, moduleName, solution, eventModule);
+            return await handler.ExecuteAsync(eventName, moduleName, solution, eventModule, dryRun);
         });
 
         return command;

@@ -44,7 +44,7 @@ internal static class GeneratorTestHelper
     }
 
     public static (Compilation OutputCompilation, ImmutableArray<Diagnostic> Diagnostics, GeneratorDriverRunResult RunResult) RunGenerator(
-        string source, bool includeEfCoreReference = true)
+        string source, bool includeEfCoreReference = true, string? rootNamespace = null)
     {
         var syntaxTree = CSharpSyntaxTree.ParseText(source);
 
@@ -65,12 +65,117 @@ internal static class GeneratorTestHelper
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
         var generator = new StronglyTypedIdGenerator();
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(generator);
+
+        AnalyzerConfigOptionsProvider? optionsProvider = rootNamespace is not null
+            ? new TestAnalyzerConfigOptionsProvider(rootNamespace)
+            : null;
+
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(
+            generators: [generator.AsSourceGenerator()],
+            optionsProvider: optionsProvider);
 
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var diagnostics);
         var runResult = driver.GetRunResult();
 
         return (outputCompilation, diagnostics, runResult);
+    }
+
+    /// <summary>
+    /// Compiles <paramref name="referencedSource"/> as its own assembly — running
+    /// <see cref="StronglyTypedIdGenerator"/> on it first, so the emitted metadata genuinely
+    /// carries (or omits) the nested <c>{Name}ValueConverter</c> depending on
+    /// <paramref name="referencedIncludeEfCoreReference"/> — then references it while running the
+    /// generator on <paramref name="hostSource"/>. Used to prove the bulk EF Core registration
+    /// helper's referenced-assembly scan checks real compiled metadata instead of assuming a
+    /// converter exists just because the type carries <c>[StronglyTypedId]</c>.
+    /// </summary>
+    public static (Compilation OutputCompilation, ImmutableArray<Diagnostic> Diagnostics, GeneratorDriverRunResult RunResult) RunGeneratorWithReferencedAssembly(
+        string hostSource,
+        string referencedSource,
+        bool hostIncludeEfCoreReference = true,
+        bool referencedIncludeEfCoreReference = true,
+        string? rootNamespace = null)
+    {
+        var referencedReferences = referencedIncludeEfCoreReference
+            ? LazyReferences.Value
+            : LazyReferences.Value
+                .Where(r => r.Display is null || !r.Display.Contains("Microsoft.EntityFrameworkCore"))
+                .ToList();
+
+        var referencedSyntaxTree = CSharpSyntaxTree.ParseText(referencedSource);
+        var referencedCompilation = CSharpCompilation.Create(
+            "ReferencedIdAssembly",
+            [referencedSyntaxTree],
+            referencedReferences,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var referencedGenerator = new StronglyTypedIdGenerator();
+        GeneratorDriver referencedDriver = CSharpGeneratorDriver.Create(referencedGenerator);
+        referencedDriver = referencedDriver.RunGeneratorsAndUpdateCompilation(
+            referencedCompilation, out var referencedOutputCompilation, out _);
+
+        using var ms = new MemoryStream();
+        var emitResult = referencedOutputCompilation.Emit(ms);
+        if (!emitResult.Success)
+        {
+            var errors = string.Join(", ", emitResult.Diagnostics
+                .Where(d => d.Severity == DiagnosticSeverity.Error)
+                .Select(d => d.GetMessage()));
+            throw new InvalidOperationException($"Referenced ID assembly failed to compile: {errors}");
+        }
+
+        ms.Seek(0, SeekOrigin.Begin);
+
+        var hostReferences = new List<MetadataReference>(
+            hostIncludeEfCoreReference
+                ? LazyReferences.Value
+                : LazyReferences.Value.Where(r => r.Display is null || !r.Display.Contains("Microsoft.EntityFrameworkCore")))
+        {
+            MetadataReference.CreateFromStream(ms)
+        };
+
+        var hostSyntaxTree = CSharpSyntaxTree.ParseText(hostSource);
+        var hostCompilation = CSharpCompilation.Create(
+            "HostAssembly",
+            [hostSyntaxTree],
+            hostReferences,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var hostGenerator = new StronglyTypedIdGenerator();
+
+        AnalyzerConfigOptionsProvider? optionsProvider = rootNamespace is not null
+            ? new TestAnalyzerConfigOptionsProvider(rootNamespace)
+            : null;
+
+        GeneratorDriver hostDriver = CSharpGeneratorDriver.Create(
+            generators: [hostGenerator.AsSourceGenerator()],
+            optionsProvider: optionsProvider);
+
+        hostDriver = hostDriver.RunGeneratorsAndUpdateCompilation(hostCompilation, out var outputCompilation, out var diagnostics);
+        var runResult = hostDriver.GetRunResult();
+
+        return (outputCompilation, diagnostics, runResult);
+    }
+
+    /// <summary>
+    /// Emits <paramref name="compilation"/> to an in-memory assembly and loads it, so a generated
+    /// strongly typed ID can actually be constructed, parsed, compared, and (de)serialized via
+    /// reflection at test time instead of only asserting on the generated source text.
+    /// </summary>
+    public static System.Reflection.Assembly EmitToAssembly(Compilation compilation)
+    {
+        using var ms = new MemoryStream();
+        var emitResult = compilation.Emit(ms);
+        if (!emitResult.Success)
+        {
+            var errors = string.Join(", ", emitResult.Diagnostics
+                .Where(d => d.Severity == DiagnosticSeverity.Error)
+                .Select(d => d.GetMessage()));
+            throw new InvalidOperationException($"Compilation failed to emit: {errors}");
+        }
+
+        ms.Seek(0, SeekOrigin.Begin);
+        return System.Reflection.Assembly.Load(ms.ToArray());
     }
 
     public static (Compilation OutputCompilation, ImmutableArray<Diagnostic> Diagnostics, GeneratorDriverRunResult RunResult) RunHandlerRegistrationGenerator(

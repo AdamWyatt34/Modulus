@@ -53,8 +53,9 @@ Integration test projects additionally include:
 | `Microsoft.AspNetCore.Mvc.Testing` | `WebApplicationFactory` for hosting the app in tests |
 | `Microsoft.EntityFrameworkCore.InMemory` | In-memory EF Core provider for lightweight test doubles |
 | `Testcontainers.MsSql` | Docker-based SQL Server for test isolation |
+| `ModulusKit.Testing` | Messaging test harness, test transport, and outbox/inbox assertion helpers -- see [ModulusKit.Testing](./modulus-testing) |
 
-No mocking framework is scaffolded -- the generated tests exercise real objects. If your team prefers mocks, add `NSubstitute` or `Moq` to the unit test project yourself (see [Unit Testing](./unit-testing)).
+No mocking framework is scaffolded -- the generated tests exercise real objects. If your team prefers mocks, add `NSubstitute` or `Moq` to the unit test project yourself (see [Unit Testing](./unit-testing)). For messaging, prefer `ModulusKit.Testing`'s `TestMessageTransport` and `ModulusMessagingTestHarness` over hand-rolling a fake `IMessageTransport` or writing raw `OutboxDbContext`/`InboxDbContext` queries -- see [ModulusKit.Testing](./modulus-testing).
 
 ## Running Tests
 
@@ -109,3 +110,4 @@ Dive into the specific testing guides:
 - **[Architecture Tests](./architecture-tests)** -- Enforce layer dependency rules with NetArchTest and Roslyn analyzers
 - **[Unit Testing](./unit-testing)** -- Test handlers, validators, and domain logic in isolation
 - **[Integration Testing](./integration-testing)** -- Test endpoints end-to-end with WebApplicationFactory
+- **[ModulusKit.Testing](./modulus-testing)** -- Test messaging module-to-module with a real pipeline instead of hand-rolled fakes

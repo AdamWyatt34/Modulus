@@ -1,0 +1,6 @@
+#nullable enable
+Modulus.Messaging.AzureServiceBus.AzureServiceBusTopology
+Modulus.Messaging.AzureServiceBus.ServiceCollectionExtensions
+static Modulus.Messaging.AzureServiceBus.AzureServiceBusTopology.SubscriptionName(string! endpointName) -> string!
+static Modulus.Messaging.AzureServiceBus.AzureServiceBusTopology.TopicName(string! messageTypeName) -> string!
+static Modulus.Messaging.AzureServiceBus.ServiceCollectionExtensions.AddModulusAzureServiceBusTransport(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

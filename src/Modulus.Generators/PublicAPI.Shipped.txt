@@ -1,0 +1,10 @@
+#nullable enable
+Modulus.Generators.HandlerRegistrationGenerator
+Modulus.Generators.HandlerRegistrationGenerator.HandlerRegistrationGenerator() -> void
+Modulus.Generators.HandlerRegistrationGenerator.Initialize(Microsoft.CodeAnalysis.IncrementalGeneratorInitializationContext context) -> void
+Modulus.Generators.ModuleRegistrationGenerator
+Modulus.Generators.ModuleRegistrationGenerator.Initialize(Microsoft.CodeAnalysis.IncrementalGeneratorInitializationContext context) -> void
+Modulus.Generators.ModuleRegistrationGenerator.ModuleRegistrationGenerator() -> void
+Modulus.Generators.StronglyTypedIdGenerator
+Modulus.Generators.StronglyTypedIdGenerator.Initialize(Microsoft.CodeAnalysis.IncrementalGeneratorInitializationContext context) -> void
+Modulus.Generators.StronglyTypedIdGenerator.StronglyTypedIdGenerator() -> void

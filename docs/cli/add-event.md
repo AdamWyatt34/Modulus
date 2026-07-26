@@ -20,7 +20,8 @@ modulus add-event <event-name> [options]
 |---|---|---|
 | `--module, -m <name>` | **(Required)** Module that owns the event. The file is created in that module's `Integration` project. | -- |
 | `--solution, -s <path>` | Path to the `.slnx` solution file. | Auto-discovered |
-| `--properties, -p <list>` | Comma-separated payload properties in `Name:Type` format. Each becomes a positional record parameter. | None |
+| `--properties, -p <list>` | Comma-separated payload properties in `Name:Type` format. Each becomes a positional record parameter. Types accept built-in aliases, BCL types, nullable, arrays, and generic types (`List<Guid>`, `Dictionary<string, decimal>`); commas nested inside `<...>` are not treated as property separators. | None |
+| `--dry-run` | Print the file that would be created without writing anything. | Disabled |
 
 ## Generated Output
 
@@ -56,6 +57,12 @@ modulus add-event OrderPlaced --module Orders --properties "OrderId:Guid,Total:d
 
 ```bash
 modulus add-event CatalogReindexRequested --module Catalog
+```
+
+**Preview the file that would be created without writing anything:**
+
+```bash
+modulus add-event OrderPlaced --module Orders --properties "OrderId:Guid,Total:decimal" --dry-run
 ```
 
 ## Publishing the event

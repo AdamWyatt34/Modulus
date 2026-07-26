@@ -5,4 +5,16 @@
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
   </ItemGroup>
 
+  <!-- Package hygiene: every packable, non-test project is validated at pack time, and
+       library packages are additionally checked for breaking changes against the last
+       released version. A brand-new package has no published baseline yet — it sets
+       NoPackageBaseline=true in its csproj until its first release. Bump the baseline
+       version as part of each release (see CONTRIBUTING's checklist). Lives here rather
+       than Directory.Build.props so those per-project properties are final when the
+       conditions evaluate. -->
+  <PropertyGroup Condition="'$(IsPackable)' != 'false' and '$(IsTestProject)' != 'true'">
+    <EnablePackageValidation>true</EnablePackageValidation>
+    <PackageValidationBaselineVersion Condition="'$(PackAsTool)' != 'true' and '$(NoPackageBaseline)' != 'true'">3.0.0</PackageValidationBaselineVersion>
+  </PropertyGroup>
+
 </Project>

@@ -381,4 +381,153 @@ public class InitHandlerTests
         _fs.FileExists(@"C:\work\EShop\src\BuildingBlocks.Application\IUnitOfWork.cs").ShouldBeFalse();
         _fs.FileExists(@"C:\work\EShop\src\BuildingBlocks.Application\Behaviors\UnitOfWorkBehavior.cs").ShouldBeFalse();
     }
+
+    // ── --dry-run ─────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Init_dry_run_writes_no_files()
+    {
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync("EShop", @"C:\work", includeAspire: false, "inmemory", noGit: true, dryRun: true);
+
+        result.ShouldBe(0);
+        _fs.FileExists(@"C:\work\EShop\EShop.slnx").ShouldBeFalse();
+        _fs.AllFiles.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Init_dry_run_runs_no_processes()
+    {
+        var handler = CreateHandler();
+
+        await handler.ExecuteAsync("EShop", @"C:\work", includeAspire: false, "inmemory", noGit: false, dryRun: true);
+
+        _proc.Invocations.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Init_dry_run_prints_file_paths_that_would_be_created()
+    {
+        var handler = CreateHandler();
+
+        await handler.ExecuteAsync("EShop", @"C:\work", includeAspire: false, "inmemory", noGit: true, dryRun: true);
+
+        _console.Lines.ShouldContain(l => l.Contains("EShop.slnx"));
+        _console.Lines.ShouldContain(l => l.Contains("Directory.Build.props"));
+    }
+
+    [Fact]
+    public async Task Init_dry_run_returns_zero_exit_code()
+    {
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync("EShop", @"C:\work", includeAspire: false, "inmemory", noGit: true, dryRun: true);
+
+        result.ShouldBe(0);
+    }
+
+    // ── --no-restore ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task Init_no_restore_skips_dotnet_restore()
+    {
+        var handler = CreateHandler();
+
+        await handler.ExecuteAsync("EShop", @"C:\work", includeAspire: false, "inmemory", noGit: true, noRestore: true);
+
+        _proc.Invocations.ShouldNotContain(i => i.Command == "dotnet" && i.Arguments.Contains("restore"));
+    }
+
+    [Fact]
+    public async Task Init_no_restore_still_writes_files()
+    {
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync("EShop", @"C:\work", includeAspire: false, "inmemory", noGit: true, noRestore: true);
+
+        result.ShouldBe(0);
+        _fs.FileExists(@"C:\work\EShop\EShop.slnx").ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Init_no_restore_reports_skipped_in_summary()
+    {
+        var handler = CreateHandler();
+
+        await handler.ExecuteAsync("EShop", @"C:\work", includeAspire: false, "inmemory", noGit: true, noRestore: true);
+
+        _console.Lines.ShouldContain(l => l.Contains("Restore:") && l.Contains("Skipped"));
+    }
+
+    // ── --ci github ───────────────────────────────────────────────
+
+    [Fact]
+    public async Task Init_ci_github_creates_workflow_file()
+    {
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync("EShop", @"C:\work", includeAspire: false, "inmemory", noGit: true, ci: "github");
+
+        result.ShouldBe(0);
+        _fs.FileExists(@"C:\work\EShop\.github\workflows\ci.yml").ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Init_without_ci_option_creates_no_workflow_file()
+    {
+        var handler = CreateHandler();
+
+        await handler.ExecuteAsync("EShop", @"C:\work", includeAspire: false, "inmemory", noGit: true);
+
+        _fs.FileExists(@"C:\work\EShop\.github\workflows\ci.yml").ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Init_invalid_ci_provider_returns_error()
+    {
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync("EShop", @"C:\work", includeAspire: false, "inmemory", noGit: true, ci: "gitlab");
+
+        result.ShouldBe(1);
+        _console.ErrorLines.ShouldContain(l => l.Contains("gitlab"));
+    }
+
+    // ── --dockerfile ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task Init_dockerfile_option_creates_dockerfile_and_dockerignore()
+    {
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync("EShop", @"C:\work", includeAspire: false, "inmemory", noGit: true, includeDockerfile: true);
+
+        result.ShouldBe(0);
+        _fs.FileExists(@"C:\work\EShop\Dockerfile").ShouldBeTrue();
+        _fs.FileExists(@"C:\work\EShop\.dockerignore").ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Init_without_dockerfile_option_creates_no_docker_files()
+    {
+        var handler = CreateHandler();
+
+        await handler.ExecuteAsync("EShop", @"C:\work", includeAspire: false, "inmemory", noGit: true);
+
+        _fs.FileExists(@"C:\work\EShop\Dockerfile").ShouldBeFalse();
+        _fs.FileExists(@"C:\work\EShop\.dockerignore").ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Init_dockerfile_references_webapi_project()
+    {
+        var handler = CreateHandler();
+
+        await handler.ExecuteAsync("EShop", @"C:\work", includeAspire: false, "inmemory", noGit: true, includeDockerfile: true);
+
+        var dockerfile = _fs.ReadAllText(@"C:\work\EShop\Dockerfile");
+        dockerfile.ShouldContain("src/EShop.WebApi/EShop.WebApi.csproj");
+        dockerfile.ShouldContain("EShop.WebApi.dll");
+    }
 }

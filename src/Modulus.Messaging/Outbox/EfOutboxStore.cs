@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using System.Transactions;
 using Microsoft.EntityFrameworkCore;
@@ -7,14 +8,27 @@ namespace Modulus.Messaging.Outbox;
 
 internal sealed class EfOutboxStore(OutboxDbContext dbContext, IOutboxNotifier notifier) : IOutboxStore
 {
-    public async Task Save(IIntegrationEvent @event, CancellationToken cancellationToken = default)
+    public Task Save(IIntegrationEvent @event, CancellationToken cancellationToken = default)
+        => SaveCore(@event, scheduledOnUtc: null, cancellationToken);
+
+    public Task Save(IIntegrationEvent @event, DateTimeOffset enqueueAtUtc, CancellationToken cancellationToken = default)
+        => SaveCore(@event, enqueueAtUtc.UtcDateTime, cancellationToken);
+
+    private async Task SaveCore(IIntegrationEvent @event, DateTime? scheduledOnUtc, CancellationToken cancellationToken)
     {
+        // Save runs inside the caller's request flow, so the ambient activity is the business
+        // operation — captured on the row so the (much later) dispatch can link back to it.
+        var activity = Activity.Current;
+
         var message = new OutboxMessage
         {
             Id = @event.EventId,
             EventType = @event.GetType().AssemblyQualifiedName!,
             Payload = JsonSerializer.Serialize(@event, @event.GetType()),
-            CreatedAt = @event.OccurredOn
+            CreatedAt = @event.OccurredOn,
+            ScheduledOnUtc = scheduledOnUtc,
+            TraceParent = activity?.Id,
+            TraceState = string.IsNullOrEmpty(activity?.TraceStateString) ? null : activity.TraceStateString,
         };
 
         dbContext.OutboxMessages.Add(message);
@@ -38,7 +52,8 @@ internal sealed class EfOutboxStore(OutboxDbContext dbContext, IOutboxNotifier n
             .AsNoTracking()
             .Where(m => m.ProcessedAt == null
                 && m.Attempts < maxAttempts
-                && (m.NextAttemptOnUtc == null || m.NextAttemptOnUtc <= utcNow))
+                && (m.NextAttemptOnUtc == null || m.NextAttemptOnUtc <= utcNow)
+                && (m.ScheduledOnUtc == null || m.ScheduledOnUtc <= utcNow))
             .OrderBy(m => m.CreatedAt)
             .Take(batchSize)
             .ToListAsync(cancellationToken).ConfigureAwait(false);
@@ -48,9 +63,18 @@ internal sealed class EfOutboxStore(OutboxDbContext dbContext, IOutboxNotifier n
         int maxAttempts,
         CancellationToken cancellationToken = default)
     {
+        // Future-scheduled rows are deliberately excluded: unlike retry backoff (which is
+        // outstanding work pushed back by failures), a not-yet-due scheduled message is not
+        // backlog and must not trip the backlog health check.
+        var utcNow = DateTime.UtcNow;
+
         return await dbContext.OutboxMessages
             .AsNoTracking()
-            .CountAsync(m => m.ProcessedAt == null && m.Attempts < maxAttempts, cancellationToken)
+            .CountAsync(
+                m => m.ProcessedAt == null
+                    && m.Attempts < maxAttempts
+                    && (m.ScheduledOnUtc == null || m.ScheduledOnUtc <= utcNow),
+                cancellationToken)
             .ConfigureAwait(false);
     }
 

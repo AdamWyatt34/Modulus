@@ -33,12 +33,18 @@ public static class AddQueryCommand
         };
         solutionOption.Aliases.Add("-s");
 
+        var dryRunOption = new Option<bool>("--dry-run")
+        {
+            Description = "Print what would be created without writing any files.",
+        };
+
         var command = new Command("add-query", "Add a new query with handler to an existing module")
         {
             queryNameArg,
             moduleOption,
             resultTypeOption,
             solutionOption,
+            dryRunOption,
         };
 
         command.SetAction(async parseResult =>
@@ -47,10 +53,11 @@ public static class AddQueryCommand
             var moduleName = parseResult.GetValue(moduleOption)!;
             var resultType = parseResult.GetValue(resultTypeOption)!;
             var solution = parseResult.GetValue(solutionOption);
+            var dryRun = parseResult.GetValue(dryRunOption);
 
             var solutionFinder = new SolutionFinder(fileSystem);
             var handler = new AddQueryHandler(fileSystem, console, solutionFinder);
-            return await handler.ExecuteAsync(queryName, moduleName, solution, resultType);
+            return await handler.ExecuteAsync(queryName, moduleName, solution, resultType, dryRun);
         });
 
         return command;

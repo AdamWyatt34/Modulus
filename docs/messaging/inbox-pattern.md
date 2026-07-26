@@ -288,11 +288,31 @@ Together, they provide **effectively exactly-once processing**:
 - The outbox ensures no messages are lost.
 - The inbox ensures no messages are processed more than once.
 
+## Retention
+
+Inbox rows are the deduplication memory, so cleanup is a trade-off the outbox side doesn't have: **a purged row re-opens the window for its message**. If the broker redelivers a message after its inbox row is gone — including a `modulus dlq replay` of an old dead-letter — every handler executes again.
+
+The built-in sweep handles this with an age-based policy measured from the event's `OccurredOn`:
+
+```csharp
+builder.Services.AddModulusMessaging(options =>
+{
+    options.Retention.Enabled = true;
+    options.Retention.InboxAge = TimeSpan.FromDays(7); // must exceed the broker's max redelivery horizon
+});
+```
+
+Size `InboxAge` beyond the *latest possible redelivery* of a message: broker redelivery windows, your dead-letter replay habits, and any manual re-publish tooling. Seven days is a safe default for most deployments; teams that replay months-old DLQ messages should either keep inbox rows longer or ensure handlers are naturally idempotent.
+
+The sweep never races live work: a message with an unprocessed reservation younger than one hour is skipped whatever its age, so a handler mid-execution (e.g. a DLQ replay of an old event) cannot have its reservation deleted out from under it. Reservations older than that are crashed owners' leftovers and are removed with the message.
+
+One-off cleanup uses [`modulus inbox purge`](/cli/inbox), which previews the row count until you pass `--confirm`. Configuration details for the sweep are shared with the outbox — see [Outbox Pattern § Retention & Cleanup](./outbox-pattern#retention-cleanup).
+
 ## Best Practices
 
 - **Always pair outbox with inbox.** The outbox guarantees at-least-once publishing, which means duplicates will occur. The inbox ensures each handler processes each message only once.
 - **Include inbox tables in your migrations.** The `InboxMessage` and `InboxMessageConsumer` tables must exist in your database. Run EF Core migrations to create them.
-- **Monitor the inbox table.** Like the outbox, the inbox table grows over time. Implement a cleanup job to remove old processed entries.
+- **Monitor the inbox table.** Like the outbox, the inbox table grows over time. Enable `MessagingOptions.Retention` (see [Retention](#retention)) to age old rows out safely.
 - **Keep handlers idempotent where possible.** Even with the inbox pattern, designing naturally idempotent handlers (e.g., upserts instead of inserts) adds an extra layer of safety.
 - **Do not rely solely on the inbox for correctness.** The inbox is a safety net. Design your system to be resilient to duplicate processing at the domain level as well.
 

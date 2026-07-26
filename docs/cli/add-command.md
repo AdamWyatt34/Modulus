@@ -20,7 +20,8 @@ modulus add-command <command-name> [options]
 |---|---|---|
 | `--module, -m <name>` | **(Required)** Target module where the command will be created. | -- |
 | `--solution, -s <path>` | Path to the `.slnx` solution file. | Auto-discovered |
-| `--result-type, -r <type>` | Return type wrapped in `Result<T>`. Omit for a void `Result` (commands that return no value). Must be a single type identifier (e.g. `Guid`, `OrderConfirmation`); generic types like `List<T>` are not accepted -- define a wrapper DTO instead. | Void `Result` |
+| `--result-type, -r <type>` | Return type wrapped in `Result<T>`. Omit for a void `Result` (commands that return no value). Accepts built-in aliases, BCL types, fully-qualified names, nullable (`Guid?`), arrays (`int[]`, `int[,]`), and generic types (`List<Guid>`, `Dictionary<string, decimal>`, arbitrarily nested). | Void `Result` |
+| `--dry-run` | Print the files that would be created without writing anything. | Disabled |
 
 ## Generated Output
 
@@ -99,6 +100,18 @@ modulus add-command DeleteProduct --module Catalog
 
 ```bash
 modulus add-command PlaceOrder --module Orders --result-type OrderConfirmation
+```
+
+**Create a command that returns a generic collection type:**
+
+```bash
+modulus add-command ImportProducts --module Catalog --result-type "List<Guid>"
+```
+
+**Preview the files that would be created without writing anything:**
+
+```bash
+modulus add-command CreateProduct --module Catalog --result-type Guid --dry-run
 ```
 
 ## See Also

@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <EnforcePublicApi>true</EnforcePublicApi>
     <PackageId>ModulusKit.Messaging.RabbitMq</PackageId>
     <Description>RabbitMQ transport for ModulusKit.Messaging, built directly on RabbitMQ.Client with fanout-exchange-per-event topology, durable endpoint queues, and dead-letter exchanges.</Description>
     <PackageTags>messaging;rabbitmq;transport;outbox;modular-monolith</PackageTags>

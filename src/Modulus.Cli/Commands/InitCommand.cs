@@ -40,6 +40,26 @@ public static class InitCommand
             Description = "Override the ModulusKit.* package version emitted into Directory.Packages.props (default: CLI's own version)",
         };
 
+        var dryRunOption = new Option<bool>("--dry-run")
+        {
+            Description = "Print what would be created without writing any files or running any processes.",
+        };
+
+        var noRestoreOption = new Option<bool>("--no-restore")
+        {
+            Description = "Skip running 'dotnet restore' after scaffolding.",
+        };
+
+        var ciOption = new Option<string?>("--ci")
+        {
+            Description = "Scaffold a CI workflow for the given provider (currently only 'github' is supported). Omit to skip.",
+        };
+
+        var dockerfileOption = new Option<bool>("--dockerfile")
+        {
+            Description = "Scaffold a multi-stage Dockerfile (and .dockerignore) building the WebApi host.",
+        };
+
         var command = new Command("init", "Scaffold a new modular monolith solution")
         {
             solutionNameArg,
@@ -48,6 +68,10 @@ public static class InitCommand
             transportOption,
             noGitOption,
             modulusKitVersionOption,
+            dryRunOption,
+            noRestoreOption,
+            ciOption,
+            dockerfileOption,
         };
 
         command.SetAction(async parseResult =>
@@ -58,6 +82,10 @@ public static class InitCommand
             var transport = parseResult.GetValue(transportOption)!;
             var noGit = parseResult.GetValue(noGitOption);
             var modulusKitVersion = parseResult.GetValue(modulusKitVersionOption);
+            var dryRun = parseResult.GetValue(dryRunOption);
+            var noRestore = parseResult.GetValue(noRestoreOption);
+            var ci = parseResult.GetValue(ciOption);
+            var dockerfile = parseResult.GetValue(dockerfileOption);
 
             if (transport is not ("inmemory" or "rabbitmq" or "azureservicebus"))
             {
@@ -72,7 +100,11 @@ public static class InitCommand
                 aspire,
                 transport,
                 noGit,
-                modulusKitVersion);
+                modulusKitVersion,
+                dryRun,
+                noRestore,
+                ci,
+                dockerfile);
         });
 
         return command;

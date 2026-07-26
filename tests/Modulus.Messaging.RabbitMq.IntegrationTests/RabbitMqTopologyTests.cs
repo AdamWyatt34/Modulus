@@ -35,6 +35,28 @@ public sealed class RabbitMqTopologyTests
     }
 
     [Fact]
+    public void RetryQueueName_AppendsRetrySuffixToQueueName()
+    {
+        RabbitMqTopology.RetryQueueName("orders").ShouldBe("orders.retry");
+    }
+
+    [Fact]
+    public void ScheduledQueueName_AppendsScheduledSuffixToExchangeName()
+    {
+        RabbitMqTopology.ScheduledQueueName("My.Namespace.SomeEvent").ShouldBe("my.namespace.someevent.scheduled");
+    }
+
+    [Fact]
+    public void RetryQueueName_BaseNameWithinLimitButSuffixPushesOverLimit_ThrowsDescriptiveError()
+    {
+        var borderline = new string('a', 250);
+
+        var ex = Should.Throw<InvalidOperationException>(() => RabbitMqTopology.RetryQueueName(borderline));
+
+        ex.Message.ShouldContain("retry queue");
+    }
+
+    [Fact]
     public void ExchangeName_NameWithinLimit_DoesNotThrow()
     {
         var name = new string('a', 255);

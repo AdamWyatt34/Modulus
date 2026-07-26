@@ -32,12 +32,18 @@ public static class AddCommandCommand
         };
         resultTypeOption.Aliases.Add("-r");
 
+        var dryRunOption = new Option<bool>("--dry-run")
+        {
+            Description = "Print what would be created without writing any files.",
+        };
+
         var command = new Command("add-command", "Add a new command with handler and validator to an existing module")
         {
             commandNameArg,
             moduleOption,
             solutionOption,
             resultTypeOption,
+            dryRunOption,
         };
 
         command.SetAction(async parseResult =>
@@ -46,10 +52,11 @@ public static class AddCommandCommand
             var moduleName = parseResult.GetValue(moduleOption)!;
             var solution = parseResult.GetValue(solutionOption);
             var resultType = parseResult.GetValue(resultTypeOption);
+            var dryRun = parseResult.GetValue(dryRunOption);
 
             var solutionFinder = new SolutionFinder(fileSystem);
             var handler = new AddCommandHandler(fileSystem, console, solutionFinder);
-            return await handler.ExecuteAsync(commandName, moduleName, solution, resultType);
+            return await handler.ExecuteAsync(commandName, moduleName, solution, resultType, dryRun);
         });
 
         return command;

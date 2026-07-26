@@ -90,11 +90,52 @@ public static class OutboxCommand
             return await handler.PurgeAsync(connection, parseResult.GetValue(messageIdArgument));
         });
 
+        var purgeProcessed = new Command(
+            "purge-processed",
+            "Bulk-delete successfully published outbox messages older than a retention age. Without --confirm, reports what would be deleted.");
+        var olderThanDaysOption = new Option<int>("--older-than-days")
+        {
+            Description = "Purge processed messages whose ProcessedAt is older than this many days (default: 7).",
+            DefaultValueFactory = _ => 7,
+        };
+        var batchSizeOption = new Option<int>("--batch-size")
+        {
+            Description = "Maximum rows deleted per round trip; batches repeat until drained (default: 500).",
+            DefaultValueFactory = _ => 500,
+        };
+        var confirmOption = new Option<bool>("--confirm")
+        {
+            Description = "Actually delete. Without this flag the command only reports the matching row count.",
+        };
+        purgeProcessed.Options.Add(connectionStringOption);
+        purgeProcessed.Options.Add(configOption);
+        purgeProcessed.Options.Add(providerOption);
+        purgeProcessed.Options.Add(olderThanDaysOption);
+        purgeProcessed.Options.Add(batchSizeOption);
+        purgeProcessed.Options.Add(confirmOption);
+        purgeProcessed.SetAction(async parseResult =>
+        {
+            var connection = handler.ResolveConnection(
+                parseResult.GetValue(connectionStringOption),
+                parseResult.GetValue(configOption),
+                parseResult.GetValue(providerOption));
+
+            if (connection is null)
+                return 1;
+
+            return await handler.PurgeProcessedAsync(
+                connection,
+                parseResult.GetValue(olderThanDaysOption),
+                parseResult.GetValue(batchSizeOption),
+                parseResult.GetValue(confirmOption));
+        });
+
         var outbox = new Command("outbox", "Inspect and operate the transactional outbox.")
         {
             listFailed,
             retry,
             purge,
+            purgeProcessed,
         };
 
         return outbox;

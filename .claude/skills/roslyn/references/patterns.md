@@ -262,16 +262,21 @@ public record struct ProductId;  // ❌
 public partial class ProductId { }  // ❌
 ```
 
-Generated members (Guid-backed):
+Backing types: `Guid` (default), `int`, `long`, `string` — anything else is MODGEN005. Generated members (Guid-backed):
 ```csharp
-// Auto-generated inside ProductId partial:
-public static ProductId New() => new(Guid.NewGuid());
-public static ProductId Empty => new(Guid.Empty);
+// Auto-generated inside ProductId partial (which implements IComparable<ProductId> and IParsable<ProductId>):
+public static ProductId New() => new(Guid.NewGuid());   // omitted for string backing (no natural generator)
+public static ProductId Empty => new(Guid.Empty);       // string.Empty for string backing
+public static ProductId Parse(string s, IFormatProvider? provider = null) { ... }
+public static bool TryParse(string? s, IFormatProvider? provider, out ProductId result) { ... }  // minimal-API route/query binding uses this
+public int CompareTo(ProductId other) { ... }           // delegates to the backing value; string uses CompareOrdinal
 
-public sealed class ValueConverter : Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<ProductId, Guid> { ... }
-public sealed class JsonConverter : System.Text.Json.Serialization.JsonConverter<ProductId> { ... }
+public sealed class ValueConverter : Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<ProductId, Guid> { ... }  // only when the project references EF Core
+public sealed class JsonConverter : System.Text.Json.Serialization.JsonConverter<ProductId> { ... }  // overrides ReadAsPropertyName/WriteAsPropertyName → Dictionary<ProductId,V> keys work
 public sealed class TypeConverter : System.ComponentModel.TypeConverter { ... }
 ```
+
+EF bulk registration (also gated on the EF Core reference): the generator emits `ModulusStronglyTypedIdConventions.UseModulusStronglyTypedIds(this ModelConfigurationBuilder)` covering every discovered ID (local + public IDs from referenced assemblies built with EF) — call it once from `DbContext.ConfigureConventions` instead of per-property `HasConversion<>()`. Compile-and-run test helpers: `GeneratorTestHelper.EmitToAssembly` / `RunGeneratorWithReferencedAssembly` for behavior-level assertions beyond golden-source text.
 
 ---
 

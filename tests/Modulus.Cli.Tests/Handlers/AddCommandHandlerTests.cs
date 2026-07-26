@@ -282,4 +282,31 @@ public class AddCommandHandlerTests
         result.ShouldBe(0);
         _console.SuccessLines.ShouldContain(l => l.Contains("CreateProduct") && l.Contains("Catalog"));
     }
+
+    // ── --dry-run ─────────────────────────────────────────────────
+
+    [Fact]
+    public async Task AddCommand_dry_run_writes_no_files()
+    {
+        SeedModulusSolutionWithModule();
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync("CreateProduct", "Catalog", @"C:\work\EShop\EShop.slnx", "Guid", dryRun: true);
+
+        result.ShouldBe(0);
+        _fs.FileExists(@"C:\work\EShop\src\Modules\Catalog\src\Catalog.Application\Commands\CreateProduct\CreateProduct.cs").ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task AddCommand_dry_run_prints_the_files_that_would_be_created()
+    {
+        SeedModulusSolutionWithModule();
+        var handler = CreateHandler();
+
+        await handler.ExecuteAsync("CreateProduct", "Catalog", @"C:\work\EShop\EShop.slnx", null, dryRun: true);
+
+        _console.Lines.ShouldContain(l => l.Contains("CreateProduct.cs"));
+        _console.Lines.ShouldContain(l => l.Contains("CreateProductHandler.cs"));
+        _console.Lines.ShouldContain(l => l.Contains("CreateProductValidator.cs"));
+    }
 }

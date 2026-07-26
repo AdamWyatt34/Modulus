@@ -19,6 +19,7 @@ internal sealed class RabbitMqDlqBrowser(DlqConnection connection) : IDlqBrowser
     private const string FirstDeathReasonHeader = "x-first-death-reason";
     private const string DeathHeader = "x-death";
     private const string DeathCountField = "count";
+    private const string DeliveryAttemptHeader = "modulus-delivery-attempt";
 
     private IConnection? _brokerConnection;
     private IChannel? _channel;
@@ -101,16 +102,30 @@ internal sealed class RabbitMqDlqBrowser(DlqConnection connection) : IDlqBrowser
                     continue;
                 }
 
-                var exchange = ReadHeader(result.BasicProperties, FirstDeathExchangeHeader)
-                    ?? RabbitMqTopology.ExchangeName(result.BasicProperties.Type ?? string.Empty);
+                // Empty x-first-death-exchange means the first death happened via the DEFAULT
+                // exchange — the shape of every broker-retried or scheduled message (their
+                // copies are published to "" with the queue as routing key). Replaying to ""
+                // with an empty routing key would be silently unroutable-and-confirmed, so an
+                // empty value must fall back to the event-type exchange like a missing one.
+                var firstDeathExchange = ReadHeader(result.BasicProperties, FirstDeathExchangeHeader);
+                var exchange = string.IsNullOrWhiteSpace(firstDeathExchange)
+                    ? RabbitMqTopology.ExchangeName(result.BasicProperties.Type ?? string.Empty)
+                    : firstDeathExchange;
 
-                // Confirmations are on: BasicPublishAsync completes only when the broker
-                // confirms, so the dead-lettered copy is acked only after the replay is safe.
+                var replayProperties = new BasicProperties(result.BasicProperties);
+                // A broker-retried message dead-lettered with its attempt budget spent; a
+                // replay is a fresh operator-initiated run and must get the full budget again.
+                if (replayProperties.Headers is { } replayHeaders)
+                    replayHeaders.Remove(DeliveryAttemptHeader);
+
+                // Confirmations are on and the publish is mandatory: BasicPublishAsync completes
+                // only when the broker confirms a *routed* message, so the dead-lettered copy is
+                // acked only after the replay is provably safe (an unroutable replay faults).
                 await channel.BasicPublishAsync(
                     exchange,
                     routingKey: string.Empty,
-                    mandatory: false,
-                    basicProperties: new BasicProperties(result.BasicProperties),
+                    mandatory: true,
+                    basicProperties: replayProperties,
                     body: result.Body,
                     cancellationToken: cancellationToken).ConfigureAwait(false);
 

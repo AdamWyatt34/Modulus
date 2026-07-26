@@ -23,7 +23,7 @@ public static class PropertyParser
 
         var results = new List<EntityProperty>();
         var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var parts = input.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var parts = SplitTopLevel(input);
 
         foreach (var part in parts)
         {
@@ -50,5 +50,50 @@ public static class PropertyParser
         }
 
         return (results, null);
+    }
+
+    /// <summary>
+    /// Splits a <c>--properties</c> value on top-level commas only — commas nested inside a
+    /// generic type argument list (e.g. <c>Prices:Dictionary&lt;string,decimal&gt;</c>) are part
+    /// of that property's type, not a separator between properties. Tracks '&lt;'/'&gt;' nesting
+    /// depth across the whole input; a comma is only treated as a separator at depth zero.
+    /// Mirrors the previous <c>string.Split(',', RemoveEmptyEntries | TrimEntries)</c> behavior
+    /// for whitespace and empty-entry handling (e.g. a trailing comma is silently dropped).
+    /// </summary>
+    private static List<string> SplitTopLevel(string input)
+    {
+        var parts = new List<string>();
+        var depth = 0;
+        var start = 0;
+
+        for (var i = 0; i < input.Length; i++)
+        {
+            switch (input[i])
+            {
+                case '<':
+                    depth++;
+                    break;
+                case '>':
+                    if (depth > 0)
+                        depth--;
+                    break;
+                case ',' when depth == 0:
+                    AddTrimmed(parts, input[start..i]);
+                    start = i + 1;
+                    break;
+            }
+        }
+
+        AddTrimmed(parts, input[start..]);
+        return parts;
+    }
+
+    private static void AddTrimmed(List<string> parts, string part)
+    {
+        var trimmed = part.Trim();
+        if (trimmed.Length > 0)
+        {
+            parts.Add(trimmed);
+        }
     }
 }

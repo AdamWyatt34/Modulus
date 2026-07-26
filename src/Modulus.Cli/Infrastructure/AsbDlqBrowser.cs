@@ -98,7 +98,7 @@ internal sealed class AsbDlqBrowser(DlqConnection connection) : IDlqBrowser
                 return false;
 
             // The copy constructor carries body, MessageId, and application properties.
-            await sender.SendMessageAsync(new ServiceBusMessage(match), cancellationToken).ConfigureAwait(false);
+            await sender.SendMessageAsync(BuildReplayMessage(match), cancellationToken).ConfigureAwait(false);
             await receiver.CompleteMessageAsync(match, cancellationToken).ConfigureAwait(false);
             return true;
         }
@@ -132,7 +132,7 @@ internal sealed class AsbDlqBrowser(DlqConnection connection) : IDlqBrowser
 
             foreach (var message in batch)
             {
-                await sender.SendMessageAsync(new ServiceBusMessage(message), cancellationToken).ConfigureAwait(false);
+                await sender.SendMessageAsync(BuildReplayMessage(message), cancellationToken).ConfigureAwait(false);
                 await receiver.CompleteMessageAsync(message, cancellationToken).ConfigureAwait(false);
                 replayed++;
             }
@@ -142,4 +142,16 @@ internal sealed class AsbDlqBrowser(DlqConnection connection) : IDlqBrowser
     }
 
     public ValueTask DisposeAsync() => _client?.DisposeAsync() ?? ValueTask.CompletedTask;
+    /// <summary>
+    /// Builds the replay copy: same body and properties, minus the delivery-attempt header —
+    /// a broker-retried message dead-lettered with its budget spent, and an operator replay
+    /// must get the full budget again instead of one pass straight back to the DLQ.
+    /// </summary>
+    private static ServiceBusMessage BuildReplayMessage(ServiceBusReceivedMessage source)
+    {
+        var copy = new ServiceBusMessage(source);
+        copy.ApplicationProperties.Remove("modulus-delivery-attempt");
+        return copy;
+    }
+
 }

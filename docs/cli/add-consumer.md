@@ -23,6 +23,7 @@ modulus add-consumer <event-name> [options]
 | `--module, -m <name>` | **(Required)** Consuming module that hosts the handler. | -- |
 | `--solution, -s <path>` | Path to the `.slnx` solution file. | Auto-discovered |
 | `--event-module <name>` | Module that owns the event. Use to disambiguate when the same event name exists in more than one module. | Auto-detected |
+| `--dry-run` | Print the handler file that would be created and/or the project reference that would be added, without writing anything. | Disabled |
 
 ## How the event is located
 
@@ -95,6 +96,12 @@ modulus add-consumer OrderShipped --module Shipping
 
 ```bash
 modulus add-consumer OrderShipped --module Shipping --event-module Orders
+```
+
+**Preview what would be created/changed without writing anything:**
+
+```bash
+modulus add-consumer OrderShipped --module Shipping --dry-run
 ```
 
 ## See Also

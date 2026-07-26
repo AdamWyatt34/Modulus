@@ -1,0 +1,10 @@
+**/bin/
+**/obj/
+**/.git/
+**/.vs/
+**/.idea/
+**/*.user
+**/TestResults/
+**/node_modules/
+Dockerfile
+.dockerignore

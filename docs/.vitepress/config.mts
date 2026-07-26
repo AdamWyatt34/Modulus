@@ -37,7 +37,7 @@ export default withMermaid(
         },
         { text: 'Recipes', link: '/recipes/' },
         {
-          text: 'v2.1.0',
+          text: 'v3.0.0',
           items: [
             { text: 'Changelog', link: 'https://github.com/adamwyatt34/Modulus/blob/main/CHANGELOG.md' },
             { text: 'NuGet', link: 'https://www.nuget.org/packages/ModulusKit.Cli' },
@@ -111,6 +111,7 @@ export default withMermaid(
               { text: 'Outbox Pattern', link: '/messaging/outbox-pattern' },
               { text: 'Inbox Pattern', link: '/messaging/inbox-pattern' },
               { text: 'Dead-Letter Queues', link: '/messaging/dead-letter-queues' },
+              { text: 'Distributed Tracing', link: '/messaging/distributed-tracing' },
               { text: 'Graceful Shutdown', link: '/messaging/graceful-shutdown' },
               { text: 'Migrating from MassTransit', link: '/messaging/migrating-from-masstransit' },
             ]
@@ -141,9 +142,11 @@ export default withMermaid(
               { text: 'modulus add-endpoint', link: '/cli/add-endpoint' },
               { text: 'modulus add-event', link: '/cli/add-event' },
               { text: 'modulus add-consumer', link: '/cli/add-consumer' },
+              { text: 'modulus add-migration', link: '/cli/add-migration' },
               { text: 'modulus remove-module', link: '/cli/remove-module' },
               { text: 'Renaming a module (manual)', link: '/cli/rename-module' },
               { text: 'modulus outbox', link: '/cli/outbox' },
+              { text: 'modulus inbox', link: '/cli/inbox' },
               { text: 'modulus dlq', link: '/cli/dlq' },
               { text: 'modulus doctor', link: '/cli/doctor' },
               { text: 'modulus upgrade', link: '/cli/upgrade' },
@@ -160,6 +163,7 @@ export default withMermaid(
               { text: 'Architecture Tests', link: '/testing/architecture-tests' },
               { text: 'Unit Testing', link: '/testing/unit-testing' },
               { text: 'Integration Testing', link: '/testing/integration-testing' },
+              { text: 'ModulusKit.Testing', link: '/testing/modulus-testing' },
             ]
           }
         ],

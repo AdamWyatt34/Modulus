@@ -25,21 +25,41 @@ modulus init MyApp                                   # new solution
 modulus init MyApp --aspire                          # with Aspire orchestration
 modulus init MyApp --transport rabbitmq              # inmemory | rabbitmq | azureservicebus
 modulus init MyApp --output ./src --no-git
+modulus init MyApp --ci github --dockerfile          # opt-in .github/workflows/ci.yml + Dockerfile/.dockerignore
+modulus init MyApp --no-restore                      # CI/scripted setups that restore separately
 
 modulus add-module Orders                            # full module (Domain/Application/Infrastructure/Integration/Api)
 modulus add-module SharedKernel --no-endpoints
+modulus add-module Orders --no-restore               # skip 'dotnet restore' (still runs 'dotnet sln add')
 
 modulus add-entity Order --module Orders --properties "CustomerId:Guid,Status:string,Total:decimal"
 modulus add-entity Order --module Orders --aggregate --id-type guid
+modulus add-entity Product --module Catalog --properties "Tags:List<string>,Prices:Dictionary<string,decimal>"
+                                                     # --properties/--result-type accept generics, nullable, arrays:
+                                                     # List<T>, Dictionary<K,V>, T?, T[], T[,], arbitrarily nested
 
 modulus add-command CreateOrder --module Orders --result-type Guid
 modulus add-query GetOrders --module Orders --result-type "List<OrderDto>"
 modulus add-endpoint CreateOrder --module Orders --method POST --route "/orders" --command CreateOrderCommand
+modulus add-endpoint GetOrder --module Orders --method GET --route "/{id:guid}" --query GetOrderById --result-type OrderDto
+                                                     # route params ({id:guid} -> Guid id) are bound as leading lambda
+                                                     # params and forwarded positionally into the command/query ctor —
+                                                     # the target record needs matching positional parameters in order:
+                                                     #   public sealed record GetOrderById(Guid Id) : IQuery<OrderDto>;
 
 modulus add-event OrderPlaced --module Orders --properties "OrderId:Guid,Total:decimal"
 modulus add-consumer OrderPlaced --module Loyalty --event-module Orders   # handler in Loyalty for Orders' event
 
+modulus add-migration AddOrderTable --module Orders  # wraps 'dotnet ef migrations add' with inferred
+                                                     # --project (module Infrastructure) and
+                                                     # --startup-project (WebApi host); needs dotnet-ef tool.
+                                                     # Only the write context — never {Module}ReadOnlyDbContext.
+
 modulus remove-module Orders                         # dry-run by default; --confirm to apply, --force to override blocks
+
+# --dry-run is available on EVERY mutating scaffold command (init, add-module, add-entity,
+# add-command, add-query, add-endpoint, add-event, add-consumer): prints every file/edit that
+# would happen and exits 0 without touching the filesystem or running any process.
 ```
 
 ### Inspection and operations
@@ -54,6 +74,8 @@ modulus doctor                                       # six solution-health check
 
 modulus outbox list-failed                           # dead-lettered outbox rows
 modulus outbox retry --message-id <guid>             # options: --connection-string, --config, --provider, --max-attempts
+modulus outbox purge-processed --older-than-days 7 --confirm   # bulk retention purge (previews count without --confirm)
+modulus inbox purge --older-than-days 7 --confirm    # bulk inbox purge; shortens dedup window — mind redelivery horizon
 
 modulus dlq list --transport rabbitmq                # peek broker dead-letter queue
 modulus dlq replay --transport rabbitmq --message-id <guid>   # or --all; ASB also needs --event
@@ -493,6 +515,6 @@ public sealed class OrderCreatedEventHandlerTests
 - Suppress with `#pragma warning disable MOD001` if truly intentional
 
 ### "Package version skew after upgrading"
-- All nine ModulusKit.* packages ship at one aligned version
+- All ten ModulusKit.* packages ship at one aligned version
 - Run `modulus upgrade` to bump every pin in `Directory.Packages.props`, then `dotnet restore`
 - Run `modulus doctor` — it warns when pins don't match the CLI version

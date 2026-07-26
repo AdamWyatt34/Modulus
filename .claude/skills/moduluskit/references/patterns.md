@@ -48,14 +48,35 @@ if (result.IsFailure) { /* ... */ }
 // Result<T>:  Match<TOut>(Func<T, TOut> onSuccess, Func<Result<T>, TOut> onFailure)
 return result.Match(
     value => Results.Ok(value),
-    failure => Results.Problem(failure.Errors.First().Description));
+    failure => Results.Problem(failure.FirstError.Description));
 
 // Access value (throws if failed)
 var value = result.Value;
 
+// First error of a failed result (throws if successful, like Value on failure)
+var error = result.FirstError;
+
 // Access errors (IReadOnlyList<Error>)
 foreach (var error in result.Errors)
     logger.LogWarning("{Code}: {Description}", error.Code, error.Description);
+```
+
+### Combinators (railway-oriented chaining)
+
+`Result`/`Result<T>` carry `Bind`, `Map`, `Tap`, `Ensure` (+ `BindAsync`/`MapAsync`/`TapAsync`/`MatchAsync`); `ResultExtensions` provides the same names over `Task<Result>`/`Task<Result<T>>` so chains compose without intermediate awaits. Failure short-circuits — later steps never run, errors propagate unchanged.
+
+```csharp
+// Instead of nested if (r.IsFailure) blocks:
+public Task<Result<Guid>> Handle(ShipOrderCommand cmd, CancellationToken ct) =>
+    LoadOrder(cmd.OrderId, ct)                                   // Task<Result<Order>>
+        .Ensure(o => o.IsOpen, Error.Conflict("Orders.Closed", "Order already closed."))
+        .Bind(o => Ship(o, ct))                                  // Order → Task<Result<Shipment>>
+        .Tap(s => logger.LogInformation("Shipped {Id}", s.Id))   // side effect on success only
+        .Map(s => s.Id);                                         // Shipment → Guid
+
+// Bind = chain a Result-returning step; Map = transform the value;
+// Tap = side effect, result unchanged; Ensure = predicate or fail with the given Error.
+// Ensure also takes an error factory: .Ensure(v => v > 0, v => Error.Validation("Neg", $"{v} < 0"))
 ```
 
 ### ValidationResult
@@ -283,6 +304,44 @@ Register with `AddModulusInbox(...)`. Consumption is **reservation-based**: each
 
 ---
 
+## Delayed Redelivery & Scheduled Publishing
+
+```csharp
+// Broker-native consumer retry (opt-in): backoff waits on the broker, not in-process.
+// One handler pass per delivery; failed messages come back via RabbitMQ TTL retry queue /
+// ASB scheduled copy / in-memory timer. Frees the concurrency slot; survives crashes.
+builder.Services.AddModulusMessaging(options =>
+    options.ConsumerRetryMode = ConsumerRetryMode.Broker);   // default: InProcess
+
+// Scheduled publish — broker holds the message until due:
+await bus.PublishScheduled(new ReminderDue(id), DateTimeOffset.UtcNow.AddHours(4), ct);
+
+// Durable variant through the outbox (transactional with business data; precision =
+// OutboxPollInterval). Far-future rows don't count as backlog for the health check.
+await outbox.Save(new ReminderDue(id), DateTimeOffset.UtcNow.AddDays(3), ct);
+```
+
+RabbitMQ caveat: per-message TTL expires only at the queue head, so mixed delays on one event type release in publish order (`PublishScheduled`); retry backoff is non-decreasing so the retry queue is unaffected in practice. ASB redelivery copies fan out with a `modulus-redeliver-endpoint` property; other endpoints ack them unrun.
+
+## Retention (Outbox + Inbox Cleanup)
+
+Delivered rows accumulate forever unless retention is on. Opt in via `MessagingOptions.Retention`:
+
+```csharp
+builder.Services.AddModulusMessaging(options =>
+{
+    options.Retention.Enabled = true;                            // default false
+    options.Retention.ProcessedOutboxAge = TimeSpan.FromDays(7); // published outbox rows
+    options.Retention.InboxAge = TimeSpan.FromDays(7);           // must exceed broker's max redelivery horizon
+    options.Retention.SweepInterval = TimeSpan.FromHours(1);
+    options.Retention.PurgeBatchSize = 500;
+});
+```
+
+A background sweep deletes old rows in batches. Outbox: only `ProcessedAt` rows are purged — pending/dead-lettered rows are never touched. Inbox: purging shortens the dedup window, so `InboxAge` must outlive every possible redelivery (DLQ replays included). One-off cleanup: `modulus outbox purge-processed` / `modulus inbox purge` (both preview counts until `--confirm`). Counter: `modulus.messaging.retention.purged` (tag `store`).
+
+---
+
 ## Health Checks and Metrics
 
 ```csharp
@@ -298,7 +357,9 @@ app.MapHealthChecks("/readyz", new HealthCheckOptions
 
 Checks: `modulus_messaging_transport` (via optional `ITransportHealthProbe`) and `modulus_messaging_outbox` (Degraded/Unhealthy thresholds configurable via `ModulusMessagingHealthCheckOptions`).
 
-Metrics: subscribe with `AddMeter("Modulus.Messaging")` — outbox dispatch outcomes, outbox wakeups, consumer handler duration, inbox dedup, retries, dead-letters. The mediator side has `MetricsBehavior` + `TracingBehavior` (ActivitySource `Modulus.Mediator`).
+Metrics: subscribe with `AddMeter("Modulus.Messaging")` — outbox dispatch outcomes, outbox wakeups, consumer handler duration, inbox dedup, retries, dead-letters, retention purges. The mediator side has `MetricsBehavior` + `TracingBehavior` (ActivitySource `Modulus.Mediator`).
+
+Distributed tracing: W3C trace context propagates across the broker automatically — `IMessageBus.Publish` emits a Producer span and injects `traceparent`/`tracestate` into `TransportEnvelope.Headers` (mapped to RabbitMQ headers / ASB application properties); the consumer pipeline starts a Consumer span per delivery parented on the extracted context, and `Activity.Current` flows into handlers. Outbox saves persist the request's context on the row; `outbox.dispatch` spans link back to it. Subscribe with `AddSource("Modulus.Messaging")` + `AddSource("Modulus.Messaging.Outbox")` (constants on `MessagingDiagnostics`). Upgrading from 3.0.x: `OutboxMessages` gains nullable `TraceParent`/`TraceState` columns — regenerate the consumer-owned migration.
 
 ---
 

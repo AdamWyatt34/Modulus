@@ -12,4 +12,14 @@ public enum MessageDispatchResult
 
     /// <summary>All processing attempts failed; the transport should dead-letter the message.</summary>
     DeadLetter,
+
+    /// <summary>
+    /// The attempt failed with attempts remaining and broker-native redelivery is enabled
+    /// (<see cref="MessagingOptions.ConsumerRetryMode"/>): the transport should schedule a
+    /// delayed redelivery of the message (with its incremented attempt header) and consume
+    /// the original — freeing the concurrency slot an in-process retry sleep would pin.
+    /// Only returned when <see cref="ConsumerRetryMode.Broker"/> is configured; transports
+    /// without a native delay mechanism should treat it as a redelivery request (requeue).
+    /// </summary>
+    Retry,
 }

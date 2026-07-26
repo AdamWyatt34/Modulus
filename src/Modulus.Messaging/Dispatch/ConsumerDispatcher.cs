@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Modulus.Messaging.Abstractions;
 using Modulus.Messaging.Diagnostics;
+using Modulus.Messaging.Internals;
 using Modulus.Messaging.Serialization;
 using Modulus.Messaging.Transports;
 
@@ -27,10 +28,55 @@ internal sealed class ConsumerDispatcher(
     MessagingOptions options,
     MessagingMetrics metrics)
 {
+    private static readonly ActivitySource Source = new(MessagingDiagnostics.ActivitySourceName);
+
     public async Task<MessageDispatchResult> DispatchAsync(
         TransportEnvelope envelope,
         CancellationToken cancellationToken)
     {
+        // One Consumer span per delivery, parented on the producer context that rode the
+        // envelope headers across the broker — this is what makes end-to-end traces possible.
+        // It spans the whole in-process retry loop; Activity.Current flows into handlers (and
+        // any TracingBehavior-instrumented mediator calls they make) for free.
+        using var activity = StartConsumeActivity(envelope);
+
+        var result = await DispatchCoreAsync(envelope, activity, cancellationToken).ConfigureAwait(false);
+
+        activity?.SetTag("modulus.outcome", result switch
+        {
+            MessageDispatchResult.Acknowledge => "acknowledge",
+            MessageDispatchResult.Retry => "retry",
+            _ => "dead_letter",
+        });
+        if (result == MessageDispatchResult.DeadLetter)
+            activity?.SetStatus(ActivityStatusCode.Error, "Message was dead-lettered.");
+
+        return result;
+    }
+
+    private static Activity? StartConsumeActivity(TransportEnvelope envelope)
+    {
+        var activity = TraceContextPropagation.TryExtract(envelope.Headers, out var parentContext)
+            ? Source.StartActivity($"{envelope.MessageType} process", ActivityKind.Consumer, parentContext)
+            : Source.StartActivity($"{envelope.MessageType} process", ActivityKind.Consumer);
+
+        activity?.SetTag("modulus.message_id", envelope.MessageId);
+        activity?.SetTag("modulus.message_type", envelope.MessageType);
+        return activity;
+    }
+
+    private async Task<MessageDispatchResult> DispatchCoreAsync(
+        TransportEnvelope envelope,
+        Activity? activity,
+        CancellationToken cancellationToken)
+    {
+        // A fan-out transport's redelivery copy targeted at a different endpoint: not ours.
+        if (RedeliveryHeaders.IsForeignRedelivery(envelope, EndpointNameResolver.Resolve(options)))
+        {
+            activity?.SetTag("modulus.dispatch", "foreign_redelivery");
+            return MessageDispatchResult.Acknowledge;
+        }
+
         var eventType = typeRegistry.Resolve(envelope.MessageType);
         if (eventType is null)
         {
@@ -38,6 +84,7 @@ internal sealed class ConsumerDispatcher(
                 "Received message {MessageId} with unknown or disallowed type {MessageType}. Acknowledging without dispatch.",
                 envelope.MessageId,
                 envelope.MessageType);
+            activity?.SetTag("modulus.dispatch", "unknown_type");
             return MessageDispatchResult.Acknowledge;
         }
 
@@ -54,6 +101,7 @@ internal sealed class ConsumerDispatcher(
                 envelope.MessageId,
                 envelope.MessageType);
             metrics.ConsumerDeadLettered(envelope.MessageType);
+            activity?.SetTag("modulus.dispatch", "deserialize_failed");
             return MessageDispatchResult.DeadLetter;
         }
 
@@ -72,6 +120,13 @@ internal sealed class ConsumerDispatcher(
         // Handlers whose reservation this dispatch already holds: a retry attempt must
         // re-execute them rather than see its own reservation as foreign and back off.
         var reservedByThisDispatch = new HashSet<string>(StringComparer.Ordinal);
+
+        if (options.ConsumerRetryMode == ConsumerRetryMode.Broker)
+        {
+            return await DispatchBrokerRetryAsync(
+                envelope, eventType, integrationEvent, maxAttempts, reservedByThisDispatch, activity, cancellationToken)
+                .ConfigureAwait(false);
+        }
 
         for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
@@ -114,6 +169,7 @@ internal sealed class ConsumerDispatcher(
                     attempt,
                     maxAttempts);
                 metrics.ConsumerRetry(envelope.MessageType);
+                activity?.SetTag("modulus.attempt", attempt + 1);
 
                 var delay = RetryDelayCalculator.GetDelay(options.ConsumerRetry, attempt);
                 if (delay > TimeSpan.Zero)
@@ -122,6 +178,70 @@ internal sealed class ConsumerDispatcher(
         }
 
         return MessageDispatchResult.DeadLetter;
+    }
+
+    /// <summary>
+    /// Broker-native retry: one handler pass per delivery, with the attempt number carried in
+    /// the message's <see cref="RedeliveryHeaders.AttemptHeader"/>. On failure with attempts
+    /// remaining, this dispatch's own reservations are released (the delayed redelivery may
+    /// arrive well inside <see cref="MessagingOptions.ConsumerReservationTimeout"/>) and
+    /// <see cref="MessageDispatchResult.Retry"/> tells the transport to schedule the copy —
+    /// no in-process sleep, so the concurrency slot frees immediately and the backoff
+    /// survives a crash.
+    /// </summary>
+    private async Task<MessageDispatchResult> DispatchBrokerRetryAsync(
+        TransportEnvelope envelope,
+        Type eventType,
+        IIntegrationEvent integrationEvent,
+        int maxAttempts,
+        HashSet<string> reservedByThisDispatch,
+        Activity? activity,
+        CancellationToken cancellationToken)
+    {
+        var attempt = RedeliveryHeaders.GetAttempt(envelope);
+        activity?.SetTag("modulus.attempt", attempt);
+
+        try
+        {
+            await HandleOnce(eventType, integrationEvent, reservedByThisDispatch, cancellationToken).ConfigureAwait(false);
+            return MessageDispatchResult.Acknowledge;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            if (attempt >= maxAttempts)
+            {
+                logger.LogError(
+                    ex,
+                    "Message {MessageId} of type {MessageType} failed after {Attempts} attempts and is being dead-lettered.",
+                    envelope.MessageId,
+                    envelope.MessageType,
+                    attempt);
+                metrics.ConsumerDeadLettered(envelope.MessageType);
+
+                await ReleaseReservationsAsync(integrationEvent.EventId, reservedByThisDispatch, cancellationToken)
+                    .ConfigureAwait(false);
+
+                return MessageDispatchResult.DeadLetter;
+            }
+
+            logger.LogWarning(
+                ex,
+                "Message {MessageId} of type {MessageType} failed (attempt {Attempt} of {Max}). Scheduling broker redelivery.",
+                envelope.MessageId,
+                envelope.MessageType,
+                attempt,
+                maxAttempts);
+            metrics.ConsumerRetry(envelope.MessageType);
+
+            await ReleaseReservationsAsync(integrationEvent.EventId, reservedByThisDispatch, cancellationToken)
+                .ConfigureAwait(false);
+
+            return MessageDispatchResult.Retry;
+        }
     }
 
     private async Task HandleOnce(

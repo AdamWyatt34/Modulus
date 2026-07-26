@@ -176,3 +176,49 @@ public class SlowHandler : IIntegrationEventHandler<SlowEvent>
         _completed = true;
     }
 }
+
+public record BrokerRetryEvent : IntegrationEvent
+{
+    public required int Value { get; init; }
+}
+
+/// <summary>Fails the first delivery, succeeds the broker-scheduled redelivery.</summary>
+public class BrokerRetryHandler : IIntegrationEventHandler<BrokerRetryEvent>
+{
+    private static int _attempts;
+
+    public static ConcurrentQueue<BrokerRetryEvent> Handled { get; } = [];
+
+    public static int Attempts => _attempts;
+
+    public static void Reset()
+    {
+        Interlocked.Exchange(ref _attempts, 0);
+        Handled.Clear();
+    }
+
+    public Task Handle(BrokerRetryEvent @event, CancellationToken cancellationToken = default)
+    {
+        if (Interlocked.Increment(ref _attempts) == 1)
+            throw new InvalidOperationException("Simulated transient failure");
+
+        Handled.Enqueue(@event);
+        return Task.CompletedTask;
+    }
+}
+
+public record ScheduledPublishEvent : IntegrationEvent
+{
+    public required int Value { get; init; }
+}
+
+public class ScheduledPublishHandler : IIntegrationEventHandler<ScheduledPublishEvent>
+{
+    public static ConcurrentQueue<(ScheduledPublishEvent Event, DateTime ReceivedAtUtc)> Handled { get; } = [];
+
+    public Task Handle(ScheduledPublishEvent @event, CancellationToken cancellationToken = default)
+    {
+        Handled.Enqueue((@event, DateTime.UtcNow));
+        return Task.CompletedTask;
+    }
+}

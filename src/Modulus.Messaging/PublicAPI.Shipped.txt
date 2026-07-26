@@ -1,0 +1,182 @@
+#nullable enable
+Modulus.Messaging.ConsumerRetryMode
+Modulus.Messaging.ConsumerRetryMode.Broker = 1 -> Modulus.Messaging.ConsumerRetryMode
+Modulus.Messaging.ConsumerRetryMode.InProcess = 0 -> Modulus.Messaging.ConsumerRetryMode
+Modulus.Messaging.DependencyInjection.ModulusMessagingApplicationBuilderExtensions
+Modulus.Messaging.Diagnostics.MessagingDiagnostics
+Modulus.Messaging.HealthChecks.HealthChecksBuilderExtensions
+Modulus.Messaging.HealthChecks.ModulusMessagingHealthCheckOptions
+Modulus.Messaging.HealthChecks.ModulusMessagingHealthCheckOptions.ModulusMessagingHealthCheckOptions() -> void
+Modulus.Messaging.HealthChecks.ModulusMessagingHealthCheckOptions.OutboxDegradedThreshold.get -> int
+Modulus.Messaging.HealthChecks.ModulusMessagingHealthCheckOptions.OutboxDegradedThreshold.set -> void
+Modulus.Messaging.HealthChecks.ModulusMessagingHealthCheckOptions.OutboxUnhealthyThreshold.get -> int
+Modulus.Messaging.HealthChecks.ModulusMessagingHealthCheckOptions.OutboxUnhealthyThreshold.set -> void
+Modulus.Messaging.Inbox.EfInboxAdminStore
+Modulus.Messaging.Inbox.EfInboxAdminStore.CountOldAsync(System.DateTime olderThanUtc, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Modulus.Messaging.Inbox.EfInboxAdminStore.EfInboxAdminStore(Modulus.Messaging.Inbox.InboxDbContext! dbContext) -> void
+Modulus.Messaging.Inbox.EfInboxAdminStore.PurgeOldAsync(System.DateTime olderThanUtc, int batchSize, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Modulus.Messaging.Inbox.InboxDbContext
+Modulus.Messaging.Inbox.InboxDbContext.InboxDbContext(Microsoft.EntityFrameworkCore.DbContextOptions<Modulus.Messaging.Inbox.InboxDbContext!>! options) -> void
+Modulus.Messaging.Inbox.InboxDbContext.InboxMessageConsumers.get -> Microsoft.EntityFrameworkCore.DbSet<Modulus.Messaging.Abstractions.InboxMessageConsumer!>!
+Modulus.Messaging.Inbox.InboxDbContext.InboxMessages.get -> Microsoft.EntityFrameworkCore.DbSet<Modulus.Messaging.Abstractions.InboxMessage!>!
+Modulus.Messaging.MessagingOptions
+Modulus.Messaging.MessagingOptions.Assemblies.get -> System.Collections.Generic.List<System.Reflection.Assembly!>!
+Modulus.Messaging.MessagingOptions.AutoProvision.get -> bool
+Modulus.Messaging.MessagingOptions.AutoProvision.set -> void
+Modulus.Messaging.MessagingOptions.ConnectionString.get -> string?
+Modulus.Messaging.MessagingOptions.ConnectionString.set -> void
+Modulus.Messaging.MessagingOptions.ConsumerReservationTimeout.get -> System.TimeSpan
+Modulus.Messaging.MessagingOptions.ConsumerReservationTimeout.set -> void
+Modulus.Messaging.MessagingOptions.ConsumerRetry.get -> Modulus.Messaging.RetryPolicyOptions!
+Modulus.Messaging.MessagingOptions.ConsumerRetry.set -> void
+Modulus.Messaging.MessagingOptions.ConsumerRetryMode.get -> Modulus.Messaging.ConsumerRetryMode
+Modulus.Messaging.MessagingOptions.ConsumerRetryMode.set -> void
+Modulus.Messaging.MessagingOptions.Credential.get -> Azure.Core.TokenCredential?
+Modulus.Messaging.MessagingOptions.Credential.set -> void
+Modulus.Messaging.MessagingOptions.EndpointName.get -> string?
+Modulus.Messaging.MessagingOptions.EndpointName.set -> void
+Modulus.Messaging.MessagingOptions.FullyQualifiedNamespace.get -> string?
+Modulus.Messaging.MessagingOptions.FullyQualifiedNamespace.set -> void
+Modulus.Messaging.MessagingOptions.MessagingOptions() -> void
+Modulus.Messaging.MessagingOptions.OutboxBatchSize.get -> int
+Modulus.Messaging.MessagingOptions.OutboxBatchSize.set -> void
+Modulus.Messaging.MessagingOptions.OutboxPollInterval.get -> System.TimeSpan
+Modulus.Messaging.MessagingOptions.OutboxPollInterval.set -> void
+Modulus.Messaging.MessagingOptions.PrefetchCount.get -> int
+Modulus.Messaging.MessagingOptions.PrefetchCount.set -> void
+Modulus.Messaging.MessagingOptions.Retention.get -> Modulus.Messaging.RetentionOptions!
+Modulus.Messaging.MessagingOptions.Retention.set -> void
+Modulus.Messaging.MessagingOptions.RetryPolicy.get -> Modulus.Messaging.RetryPolicyOptions!
+Modulus.Messaging.MessagingOptions.RetryPolicy.set -> void
+Modulus.Messaging.MessagingOptions.Transport.get -> Modulus.Messaging.Transport
+Modulus.Messaging.MessagingOptions.Transport.set -> void
+Modulus.Messaging.Outbox.EfOutboxAdminStore
+Modulus.Messaging.Outbox.EfOutboxAdminStore.CountProcessedAsync(System.DateTime olderThanUtc, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Modulus.Messaging.Outbox.EfOutboxAdminStore.EfOutboxAdminStore(Modulus.Messaging.Outbox.OutboxDbContext! dbContext) -> void
+Modulus.Messaging.Outbox.EfOutboxAdminStore.GetFailedAsync(int maxAttempts, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Modulus.Messaging.Abstractions.OutboxMessage!>!>!
+Modulus.Messaging.Outbox.EfOutboxAdminStore.PurgeAsync(System.Guid messageId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<bool>!
+Modulus.Messaging.Outbox.EfOutboxAdminStore.PurgeProcessedAsync(System.DateTime olderThanUtc, int batchSize, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Modulus.Messaging.Outbox.EfOutboxAdminStore.RetryAsync(System.Guid messageId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<bool>!
+Modulus.Messaging.Outbox.IOutboxNotifier
+Modulus.Messaging.Outbox.IOutboxNotifier.Notify() -> void
+Modulus.Messaging.Outbox.IOutboxNotifier.WaitAsync(System.TimeSpan maxWait, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<bool>!
+Modulus.Messaging.Outbox.OutboxDbContext
+Modulus.Messaging.Outbox.OutboxDbContext.OutboxDbContext(Microsoft.EntityFrameworkCore.DbContextOptions<Modulus.Messaging.Outbox.OutboxDbContext!>! options) -> void
+Modulus.Messaging.Outbox.OutboxDbContext.OutboxMessages.get -> Microsoft.EntityFrameworkCore.DbSet<Modulus.Messaging.Abstractions.OutboxMessage!>!
+Modulus.Messaging.Outbox.OutboxNotifyingInterceptor
+Modulus.Messaging.Outbox.OutboxNotifyingInterceptor.OutboxNotifyingInterceptor(Modulus.Messaging.Outbox.IOutboxNotifier! notifier) -> void
+Modulus.Messaging.Outbox.OutboxNotifyingInterceptor.SaveChangesFailed(Microsoft.EntityFrameworkCore.Diagnostics.DbContextErrorEventData! eventData) -> void
+Modulus.Messaging.Outbox.OutboxNotifyingInterceptor.SaveChangesFailedAsync(Microsoft.EntityFrameworkCore.Diagnostics.DbContextErrorEventData! eventData, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Modulus.Messaging.Outbox.OutboxNotifyingInterceptor.SavedChanges(Microsoft.EntityFrameworkCore.Diagnostics.SaveChangesCompletedEventData! eventData, int result) -> int
+Modulus.Messaging.Outbox.OutboxNotifyingInterceptor.SavedChangesAsync(Microsoft.EntityFrameworkCore.Diagnostics.SaveChangesCompletedEventData! eventData, int result, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>
+Modulus.Messaging.Outbox.OutboxNotifyingInterceptor.SavingChanges(Microsoft.EntityFrameworkCore.Diagnostics.DbContextEventData! eventData, Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int> result) -> Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int>
+Modulus.Messaging.Outbox.OutboxNotifyingInterceptor.SavingChangesAsync(Microsoft.EntityFrameworkCore.Diagnostics.DbContextEventData! eventData, Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int> result, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int>>
+Modulus.Messaging.Outbox.OutboxNotifyingInterceptor.TransactionCommitted(System.Data.Common.DbTransaction! transaction, Microsoft.EntityFrameworkCore.Diagnostics.TransactionEndEventData! eventData) -> void
+Modulus.Messaging.Outbox.OutboxNotifyingInterceptor.TransactionCommittedAsync(System.Data.Common.DbTransaction! transaction, Microsoft.EntityFrameworkCore.Diagnostics.TransactionEndEventData! eventData, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Modulus.Messaging.Outbox.OutboxNotifyingInterceptor.TransactionRolledBack(System.Data.Common.DbTransaction! transaction, Microsoft.EntityFrameworkCore.Diagnostics.TransactionEndEventData! eventData) -> void
+Modulus.Messaging.Outbox.OutboxNotifyingInterceptor.TransactionRolledBackAsync(System.Data.Common.DbTransaction! transaction, Microsoft.EntityFrameworkCore.Diagnostics.TransactionEndEventData! eventData, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Modulus.Messaging.RetentionOptions
+Modulus.Messaging.RetentionOptions.Enabled.get -> bool
+Modulus.Messaging.RetentionOptions.Enabled.set -> void
+Modulus.Messaging.RetentionOptions.InboxAge.get -> System.TimeSpan
+Modulus.Messaging.RetentionOptions.InboxAge.set -> void
+Modulus.Messaging.RetentionOptions.ProcessedOutboxAge.get -> System.TimeSpan
+Modulus.Messaging.RetentionOptions.ProcessedOutboxAge.set -> void
+Modulus.Messaging.RetentionOptions.PurgeBatchSize.get -> int
+Modulus.Messaging.RetentionOptions.PurgeBatchSize.set -> void
+Modulus.Messaging.RetentionOptions.RetentionOptions() -> void
+Modulus.Messaging.RetentionOptions.SweepInterval.get -> System.TimeSpan
+Modulus.Messaging.RetentionOptions.SweepInterval.set -> void
+Modulus.Messaging.RetryPolicyOptions
+Modulus.Messaging.RetryPolicyOptions.InitialInterval.get -> System.TimeSpan
+Modulus.Messaging.RetryPolicyOptions.InitialInterval.set -> void
+Modulus.Messaging.RetryPolicyOptions.IntervalIncrement.get -> System.TimeSpan
+Modulus.Messaging.RetryPolicyOptions.IntervalIncrement.set -> void
+Modulus.Messaging.RetryPolicyOptions.MaxAttempts.get -> int
+Modulus.Messaging.RetryPolicyOptions.MaxAttempts.set -> void
+Modulus.Messaging.RetryPolicyOptions.MaxInterval.get -> System.TimeSpan
+Modulus.Messaging.RetryPolicyOptions.MaxInterval.set -> void
+Modulus.Messaging.RetryPolicyOptions.RetryPolicyOptions() -> void
+Modulus.Messaging.ServiceCollectionExtensions
+Modulus.Messaging.Transport
+Modulus.Messaging.Transport.AzureServiceBus = 2 -> Modulus.Messaging.Transport
+Modulus.Messaging.Transport.InMemory = 0 -> Modulus.Messaging.Transport
+Modulus.Messaging.Transport.RabbitMq = 1 -> Modulus.Messaging.Transport
+Modulus.Messaging.Transports.IMessageTransport
+Modulus.Messaging.Transports.IMessageTransport.PublishAsync(Modulus.Messaging.Transports.TransportEnvelope! envelope, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Modulus.Messaging.Transports.IMessageTransport.StartConsumingAsync(System.Collections.Generic.IReadOnlyList<Modulus.Messaging.Transports.TransportSubscription!>! subscriptions, System.Func<Modulus.Messaging.Transports.TransportEnvelope!, System.Threading.CancellationToken, System.Threading.Tasks.Task<Modulus.Messaging.Transports.MessageDispatchResult>!>! onMessage, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Modulus.Messaging.Transports.IMessageTransport.StopConsumingAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Modulus.Messaging.Transports.ITransportFactory
+Modulus.Messaging.Transports.ITransportFactory.Create(System.IServiceProvider! provider, Modulus.Messaging.MessagingOptions! options) -> Modulus.Messaging.Transports.IMessageTransport!
+Modulus.Messaging.Transports.ITransportFactory.Transport.get -> Modulus.Messaging.Transport
+Modulus.Messaging.Transports.ITransportHealthProbe
+Modulus.Messaging.Transports.ITransportHealthProbe.CheckHealthAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Modulus.Messaging.Transports.TransportHealth>
+Modulus.Messaging.Transports.MessageDispatchResult
+Modulus.Messaging.Transports.MessageDispatchResult.Acknowledge = 0 -> Modulus.Messaging.Transports.MessageDispatchResult
+Modulus.Messaging.Transports.MessageDispatchResult.DeadLetter = 1 -> Modulus.Messaging.Transports.MessageDispatchResult
+Modulus.Messaging.Transports.MessageDispatchResult.Retry = 2 -> Modulus.Messaging.Transports.MessageDispatchResult
+Modulus.Messaging.Transports.TransportEnvelope
+Modulus.Messaging.Transports.TransportEnvelope.<Clone>$() -> Modulus.Messaging.Transports.TransportEnvelope!
+Modulus.Messaging.Transports.TransportEnvelope.Body.get -> System.ReadOnlyMemory<byte>
+Modulus.Messaging.Transports.TransportEnvelope.Body.init -> void
+Modulus.Messaging.Transports.TransportEnvelope.ContentType.get -> string!
+Modulus.Messaging.Transports.TransportEnvelope.ContentType.init -> void
+Modulus.Messaging.Transports.TransportEnvelope.CorrelationId.get -> string?
+Modulus.Messaging.Transports.TransportEnvelope.CorrelationId.init -> void
+Modulus.Messaging.Transports.TransportEnvelope.Deconstruct(out string! MessageType, out System.Guid MessageId, out string? CorrelationId, out System.DateTime OccurredOn, out System.ReadOnlyMemory<byte> Body, out string! ContentType) -> void
+Modulus.Messaging.Transports.TransportEnvelope.Equals(Modulus.Messaging.Transports.TransportEnvelope? other) -> bool
+Modulus.Messaging.Transports.TransportEnvelope.Headers.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>?
+Modulus.Messaging.Transports.TransportEnvelope.Headers.init -> void
+Modulus.Messaging.Transports.TransportEnvelope.MessageId.get -> System.Guid
+Modulus.Messaging.Transports.TransportEnvelope.MessageId.init -> void
+Modulus.Messaging.Transports.TransportEnvelope.MessageType.get -> string!
+Modulus.Messaging.Transports.TransportEnvelope.MessageType.init -> void
+Modulus.Messaging.Transports.TransportEnvelope.OccurredOn.get -> System.DateTime
+Modulus.Messaging.Transports.TransportEnvelope.OccurredOn.init -> void
+Modulus.Messaging.Transports.TransportEnvelope.ScheduledEnqueueTimeUtc.get -> System.DateTimeOffset?
+Modulus.Messaging.Transports.TransportEnvelope.ScheduledEnqueueTimeUtc.init -> void
+Modulus.Messaging.Transports.TransportEnvelope.TransportEnvelope(string! MessageType, System.Guid MessageId, string? CorrelationId, System.DateTime OccurredOn, System.ReadOnlyMemory<byte> Body, string! ContentType = "application/json") -> void
+Modulus.Messaging.Transports.TransportHealth
+Modulus.Messaging.Transports.TransportHealth.Deconstruct(out bool IsHealthy, out string? Description) -> void
+Modulus.Messaging.Transports.TransportHealth.Description.get -> string?
+Modulus.Messaging.Transports.TransportHealth.Description.init -> void
+Modulus.Messaging.Transports.TransportHealth.Equals(Modulus.Messaging.Transports.TransportHealth other) -> bool
+Modulus.Messaging.Transports.TransportHealth.IsHealthy.get -> bool
+Modulus.Messaging.Transports.TransportHealth.IsHealthy.init -> void
+Modulus.Messaging.Transports.TransportHealth.TransportHealth() -> void
+Modulus.Messaging.Transports.TransportHealth.TransportHealth(bool IsHealthy, string? Description = null) -> void
+Modulus.Messaging.Transports.TransportSubscription
+Modulus.Messaging.Transports.TransportSubscription.<Clone>$() -> Modulus.Messaging.Transports.TransportSubscription!
+Modulus.Messaging.Transports.TransportSubscription.Deconstruct(out System.Type! EventType, out string! MessageTypeName) -> void
+Modulus.Messaging.Transports.TransportSubscription.Equals(Modulus.Messaging.Transports.TransportSubscription? other) -> bool
+Modulus.Messaging.Transports.TransportSubscription.EventType.get -> System.Type!
+Modulus.Messaging.Transports.TransportSubscription.EventType.init -> void
+Modulus.Messaging.Transports.TransportSubscription.MessageTypeName.get -> string!
+Modulus.Messaging.Transports.TransportSubscription.MessageTypeName.init -> void
+Modulus.Messaging.Transports.TransportSubscription.TransportSubscription(System.Type! EventType, string! MessageTypeName) -> void
+const Modulus.Messaging.Diagnostics.MessagingDiagnostics.ActivitySourceName = "Modulus.Messaging" -> string!
+const Modulus.Messaging.Diagnostics.MessagingDiagnostics.OutboxActivitySourceName = "Modulus.Messaging.Outbox" -> string!
+const Modulus.Messaging.Diagnostics.MessagingDiagnostics.TraceParentHeader = "traceparent" -> string!
+const Modulus.Messaging.Diagnostics.MessagingDiagnostics.TraceStateHeader = "tracestate" -> string!
+const Modulus.Messaging.MessagingOptions.SectionName = "Messaging" -> string!
+override Modulus.Messaging.Transports.TransportEnvelope.Equals(object? obj) -> bool
+override Modulus.Messaging.Transports.TransportEnvelope.GetHashCode() -> int
+override Modulus.Messaging.Transports.TransportEnvelope.ToString() -> string!
+override Modulus.Messaging.Transports.TransportHealth.GetHashCode() -> int
+override Modulus.Messaging.Transports.TransportSubscription.Equals(object? obj) -> bool
+override Modulus.Messaging.Transports.TransportSubscription.GetHashCode() -> int
+override Modulus.Messaging.Transports.TransportSubscription.ToString() -> string!
+static Modulus.Messaging.DependencyInjection.ModulusMessagingApplicationBuilderExtensions.UseModulusMessagingMigrationsAsync(this Microsoft.Extensions.Hosting.IHost! host, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+static Modulus.Messaging.HealthChecks.HealthChecksBuilderExtensions.AddModulusMessaging(this Microsoft.Extensions.DependencyInjection.IHealthChecksBuilder! builder, System.Action<Modulus.Messaging.HealthChecks.ModulusMessagingHealthCheckOptions!>? configure = null) -> Microsoft.Extensions.DependencyInjection.IHealthChecksBuilder!
+static Modulus.Messaging.ServiceCollectionExtensions.AddModulusInbox(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<Microsoft.EntityFrameworkCore.DbContextOptionsBuilder!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Modulus.Messaging.ServiceCollectionExtensions.AddModulusMessaging(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Microsoft.Extensions.Configuration.IConfiguration! configuration, System.Action<Modulus.Messaging.MessagingOptions!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Modulus.Messaging.ServiceCollectionExtensions.AddModulusMessaging(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<Modulus.Messaging.MessagingOptions!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Modulus.Messaging.ServiceCollectionExtensions.AddModulusOutbox(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<Microsoft.EntityFrameworkCore.DbContextOptionsBuilder!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Modulus.Messaging.Transports.TransportEnvelope.operator !=(Modulus.Messaging.Transports.TransportEnvelope? left, Modulus.Messaging.Transports.TransportEnvelope? right) -> bool
+static Modulus.Messaging.Transports.TransportEnvelope.operator ==(Modulus.Messaging.Transports.TransportEnvelope? left, Modulus.Messaging.Transports.TransportEnvelope? right) -> bool
+static Modulus.Messaging.Transports.TransportHealth.operator !=(Modulus.Messaging.Transports.TransportHealth left, Modulus.Messaging.Transports.TransportHealth right) -> bool
+static Modulus.Messaging.Transports.TransportHealth.operator ==(Modulus.Messaging.Transports.TransportHealth left, Modulus.Messaging.Transports.TransportHealth right) -> bool
+static Modulus.Messaging.Transports.TransportSubscription.operator !=(Modulus.Messaging.Transports.TransportSubscription? left, Modulus.Messaging.Transports.TransportSubscription? right) -> bool
+static Modulus.Messaging.Transports.TransportSubscription.operator ==(Modulus.Messaging.Transports.TransportSubscription? left, Modulus.Messaging.Transports.TransportSubscription? right) -> bool
+~override Modulus.Messaging.Transports.TransportHealth.Equals(object obj) -> bool
+~override Modulus.Messaging.Transports.TransportHealth.ToString() -> string

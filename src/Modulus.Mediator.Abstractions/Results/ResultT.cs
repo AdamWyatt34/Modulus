@@ -48,6 +48,91 @@ public class Result<TValue> : Result
     public TOut Match<TOut>(Func<TValue, TOut> onSuccess, Func<Result<TValue>, TOut> onFailure)
         => IsSuccess ? onSuccess(Value) : onFailure(this);
 
+    /// <summary>Applies one of two asynchronous functions depending on whether the result is a success or failure.</summary>
+    public Task<TOut> MatchAsync<TOut>(Func<TValue, Task<TOut>> onSuccess, Func<Result<TValue>, Task<TOut>> onFailure)
+        => IsSuccess ? onSuccess(Value) : onFailure(this);
+
+    /// <summary>Chains the next operation on the value when this result is a success; otherwise propagates the failure.</summary>
+    public Result<TOut> Bind<TOut>(Func<TValue, Result<TOut>> next)
+    {
+        ArgumentNullException.ThrowIfNull(next);
+        return IsSuccess ? next(Value) : Result<TOut>.Failure(Errors);
+    }
+
+    /// <summary>Chains the next valueless operation on the value when this result is a success; otherwise propagates the failure.</summary>
+    public Result Bind(Func<TValue, Result> next)
+    {
+        ArgumentNullException.ThrowIfNull(next);
+        return IsSuccess ? next(Value) : Result.Failure(Errors);
+    }
+
+    /// <summary>Chains the next asynchronous operation on the value when this result is a success; otherwise propagates the failure.</summary>
+    public Task<Result<TOut>> BindAsync<TOut>(Func<TValue, Task<Result<TOut>>> next)
+    {
+        ArgumentNullException.ThrowIfNull(next);
+        return IsSuccess ? next(Value) : Task.FromResult(Result<TOut>.Failure(Errors));
+    }
+
+    /// <summary>Chains the next asynchronous valueless operation on the value when this result is a success; otherwise propagates the failure.</summary>
+    public Task<Result> BindAsync(Func<TValue, Task<Result>> next)
+    {
+        ArgumentNullException.ThrowIfNull(next);
+        return IsSuccess ? next(Value) : Task.FromResult(Result.Failure(Errors));
+    }
+
+    /// <summary>Transforms the value when this result is a success; otherwise propagates the failure.</summary>
+    /// <exception cref="ArgumentNullException"><paramref name="map"/> returns <see langword="null"/>.</exception>
+    public Result<TOut> Map<TOut>(Func<TValue, TOut> map)
+    {
+        ArgumentNullException.ThrowIfNull(map);
+        return IsSuccess ? Result<TOut>.Success(map(Value)) : Result<TOut>.Failure(Errors);
+    }
+
+    /// <summary>Transforms the value asynchronously when this result is a success; otherwise propagates the failure.</summary>
+    /// <exception cref="ArgumentNullException"><paramref name="map"/> returns <see langword="null"/>.</exception>
+    public async Task<Result<TOut>> MapAsync<TOut>(Func<TValue, Task<TOut>> map)
+    {
+        ArgumentNullException.ThrowIfNull(map);
+        return IsSuccess ? Result<TOut>.Success(await map(Value).ConfigureAwait(false)) : Result<TOut>.Failure(Errors);
+    }
+
+    /// <summary>Executes a side effect on the value when this result is a success, then returns the result unchanged.</summary>
+    public Result<TValue> Tap(Action<TValue> action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        if (IsSuccess)
+            action(Value);
+        return this;
+    }
+
+    /// <summary>Executes an asynchronous side effect on the value when this result is a success, then returns the result unchanged.</summary>
+    public async Task<Result<TValue>> TapAsync(Func<TValue, Task> action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        if (IsSuccess)
+            await action(Value).ConfigureAwait(false);
+        return this;
+    }
+
+    /// <summary>Fails a successful result with <paramref name="error"/> when <paramref name="predicate"/> returns <see langword="false"/> for the value.</summary>
+    public Result<TValue> Ensure(Func<TValue, bool> predicate, Error error)
+    {
+        ArgumentNullException.ThrowIfNull(predicate);
+        if (IsFailure)
+            return this;
+        return predicate(Value) ? this : Failure(error);
+    }
+
+    /// <summary>Fails a successful result when <paramref name="predicate"/> returns <see langword="false"/> for the value, building the error from the value.</summary>
+    public Result<TValue> Ensure(Func<TValue, bool> predicate, Func<TValue, Error> errorFactory)
+    {
+        ArgumentNullException.ThrowIfNull(predicate);
+        ArgumentNullException.ThrowIfNull(errorFactory);
+        if (IsFailure)
+            return this;
+        return predicate(Value) ? this : Failure(errorFactory(Value));
+    }
+
     /// <summary>Implicitly converts a value to a successful <see cref="Result{TValue}"/>.</summary>
     /// <exception cref="ArgumentNullException"><paramref name="value"/> is <see langword="null"/>.</exception>
     public static implicit operator Result<TValue>(TValue value) => Success(value);

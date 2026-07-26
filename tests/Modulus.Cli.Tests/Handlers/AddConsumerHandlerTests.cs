@@ -423,4 +423,57 @@ public class AddConsumerHandlerTests
         result.ShouldBe(0);
         _console.SuccessLines.ShouldContain(l => l.Contains("OrderShippedHandler") && l.Contains("Shipping"));
     }
+
+    // ── --dry-run ─────────────────────────────────────────────────
+
+    [Fact]
+    public async Task AddConsumer_dry_run_writes_no_handler_file()
+    {
+        SeedSolution();
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync("OrderShipped", "Shipping", Slnx, null, dryRun: true);
+
+        result.ShouldBe(0);
+        _fs.FileExists(HandlerPath).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task AddConsumer_dry_run_does_not_edit_csproj()
+    {
+        SeedSolution();
+        var handler = CreateHandler();
+        var before = _fs.ReadAllText(ShippingInfraCsproj);
+
+        await handler.ExecuteAsync("OrderShipped", "Shipping", Slnx, null, dryRun: true);
+
+        _fs.ReadAllText(ShippingInfraCsproj).ShouldBe(before);
+    }
+
+    [Fact]
+    public async Task AddConsumer_dry_run_prints_planned_create_and_edit()
+    {
+        SeedSolution();
+        var handler = CreateHandler();
+
+        await handler.ExecuteAsync("OrderShipped", "Shipping", Slnx, null, dryRun: true);
+
+        _console.Lines.ShouldContain(l => l.Contains("OrderShippedHandler.cs"));
+        _console.Lines.ShouldContain(l => l.Contains("Shipping.Infrastructure.csproj") && l.Contains("Orders.Integration"));
+    }
+
+    [Fact]
+    public async Task AddConsumer_dry_run_still_errors_when_handler_already_exists_and_wired()
+    {
+        // A dry run must preview reality — including a failure the real run would also produce —
+        // rather than silently reporting success.
+        SeedSolution();
+        var handler = CreateHandler();
+        await handler.ExecuteAsync("OrderShipped", "Shipping", Slnx, null);
+
+        var result = await handler.ExecuteAsync("OrderShipped", "Shipping", Slnx, null, dryRun: true);
+
+        result.ShouldBe(1);
+        _console.ErrorLines.ShouldContain(l => l.Contains("already exists"));
+    }
 }

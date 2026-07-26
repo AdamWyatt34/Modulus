@@ -23,6 +23,14 @@ public sealed class EndpointGenerator
             _ => "MapGet",
         };
 
+        // Route parameters (e.g. "{itemId:guid}" -> Guid itemId) are bound as leading lambda
+        // parameters and forwarded positionally into the wired command/query's constructor —
+        // the convention documented on `modulus add-endpoint` is that the target record declares
+        // matching positional parameters, in the same order they appear in the route.
+        var routeParams = RouteTemplateParser.Parse(o.Route);
+        var routeParamDecls = string.Join(", ", routeParams.Select(p => $"{p.ClrType} {p.Name}"));
+        var routeArgs = string.Join(", ", routeParams.Select(p => p.Name));
+
         // Using directives
         sb.AppendLine("using Microsoft.AspNetCore.Builder;");
         sb.AppendLine("using Microsoft.AspNetCore.Http;");
@@ -58,9 +66,15 @@ public sealed class EndpointGenerator
 
         if (o.QueryName is not null)
         {
-            sb.AppendLine($"        app.{mapMethod}(\"{o.Route}\", async (IMediator mediator, CancellationToken ct) =>");
+            var lambdaParams = routeParams.Count > 0
+                ? $"{routeParamDecls}, IMediator mediator, CancellationToken ct"
+                : "IMediator mediator, CancellationToken ct";
+
+            sb.AppendLine($"        app.{mapMethod}(\"{o.Route}\", async ({lambdaParams}) =>");
             sb.AppendLine("        {");
-            sb.AppendLine($"            var result = await mediator.Query(new {o.QueryName}(), ct);");
+            // global::-qualified: an endpoint named after its query (a natural choice) would
+            // otherwise have `new {QueryName}` resolve to the enclosing endpoint class itself.
+            sb.AppendLine($"            var result = await mediator.Query(new global::{o.SolutionName}.{o.ModuleName}.Application.Queries.{o.QueryName}.{o.QueryName}({routeArgs}), ct);");
             sb.AppendLine("            return result.Match(Results.Ok, ApiResults.Problem);");
             sb.AppendLine("        })");
             sb.AppendLine($"        .WithName(\"{o.EndpointName}\")");
@@ -69,23 +83,30 @@ public sealed class EndpointGenerator
         }
         else if (o.CommandName is not null)
         {
-            sb.AppendLine($"        app.{mapMethod}(\"{o.Route}\", async (IMediator mediator, CancellationToken ct) =>");
+            var lambdaParams = routeParams.Count > 0
+                ? $"{routeParamDecls}, IMediator mediator, CancellationToken ct"
+                : "IMediator mediator, CancellationToken ct";
+
+            sb.AppendLine($"        app.{mapMethod}(\"{o.Route}\", async ({lambdaParams}) =>");
             sb.AppendLine("        {");
-            sb.AppendLine($"            var result = await mediator.Send(new {o.CommandName}(), ct);");
+            // global::-qualified for the same self-name-shadowing reason as the query shape.
+            sb.AppendLine($"            var result = await mediator.Send(new global::{o.SolutionName}.{o.ModuleName}.Application.Commands.{o.CommandName}.{o.CommandName}({routeArgs}), ct);");
 
             if (o.ResultType is not null && o.HttpMethod == "POST")
             {
-                // The Location value is resolved here (generation time), not with a C#
-                // interpolated string in the generated file: the route may contain literal
-                // "{param}" placeholders (e.g. "/items/{itemId}"), and emitting those inside a
-                // generated `$"..."` string would make the compiler treat "{itemId}" as an
-                // interpolation hole with no such variable in scope (CS0103). Concatenating a
-                // plain, non-interpolated string literal keeps the braces inert text either way.
-                var location = "/api/" + o.ModuleName.ToLowerInvariant() + o.Route;
-                sb.AppendLine("            // NOTE: route parameters, if any, aren't bound into the Location value below yet —");
-                sb.AppendLine("            // it echoes the raw route template. Wire real values in once add-endpoint supports it.");
+                // The Location template is resolved here (generation time) with every route
+                // parameter segment rewritten to a bare "{name}" hole
+                // (RouteTemplateParser.ToInterpolationTemplate) before being spliced into the
+                // generated file's own interpolated string. A raw "{id:guid}" segment would
+                // otherwise be parsed by *that* interpolated string as an alignment/format-string
+                // clause ("id" formatted with the non-existent "guid" format), which throws at
+                // runtime even though it compiles.
+                var locationTemplate = "/api/" + o.ModuleName.ToLowerInvariant()
+                    + RouteTemplateParser.ToInterpolationTemplate(o.Route);
+                var interpolate = routeParams.Count > 0 ? "$" : "";
+
                 sb.AppendLine($"            return result.Match(");
-                sb.AppendLine($"                value => Results.Created(\"{location}\", value),");
+                sb.AppendLine($"                value => Results.Created({interpolate}\"{locationTemplate}\", value),");
                 sb.AppendLine("                ApiResults.Problem);");
             }
             else if (o.ResultType is not null)
@@ -120,7 +141,11 @@ public sealed class EndpointGenerator
         }
         else
         {
-            sb.AppendLine($"        app.{mapMethod}(\"{o.Route}\", async (CancellationToken ct) =>");
+            var lambdaParams = routeParams.Count > 0
+                ? $"{routeParamDecls}, CancellationToken ct"
+                : "CancellationToken ct";
+
+            sb.AppendLine($"        app.{mapMethod}(\"{o.Route}\", async ({lambdaParams}) =>");
             sb.AppendLine("        {");
             sb.AppendLine("            // TODO: Wire up to a command or query");
             sb.AppendLine("            return Results.Ok();");

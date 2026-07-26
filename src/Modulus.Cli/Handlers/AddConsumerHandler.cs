@@ -15,7 +15,8 @@ public sealed class AddConsumerHandler(
         string eventName,
         string moduleName,
         string? solutionPath,
-        string? eventModule)
+        string? eventModule,
+        bool dryRun = false)
     {
         if (!CSharpIdentifierValidator.IsValid(eventName))
         {
@@ -150,6 +151,36 @@ public sealed class AddConsumerHandler(
 
         var handlerFilePath = Path.Combine(infrastructureDir, "IntegrationEventHandlers", $"{eventName}Handler.cs");
         var handlerExists = fileSystem.FileExists(handlerFilePath);
+
+        if (dryRun)
+        {
+            // Read-only equivalent of AddIntegrationProjectReference's own check — this previews
+            // the real run's decision without writing the csproj.
+            var wouldAddReference = !ProjectReferenceEditor.HasReferenceTo(csprojText, $"{sourceModule}.Integration.csproj");
+
+            if (handlerExists && !wouldAddReference)
+            {
+                // Mirrors the real run's own failure path below: an existing, already-wired
+                // handler is a hard error whether or not --dry-run was passed.
+                console.WriteError($"Consumer '{eventName}Handler' already exists at '{handlerFilePath}'.");
+                return Task.FromResult(1);
+            }
+
+            console.WriteLine("Dry run — no files were written. The following would happen:");
+
+            if (!handlerExists)
+            {
+                console.WriteLine($"  create  {handlerFilePath}  -- {eventName}Handler : IIntegrationEventHandler<{eventName}>");
+            }
+
+            if (wouldAddReference)
+            {
+                console.WriteLine($"  edit    {csprojPath}  -- add ProjectReference to {sourceModule}.Integration");
+            }
+
+            console.WriteLine("Re-run without --dry-run to apply.");
+            return Task.FromResult(0);
+        }
 
         // Wire the cross-module reference first so a later failure can never leave an
         // un-referenced (non-compiling) handler behind. The operation is idempotent: it

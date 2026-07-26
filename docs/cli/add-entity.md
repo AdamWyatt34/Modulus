@@ -22,7 +22,8 @@ modulus add-entity <entity-name> [options]
 | `--solution, -s <path>` | Path to the `.slnx` solution file. | Auto-discovered |
 | `--aggregate` | Generate the entity as an `AggregateRoot` instead of a plain `Entity`. Aggregate roots can raise domain events and serve as consistency boundaries. | Plain `Entity` |
 | `--id-type <type>` | Type for the strongly-typed ID: `guid`, `int`, `long`, `string`, or any custom type. | `guid` |
-| `--properties, -p <props>` | Comma-separated `Name:Type` pairs to generate as properties (e.g., `"Name:string,Price:decimal"`). | No properties |
+| `--properties, -p <props>` | Comma-separated `Name:Type` pairs to generate as properties (e.g., `"Name:string,Price:decimal"`). Types accept built-in aliases, BCL types, fully-qualified names, nullable (`string?`), arrays (`decimal[]`), and generic types (`List<string>`, `Dictionary<string, decimal>`, arbitrarily nested) -- commas nested inside `<...>` are not treated as property separators. | No properties |
+| `--dry-run` | Print the files that would be created without writing anything. | Disabled |
 
 ## Generated Output
 
@@ -115,6 +116,18 @@ modulus add-entity Category --module Catalog --id-type int --properties "Name:st
 
 ```bash
 modulus add-entity Tenant --module Identity --aggregate --id-type string --properties "Name:string,Subdomain:string"
+```
+
+**Create an entity with a generic property type:**
+
+```bash
+modulus add-entity Product --module Catalog --properties "Name:string,Tags:List<string>,Prices:Dictionary<string,decimal>"
+```
+
+**Preview the files that would be created without writing anything:**
+
+```bash
+modulus add-entity Product --module Catalog --properties "Name:string,Price:decimal" --dry-run
 ```
 
 ## See Also

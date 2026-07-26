@@ -7,6 +7,7 @@
     <Project Path="src/Modulus.Messaging.AzureServiceBus/Modulus.Messaging.AzureServiceBus.csproj" />
     <Project Path="src/Modulus.Messaging.RabbitMq/Modulus.Messaging.RabbitMq.csproj" />
     <Project Path="src/Modulus.Messaging/Modulus.Messaging.csproj" />
+    <Project Path="src/Modulus.Testing/Modulus.Testing.csproj" />
     <Project Path="src/Modulus.Templates/Modulus.Templates.csproj" />
     <Project Path="src/Modulus.Generators/Modulus.Generators.csproj" />
     <Project Path="src/Modulus.Analyzers/Modulus.Analyzers.csproj" />
@@ -19,6 +20,7 @@
     <Project Path="tests/Modulus.Messaging.RabbitMq.IntegrationTests/Modulus.Messaging.RabbitMq.IntegrationTests.csproj" />
     <Project Path="tests/Modulus.Messaging.AzureServiceBus.IntegrationTests/Modulus.Messaging.AzureServiceBus.IntegrationTests.csproj" />
     <Project Path="tests/Modulus.Messaging.Tests/Modulus.Messaging.Tests.csproj" />
+    <Project Path="tests/Modulus.Testing.Tests/Modulus.Testing.Tests.csproj" />
     <Project Path="tests/Modulus.Generators.Tests/Modulus.Generators.Tests.csproj" />
     <Project Path="tests/Modulus.Analyzers.Tests/Modulus.Analyzers.Tests.csproj" />
     <Project Path="tests/Modulus.Templates.Tests/Modulus.Templates.Tests.csproj" />

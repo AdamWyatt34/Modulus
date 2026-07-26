@@ -1,0 +1,23 @@
+#nullable enable
+Modulus.Mediator.Behaviors.LoggingBehavior<TRequest, TResponse>
+Modulus.Mediator.Behaviors.LoggingBehavior<TRequest, TResponse>.Handle(TRequest request, Modulus.Mediator.Abstractions.RequestHandlerDelegate<TResponse!>! next, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<TResponse!>!
+Modulus.Mediator.Behaviors.LoggingBehavior<TRequest, TResponse>.LoggingBehavior(Microsoft.Extensions.Logging.ILogger<Modulus.Mediator.Behaviors.LoggingBehavior<TRequest, TResponse!>!>! logger) -> void
+Modulus.Mediator.Behaviors.MetricsBehavior<TRequest, TResponse>
+Modulus.Mediator.Behaviors.MetricsBehavior<TRequest, TResponse>.Handle(TRequest request, Modulus.Mediator.Abstractions.RequestHandlerDelegate<TResponse!>! next, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<TResponse!>!
+Modulus.Mediator.Behaviors.MetricsBehavior<TRequest, TResponse>.MetricsBehavior(System.Diagnostics.Metrics.IMeterFactory! meterFactory) -> void
+Modulus.Mediator.Behaviors.TracingBehavior<TRequest, TResponse>
+Modulus.Mediator.Behaviors.TracingBehavior<TRequest, TResponse>.Handle(TRequest request, Modulus.Mediator.Abstractions.RequestHandlerDelegate<TResponse!>! next, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<TResponse!>!
+Modulus.Mediator.Behaviors.TracingBehavior<TRequest, TResponse>.TracingBehavior() -> void
+Modulus.Mediator.Behaviors.UnhandledExceptionBehavior<TRequest, TResponse>
+Modulus.Mediator.Behaviors.UnhandledExceptionBehavior<TRequest, TResponse>.Handle(TRequest request, Modulus.Mediator.Abstractions.RequestHandlerDelegate<TResponse!>! next, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<TResponse!>!
+Modulus.Mediator.Behaviors.UnhandledExceptionBehavior<TRequest, TResponse>.UnhandledExceptionBehavior(Microsoft.Extensions.Logging.ILogger<Modulus.Mediator.Behaviors.UnhandledExceptionBehavior<TRequest, TResponse!>!>! logger) -> void
+Modulus.Mediator.Behaviors.UnitOfWorkBehavior<TRequest, TResponse>
+Modulus.Mediator.Behaviors.UnitOfWorkBehavior<TRequest, TResponse>.Handle(TRequest request, Modulus.Mediator.Abstractions.RequestHandlerDelegate<TResponse!>! next, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<TResponse!>!
+Modulus.Mediator.Behaviors.UnitOfWorkBehavior<TRequest, TResponse>.UnitOfWorkBehavior(System.IServiceProvider! serviceProvider) -> void
+Modulus.Mediator.Behaviors.ValidationBehavior<TRequest, TResponse>
+Modulus.Mediator.Behaviors.ValidationBehavior<TRequest, TResponse>.Handle(TRequest request, Modulus.Mediator.Abstractions.RequestHandlerDelegate<TResponse!>! next, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<TResponse!>!
+Modulus.Mediator.Behaviors.ValidationBehavior<TRequest, TResponse>.ValidationBehavior(System.Collections.Generic.IEnumerable<FluentValidation.IValidator<TRequest>!>! validators) -> void
+Modulus.Mediator.ServiceCollectionExtensions
+const Modulus.Mediator.Behaviors.TracingBehavior<TRequest, TResponse>.ActivitySourceName = "Modulus.Mediator" -> string!
+static Modulus.Mediator.ServiceCollectionExtensions.AddModulusMediator(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Modulus.Mediator.ServiceCollectionExtensions.AddPipelineBehavior(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Type! behaviorType) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

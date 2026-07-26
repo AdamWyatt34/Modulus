@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <EnforcePublicApi>true</EnforcePublicApi>
     <PackageId>ModulusKit.Messaging.Abstractions</PackageId>
     <Description>Abstractions for the Modulus messaging system: IMessageBus, IIntegrationEvent, and outbox pattern interfaces.</Description>
     <PackageTags>messaging;integration-events;outbox;abstractions</PackageTags>

@@ -17,4 +17,21 @@ public sealed record TransportEnvelope(
     string? CorrelationId,
     DateTime OccurredOn,
     ReadOnlyMemory<byte> Body,
-    string ContentType = "application/json");
+    string ContentType = "application/json")
+{
+    /// <summary>
+    /// Gets the string metadata that travels with the message, mapped to each broker's native
+    /// header/application-property mechanism. Carries the W3C trace context
+    /// (<c>traceparent</c>/<c>tracestate</c>) injected on publish, and is open to custom
+    /// entries. <see langword="null"/> when the message carries no headers.
+    /// </summary>
+    public IReadOnlyDictionary<string, string>? Headers { get; init; }
+
+    /// <summary>
+    /// Gets the earliest UTC time the broker should make this message available to
+    /// consumers, or <see langword="null"/> for immediate delivery. Azure Service Bus
+    /// schedules natively; RabbitMQ routes through a per-event-type TTL queue; the
+    /// in-memory transport delays in process. Set via <c>IMessageBus.PublishScheduled</c>.
+    /// </summary>
+    public DateTimeOffset? ScheduledEnqueueTimeUtc { get; init; }
+}

@@ -20,6 +20,8 @@ modulus add-module <module-name> [options]
 |---|---|---|
 | `--solution, -s <path>` | Path to the `.slnx` solution file. If omitted, the CLI auto-discovers the nearest solution by walking up the directory tree. | Auto-discovered |
 | `--no-endpoints` | Skip generating the Api layer project. Useful for modules that only communicate via integration events and have no HTTP surface. | Api layer included |
+| `--dry-run` | Print every file that would be created, the host `ProjectReference` edit, and the solution/restore steps that would run, without writing anything or running any process. | Disabled |
+| `--no-restore` | Skip running `dotnet restore` after scaffolding. The module is still added to the `.slnx` via `dotnet sln add`. | Restore runs |
 
 ## Generated Output
 
@@ -103,6 +105,18 @@ modulus add-module Notifications --no-endpoints
 
 ```bash
 modulus add-module Billing --solution ./path/to/EShop.slnx
+```
+
+**Preview what would be created without writing anything:**
+
+```bash
+modulus add-module Billing --dry-run
+```
+
+**Add a module in a scripted/CI setup that restores separately:**
+
+```bash
+modulus add-module Billing --no-restore
 ```
 
 ## See Also

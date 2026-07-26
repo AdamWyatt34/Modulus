@@ -15,6 +15,22 @@ public interface IOutboxStore
     Task Save(IIntegrationEvent @event, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Saves an integration event that the outbox holds until <paramref name="enqueueAtUtc"/>
+    /// before dispatching — durable scheduled publishing with the same transactional
+    /// guarantees as <see cref="Save(IIntegrationEvent, CancellationToken)"/>. Precision is
+    /// bounded by the outbox poll interval once the row is due. A time at or before now
+    /// dispatches on the next pass.
+    /// </summary>
+    /// <remarks>
+    /// A default interface implementation throws <see cref="NotSupportedException"/> so custom
+    /// stores written against earlier versions keep compiling; the shipped store overrides it.
+    /// </remarks>
+    Task Save(IIntegrationEvent @event, DateTimeOffset enqueueAtUtc, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException(
+            $"{GetType().Name} does not implement scheduled {nameof(Save)}. " +
+            "Override it to support scheduled publishing through the outbox.");
+
+    /// <summary>
     /// Retrieves a batch of unprocessed outbox messages whose attempt count is below
     /// <paramref name="maxAttempts"/> and whose <see cref="OutboxMessage.NextAttemptOnUtc"/> is
     /// unset or has elapsed. Dead-lettered rows (Attempts &gt;= maxAttempts) and rows still

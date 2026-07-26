@@ -14,6 +14,16 @@ To update an existing installation:
 dotnet tool update --global ModulusKit.Cli
 ```
 
+::: tip Is there a `dotnet new` template?
+Not yet. `modulus init` scaffolds a solution at runtime via token-replacement templates and
+programmatic C# generators (`Modulus.Templates`), which is a different model from `dotnet new`'s
+static `template.json` + symbol substitution -- there is no `dotnet new modulus-solution`
+today. The supported bootstrap story is `dotnet tool install --global ModulusKit.Cli` followed by
+`modulus init <SolutionName>`. A native `dotnet new` template package is tracked as a future
+enhancement; it would need either a generated static mirror of the existing templates or a
+custom template engine bridge, rather than a thin wrapper around the current scaffold.
+:::
+
 ## Commands
 
 | Command | Description |
@@ -30,6 +40,7 @@ dotnet tool update --global ModulusKit.Cli
 | [`modulus add-endpoint`](./add-endpoint) | Scaffold a minimal API endpoint |
 | [`modulus add-event`](./add-event) | Scaffold an integration event |
 | [`modulus add-consumer`](./add-consumer) | Scaffold an integration event handler and wire the cross-module reference |
+| [`modulus add-migration`](./add-migration) | Add an EF Core migration for a module's DbContext with inferred project paths |
 | [`modulus remove-module`](./remove-module) | Remove a module (dry-run by default) |
 | [`modulus outbox`](./outbox) | Inspect and operate the transactional outbox (list-failed / retry / purge) |
 | [`modulus dlq`](./dlq) | Inspect and replay broker dead-letter queues |

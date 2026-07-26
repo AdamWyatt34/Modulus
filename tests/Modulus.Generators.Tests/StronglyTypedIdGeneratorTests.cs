@@ -1,3 +1,6 @@
+using System.Collections;
+using System.Reflection;
+using System.Text.Json;
 using Microsoft.CodeAnalysis;
 using Modulus.Generators.Tests.Helpers;
 using Shouldly;
@@ -22,7 +25,8 @@ public class StronglyTypedIdGeneratorTests
         var (outputCompilation, diagnostics, runResult) = GeneratorTestHelper.RunGenerator(source);
 
         diagnostics.ShouldBeEmpty();
-        runResult.GeneratedTrees.Length.ShouldBe(1);
+        // OrderId.g.cs + the bulk EF registration file (EF is referenced by default).
+        runResult.GeneratedTrees.Length.ShouldBe(2);
 
         var generated = GeneratorTestHelper.GetGeneratedSource(runResult, "OrderId.g.cs");
 
@@ -40,6 +44,14 @@ public class StronglyTypedIdGeneratorTests
         generated.ShouldContain("public static OrderId Empty => new(System.Guid.Empty);");
         generated.ShouldContain("public override string ToString() => Value.ToString();");
 
+        // IComparable<T> / IParsable<T>
+        generated.ShouldContain("System.IComparable<OrderId>");
+        generated.ShouldContain("System.IParsable<OrderId>");
+        generated.ShouldContain("public int CompareTo(OrderId other) => Value.CompareTo(other.Value);");
+        generated.ShouldContain("public static OrderId Parse(string s, System.IFormatProvider? provider) => new(System.Guid.Parse(s));");
+        generated.ShouldContain("public static bool TryParse(string? s, System.IFormatProvider? provider, out OrderId result)");
+        generated.ShouldContain("if (System.Guid.TryParse(s, out var value))");
+
         // Attributes on struct
         generated.ShouldContain("[System.ComponentModel.TypeConverter(typeof(OrderId.OrderIdTypeConverter))]");
         generated.ShouldContain("[System.Text.Json.Serialization.JsonConverter(typeof(OrderId.OrderIdJsonConverter))]");
@@ -53,9 +65,21 @@ public class StronglyTypedIdGeneratorTests
         generated.ShouldContain("reader.GetGuid()");
         generated.ShouldContain("writer.WriteStringValue(value.Value)");
 
+        // Dictionary-key support (System.Text.Json)
+        generated.ShouldContain("public override OrderId ReadAsPropertyName(ref System.Text.Json.Utf8JsonReader reader, System.Type typeToConvert, System.Text.Json.JsonSerializerOptions options)");
+        generated.ShouldContain("System.Guid.Parse(reader.GetString()!)");
+        generated.ShouldContain("public override void WriteAsPropertyName(System.Text.Json.Utf8JsonWriter writer, OrderId value, System.Text.Json.JsonSerializerOptions options)");
+        generated.ShouldContain("writer.WritePropertyName(value.Value.ToString())");
+
         // TypeConverter (nested inside the struct)
         generated.ShouldContain("public sealed class OrderIdTypeConverter : System.ComponentModel.TypeConverter");
         generated.ShouldContain("System.Guid.Parse(s)");
+
+        // Bulk EF Core registration helper (separate generated file)
+        var bulkGenerated = GeneratorTestHelper.GetGeneratedSource(runResult, "ModulusStronglyTypedIdConventions.g.cs");
+        bulkGenerated.ShouldContain("public static class ModulusStronglyTypedIdConventions");
+        bulkGenerated.ShouldContain("public static Microsoft.EntityFrameworkCore.ModelConfigurationBuilder UseModulusStronglyTypedIds(");
+        bulkGenerated.ShouldContain("configurationBuilder.Properties<global::TestNamespace.OrderId>().HaveConversion<global::TestNamespace.OrderId.OrderIdValueConverter>();");
 
         // Verify compilation has no errors
         var errors = outputCompilation.GetDiagnostics()
@@ -79,7 +103,8 @@ public class StronglyTypedIdGeneratorTests
         var (outputCompilation, diagnostics, runResult) = GeneratorTestHelper.RunGenerator(source);
 
         diagnostics.ShouldBeEmpty();
-        runResult.GeneratedTrees.Length.ShouldBe(1);
+        // ProductId.g.cs + the bulk EF registration file (EF is referenced by default).
+        runResult.GeneratedTrees.Length.ShouldBe(2);
 
         var generated = GeneratorTestHelper.GetGeneratedSource(runResult, "ProductId.g.cs");
 
@@ -89,12 +114,24 @@ public class StronglyTypedIdGeneratorTests
         generated.ShouldNotContain("New()");
         generated.ShouldContain("public static ProductId Empty => new(0);");
 
+        // IComparable<T> / IParsable<T>
+        generated.ShouldContain("System.IComparable<ProductId>");
+        generated.ShouldContain("System.IParsable<ProductId>");
+        generated.ShouldContain("public int CompareTo(ProductId other) => Value.CompareTo(other.Value);");
+        generated.ShouldContain("public static ProductId Parse(string s, System.IFormatProvider? provider) => new(int.Parse(s, System.Globalization.CultureInfo.InvariantCulture));");
+        generated.ShouldContain("if (int.TryParse(s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var value))");
+
         // ValueConverter
         generated.ShouldContain("ValueConverter<ProductId, int>");
 
         // JsonConverter
         generated.ShouldContain("reader.GetInt32()");
         generated.ShouldContain("writer.WriteNumberValue(value.Value)");
+
+        // Dictionary-key support (System.Text.Json) — numeric keys serialize as strings, parsed
+        // invariantly like every other conversion on a numeric ID.
+        generated.ShouldContain("int.Parse(reader.GetString()!, System.Globalization.CultureInfo.InvariantCulture)");
+        generated.ShouldContain("writer.WritePropertyName(value.Value.ToString(System.Globalization.CultureInfo.InvariantCulture))");
 
         // TypeConverter — culture-invariant so a numeric ID round-trips independent of thread culture
         generated.ShouldContain("int.Parse(s, System.Globalization.CultureInfo.InvariantCulture)");
@@ -121,7 +158,8 @@ public class StronglyTypedIdGeneratorTests
         var (outputCompilation, diagnostics, runResult) = GeneratorTestHelper.RunGenerator(source);
 
         diagnostics.ShouldBeEmpty();
-        runResult.GeneratedTrees.Length.ShouldBe(1);
+        // TransactionId.g.cs + the bulk EF registration file (EF is referenced by default).
+        runResult.GeneratedTrees.Length.ShouldBe(2);
 
         var generated = GeneratorTestHelper.GetGeneratedSource(runResult, "TransactionId.g.cs");
 
@@ -131,12 +169,23 @@ public class StronglyTypedIdGeneratorTests
         generated.ShouldNotContain("New()");
         generated.ShouldContain("public static TransactionId Empty => new(0L);");
 
+        // IComparable<T> / IParsable<T>
+        generated.ShouldContain("System.IComparable<TransactionId>");
+        generated.ShouldContain("System.IParsable<TransactionId>");
+        generated.ShouldContain("public int CompareTo(TransactionId other) => Value.CompareTo(other.Value);");
+        generated.ShouldContain("public static TransactionId Parse(string s, System.IFormatProvider? provider) => new(long.Parse(s, System.Globalization.CultureInfo.InvariantCulture));");
+        generated.ShouldContain("if (long.TryParse(s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var value))");
+
         // ValueConverter
         generated.ShouldContain("ValueConverter<TransactionId, long>");
 
         // JsonConverter
         generated.ShouldContain("reader.GetInt64()");
         generated.ShouldContain("writer.WriteNumberValue(value.Value)");
+
+        // Dictionary-key support (System.Text.Json)
+        generated.ShouldContain("long.Parse(reader.GetString()!, System.Globalization.CultureInfo.InvariantCulture)");
+        generated.ShouldContain("writer.WritePropertyName(value.Value.ToString(System.Globalization.CultureInfo.InvariantCulture))");
 
         // TypeConverter — culture-invariant so a numeric ID round-trips independent of thread culture
         generated.ShouldContain("long.Parse(s, System.Globalization.CultureInfo.InvariantCulture)");
@@ -166,7 +215,8 @@ public class StronglyTypedIdGeneratorTests
         var (outputCompilation, diagnostics, runResult) = GeneratorTestHelper.RunGenerator(source);
 
         diagnostics.ShouldBeEmpty();
-        runResult.GeneratedTrees.Length.ShouldBe(2);
+        // OrderId.g.cs + LineItemId.g.cs + the bulk EF registration file.
+        runResult.GeneratedTrees.Length.ShouldBe(3);
 
         var orderIdSource = GeneratorTestHelper.GetGeneratedSource(runResult, "OrderId.g.cs");
         var lineItemIdSource = GeneratorTestHelper.GetGeneratedSource(runResult, "LineItemId.g.cs");
@@ -180,6 +230,11 @@ public class StronglyTypedIdGeneratorTests
         lineItemIdSource.ShouldContain("LineItemIdValueConverter");
         lineItemIdSource.ShouldContain("LineItemIdJsonConverter");
         lineItemIdSource.ShouldContain("LineItemIdTypeConverter");
+
+        // Bulk EF Core registration helper covers both IDs, sorted for deterministic output.
+        var bulkSource = GeneratorTestHelper.GetGeneratedSource(runResult, "ModulusStronglyTypedIdConventions.g.cs");
+        bulkSource.ShouldContain("configurationBuilder.Properties<global::TestNamespace.LineItemId>().HaveConversion<global::TestNamespace.LineItemId.LineItemIdValueConverter>();");
+        bulkSource.ShouldContain("configurationBuilder.Properties<global::TestNamespace.OrderId>().HaveConversion<global::TestNamespace.OrderId.OrderIdValueConverter>();");
 
         // No compilation errors
         var errors = outputCompilation.GetDiagnostics()
@@ -344,6 +399,11 @@ public class StronglyTypedIdGeneratorTests
 
         diagnostics.ShouldBeEmpty();
 
+        // Only OrderId.g.cs — no bulk registration file either, since it references
+        // ModelConfigurationBuilder and is gated on the exact same EF Core check.
+        runResult.GeneratedTrees.Length.ShouldBe(1);
+        runResult.GeneratedTrees.ShouldAllBe(t => !t.FilePath.EndsWith("ModulusStronglyTypedIdConventions.g.cs"));
+
         var generated = GeneratorTestHelper.GetGeneratedSource(runResult, "OrderId.g.cs");
 
         generated.ShouldNotContain("ValueConverter");
@@ -380,6 +440,9 @@ public class StronglyTypedIdGeneratorTests
 
         generated.ShouldContain("public sealed class OrderIdValueConverter : Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<OrderId, System.Guid>");
 
+        var bulkGenerated = GeneratorTestHelper.GetGeneratedSource(runResult, "ModulusStronglyTypedIdConventions.g.cs");
+        bulkGenerated.ShouldContain("configurationBuilder.Properties<global::TestNamespace.OrderId>().HaveConversion<global::TestNamespace.OrderId.OrderIdValueConverter>();");
+
         var errors = outputCompilation.GetDiagnostics()
             .Where(d => d.Severity == DiagnosticSeverity.Error)
             .ToList();
@@ -411,7 +474,8 @@ public class StronglyTypedIdGeneratorTests
         // the generator with a duplicate-hintName exception (CS8785) and loses every generated
         // member for both types.
         diagnostics.ShouldBeEmpty();
-        runResult.GeneratedTrees.Length.ShouldBe(2);
+        // Orders.OrderId.g.cs + Invoicing.OrderId.g.cs + the bulk EF registration file.
+        runResult.GeneratedTrees.Length.ShouldBe(3);
 
         var ordersOrderId = GeneratorTestHelper.GetGeneratedSource(runResult, "Orders.OrderId.g.cs");
         var invoicingOrderId = GeneratorTestHelper.GetGeneratedSource(runResult, "Invoicing.OrderId.g.cs");
@@ -422,6 +486,13 @@ public class StronglyTypedIdGeneratorTests
         invoicingOrderId.ShouldContain("namespace Invoicing;");
         invoicingOrderId.ShouldContain("public int Value { get; }");
 
+        // The bulk file must reference both same-named types by their fully qualified (and
+        // therefore distinct) names — otherwise this is exactly the collision the hint-name fix
+        // above already guards against, just one level up.
+        var bulkGenerated = GeneratorTestHelper.GetGeneratedSource(runResult, "ModulusStronglyTypedIdConventions.g.cs");
+        bulkGenerated.ShouldContain("configurationBuilder.Properties<global::Orders.OrderId>().HaveConversion<global::Orders.OrderId.OrderIdValueConverter>();");
+        bulkGenerated.ShouldContain("configurationBuilder.Properties<global::Invoicing.OrderId>().HaveConversion<global::Invoicing.OrderId.OrderIdValueConverter>();");
+
         var errors = outputCompilation.GetDiagnostics()
             .Where(d => d.Severity == DiagnosticSeverity.Error)
             .ToList();
@@ -431,12 +502,15 @@ public class StronglyTypedIdGeneratorTests
     [Fact]
     public void Generate_UnsupportedBackingType_ReportsDiagnosticError()
     {
+        // `string` used to be the canonical unsupported example here; it is now a supported
+        // backing type (see Generate_StringBackedId_ProducesCorrectConverters), so `decimal` is
+        // the new stand-in for "unsupported".
         var source = """
             using Modulus.Mediator.Abstractions;
 
             namespace TestNamespace;
 
-            [StronglyTypedId(typeof(string))]
+            [StronglyTypedId(typeof(decimal))]
             public readonly partial record struct OrderId;
             """;
 
@@ -452,6 +526,7 @@ public class StronglyTypedIdGeneratorTests
         generatorDiagnostics[0].Id.ShouldBe("MODGEN005");
         generatorDiagnostics[0].Severity.ShouldBe(DiagnosticSeverity.Error);
         generatorDiagnostics[0].GetMessage().ShouldContain("OrderId");
+        generatorDiagnostics[0].GetMessage().ShouldContain("Guid, int, long, and string");
     }
 
     [Fact]
@@ -504,9 +579,386 @@ public class StronglyTypedIdGeneratorTests
         generated.ShouldContain("internal readonly partial record struct OrderId");
         generated.ShouldNotContain("public readonly partial record struct OrderId");
 
+        // Internal accessibility doesn't block bulk EF registration for a *local* declaration —
+        // the generated call site lives in the same assembly, so there is no CS0122 risk (unlike
+        // the cross-assembly scan, which does require Accessibility.Public).
+        var bulkGenerated = GeneratorTestHelper.GetGeneratedSource(runResult, "ModulusStronglyTypedIdConventions.g.cs");
+        bulkGenerated.ShouldContain("configurationBuilder.Properties<global::TestNamespace.OrderId>().HaveConversion<global::TestNamespace.OrderId.OrderIdValueConverter>();");
+
         var errors = outputCompilation.GetDiagnostics()
             .Where(d => d.Severity == DiagnosticSeverity.Error)
             .ToList();
         errors.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Generate_StringBackedId_ProducesCorrectConverters()
+    {
+        var source = """
+            using Modulus.Mediator.Abstractions;
+
+            namespace TestNamespace;
+
+            [StronglyTypedId(typeof(string))]
+            public readonly partial record struct TenantId;
+            """;
+
+        var (outputCompilation, diagnostics, runResult) = GeneratorTestHelper.RunGenerator(source);
+
+        diagnostics.ShouldBeEmpty();
+
+        var generated = GeneratorTestHelper.GetGeneratedSource(runResult, "TenantId.g.cs");
+
+        // Struct members — string backing: no New() (no natural generator), non-null ctor,
+        // ToString() null-coalesces because `default(TenantId)` bypasses the constructor.
+        generated.ShouldContain("public string Value { get; }");
+        generated.ShouldContain("public TenantId(string value) => Value = value ?? throw new System.ArgumentNullException(nameof(value));");
+        generated.ShouldNotContain("New()");
+        generated.ShouldContain("public static TenantId Empty => new(string.Empty);");
+        generated.ShouldContain("public override string ToString() => Value ?? string.Empty;");
+
+        // IComparable<T> — ordinal via string.CompareOrdinal (null-tolerant, unlike instance CompareTo)
+        generated.ShouldContain("System.IComparable<TenantId>");
+        generated.ShouldContain("public int CompareTo(TenantId other) => string.CompareOrdinal(Value, other.Value);");
+
+        // IParsable<T> / TryParse
+        generated.ShouldContain("System.IParsable<TenantId>");
+        generated.ShouldContain("public static TenantId Parse(string s, System.IFormatProvider? provider) => new(s);");
+        generated.ShouldContain("public static bool TryParse(string? s, System.IFormatProvider? provider, out TenantId result)");
+        generated.ShouldContain("if (s is not null)");
+
+        // ValueConverter
+        generated.ShouldContain("ValueConverter<TenantId, string>");
+
+        // JsonConverter — values and dictionary keys
+        generated.ShouldContain("reader.GetString()!");
+        generated.ShouldContain("writer.WriteStringValue(value.Value)");
+        generated.ShouldContain("public override TenantId ReadAsPropertyName(ref System.Text.Json.Utf8JsonReader reader, System.Type typeToConvert, System.Text.Json.JsonSerializerOptions options)");
+        generated.ShouldContain("public override void WriteAsPropertyName(System.Text.Json.Utf8JsonWriter writer, TenantId value, System.Text.Json.JsonSerializerOptions options)");
+        generated.ShouldContain("writer.WritePropertyName(value.Value)");
+
+        // TypeConverter — identity conversion, no parsing needed
+        generated.ShouldContain("public sealed class TenantIdTypeConverter : System.ComponentModel.TypeConverter");
+        generated.ShouldContain("value is string s ? new TenantId(s) : base.ConvertFrom(context, culture, value)");
+
+        var errors = outputCompilation.GetDiagnostics()
+            .Where(d => d.Severity == DiagnosticSeverity.Error)
+            .ToList();
+        errors.ShouldBeEmpty();
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // Runtime (compile-and-run) tests: the generated assembly is emitted and loaded via
+    // reflection so the new capabilities are proven to actually work, not merely present in the
+    // generated source text. This is the only way to prove the dictionary-key fix in particular —
+    // before it, JsonSerializer.Serialize on a Dictionary<TId, _> throws NotSupportedException at
+    // runtime even though the generated source "looks" like a normal JsonConverter<TId>.
+    // ------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void Generate_GuidBackedId_DictionaryKeySerializationRoundTrips()
+    {
+        var source = """
+            using Modulus.Mediator.Abstractions;
+
+            namespace RuntimeTests;
+
+            [StronglyTypedId]
+            public readonly partial record struct OrderId;
+            """;
+
+        var (outputCompilation, diagnostics, _) = GeneratorTestHelper.RunGenerator(source);
+        diagnostics.ShouldBeEmpty();
+
+        var assembly = GeneratorTestHelper.EmitToAssembly(outputCompilation);
+        var idType = assembly.GetType("RuntimeTests.OrderId", throwOnError: true)!;
+
+        var guidValue = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var idInstance = Activator.CreateInstance(idType, guidValue)!;
+
+        var dictType = typeof(Dictionary<,>).MakeGenericType(idType, typeof(int));
+        var dict = (IDictionary)Activator.CreateInstance(dictType)!;
+        dict.Add(idInstance, 42);
+
+        // Before ReadAsPropertyName/WriteAsPropertyName were added to the generated JsonConverter,
+        // this line threw System.NotSupportedException: "Dictionary key type ... is not supported".
+        var json = JsonSerializer.Serialize(dict, dictType);
+        json.ShouldContain("11111111-1111-1111-1111-111111111111");
+        json.ShouldContain("42");
+
+        var roundTripped = (IDictionary)JsonSerializer.Deserialize(json, dictType)!;
+        roundTripped.Count.ShouldBe(1);
+
+        var valueProperty = idType.GetProperty("Value")!;
+        foreach (DictionaryEntry entry in roundTripped)
+        {
+            valueProperty.GetValue(entry.Key).ShouldBe(guidValue);
+            entry.Value.ShouldBe(42);
+        }
+    }
+
+    [Fact]
+    public void Generate_IntBackedId_DictionaryKeySerializationRoundTrips()
+    {
+        var source = """
+            using Modulus.Mediator.Abstractions;
+
+            namespace RuntimeTests;
+
+            [StronglyTypedId(typeof(int))]
+            public readonly partial record struct ProductId;
+            """;
+
+        var (outputCompilation, diagnostics, _) = GeneratorTestHelper.RunGenerator(source);
+        diagnostics.ShouldBeEmpty();
+
+        var assembly = GeneratorTestHelper.EmitToAssembly(outputCompilation);
+        var idType = assembly.GetType("RuntimeTests.ProductId", throwOnError: true)!;
+
+        var idInstance = Activator.CreateInstance(idType, 7)!;
+
+        var dictType = typeof(Dictionary<,>).MakeGenericType(idType, typeof(string));
+        var dict = (IDictionary)Activator.CreateInstance(dictType)!;
+        dict.Add(idInstance, "widget");
+
+        var json = JsonSerializer.Serialize(dict, dictType);
+        json.ShouldContain("\"7\"");
+
+        var roundTripped = (IDictionary)JsonSerializer.Deserialize(json, dictType)!;
+        roundTripped.Count.ShouldBe(1);
+
+        var valueProperty = idType.GetProperty("Value")!;
+        foreach (DictionaryEntry entry in roundTripped)
+        {
+            valueProperty.GetValue(entry.Key).ShouldBe(7);
+            entry.Value.ShouldBe("widget");
+        }
+    }
+
+    [Fact]
+    public void Generate_GuidBackedId_TryParseBindsFromRouteStringLikeMinimalApi()
+    {
+        var source = """
+            using Modulus.Mediator.Abstractions;
+
+            namespace RuntimeTests;
+
+            [StronglyTypedId]
+            public readonly partial record struct OrderId;
+            """;
+
+        var (outputCompilation, diagnostics, _) = GeneratorTestHelper.RunGenerator(source);
+        diagnostics.ShouldBeEmpty();
+
+        var assembly = GeneratorTestHelper.EmitToAssembly(outputCompilation);
+        var idType = assembly.GetType("RuntimeTests.OrderId", throwOnError: true)!;
+
+        // Minimal API route/query binding always calls TryParse(value, provider: null, out result) —
+        // the exact shape RequestDelegateFactory looks for by convention.
+        var tryParseMethod = idType.GetMethod("TryParse", BindingFlags.Public | BindingFlags.Static)!;
+        var guidValue = Guid.NewGuid();
+        var args = new object?[] { guidValue.ToString(), null, null };
+
+        var success = (bool)tryParseMethod.Invoke(null, args)!;
+
+        success.ShouldBeTrue();
+        idType.GetProperty("Value")!.GetValue(args[2]).ShouldBe(guidValue);
+
+        // A malformed route value must fail, not throw.
+        var badArgs = new object?[] { "not-a-guid", null, null };
+        ((bool)tryParseMethod.Invoke(null, badArgs)!).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void Generate_IntBackedId_ImplementsIComparableForSorting()
+    {
+        var source = """
+            using Modulus.Mediator.Abstractions;
+
+            namespace RuntimeTests;
+
+            [StronglyTypedId(typeof(int))]
+            public readonly partial record struct ProductId;
+            """;
+
+        var (outputCompilation, diagnostics, _) = GeneratorTestHelper.RunGenerator(source);
+        diagnostics.ShouldBeEmpty();
+
+        var assembly = GeneratorTestHelper.EmitToAssembly(outputCompilation);
+        var idType = assembly.GetType("RuntimeTests.ProductId", throwOnError: true)!;
+
+        var five = Activator.CreateInstance(idType, 5)!;
+        var one = Activator.CreateInstance(idType, 1)!;
+        var compareTo = idType.GetMethod("CompareTo", [idType])!;
+
+        ((int)compareTo.Invoke(five, [one])!).ShouldBeGreaterThan(0);
+        ((int)compareTo.Invoke(one, [five])!).ShouldBeLessThan(0);
+        ((int)compareTo.Invoke(five, [five])!).ShouldBe(0);
+    }
+
+    [Fact]
+    public void Generate_StringBackedId_CtorRejectsNullAndCompareToIsOrdinal()
+    {
+        var source = """
+            using Modulus.Mediator.Abstractions;
+
+            namespace RuntimeTests;
+
+            [StronglyTypedId(typeof(string))]
+            public readonly partial record struct TenantId;
+            """;
+
+        var (outputCompilation, diagnostics, _) = GeneratorTestHelper.RunGenerator(source);
+        diagnostics.ShouldBeEmpty();
+
+        var assembly = GeneratorTestHelper.EmitToAssembly(outputCompilation);
+        var idType = assembly.GetType("RuntimeTests.TenantId", throwOnError: true)!;
+
+        var thrown = Should.Throw<TargetInvocationException>(
+            () => Activator.CreateInstance(idType, [null]));
+        thrown.InnerException.ShouldBeOfType<ArgumentNullException>();
+
+        var abc = Activator.CreateInstance(idType, ["abc"])!;
+        var abd = Activator.CreateInstance(idType, ["abd"])!;
+        var compareTo = idType.GetMethod("CompareTo", [idType])!;
+
+        ((int)compareTo.Invoke(abc, [abd])!).ShouldBeLessThan(0);
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // Bulk EF Core registration — cross-assembly discovery
+    // ------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void Generate_ReferencedPublicIdWithConverter_IncludedInBulkRegistration()
+    {
+        var referencedSource = """
+            using Modulus.Mediator.Abstractions;
+
+            namespace Domain;
+
+            [StronglyTypedId]
+            public readonly partial record struct OrderId;
+            """;
+
+        var hostSource = """
+            namespace HostAssemblyNamespace;
+
+            public class Marker;
+            """;
+
+        var (outputCompilation, diagnostics, runResult) = GeneratorTestHelper.RunGeneratorWithReferencedAssembly(
+            hostSource,
+            referencedSource,
+            hostIncludeEfCoreReference: true,
+            referencedIncludeEfCoreReference: true);
+
+        diagnostics.ShouldBeEmpty();
+
+        var bulkGenerated = GeneratorTestHelper.GetGeneratedSource(runResult, "ModulusStronglyTypedIdConventions.g.cs");
+        bulkGenerated.ShouldContain("configurationBuilder.Properties<global::Domain.OrderId>().HaveConversion<global::Domain.OrderId.OrderIdValueConverter>();");
+
+        var errors = outputCompilation.GetDiagnostics()
+            .Where(d => d.Severity == DiagnosticSeverity.Error)
+            .ToList();
+        errors.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Generate_ReferencedIdWithoutEfCoreValueConverter_ExcludedFromBulkRegistration()
+    {
+        // The referenced (Domain) assembly is built WITHOUT an EF Core reference — its own
+        // StronglyTypedIdGenerator run never emitted a nested OrderIdValueConverter. The host
+        // assembly (which does reference EF Core) must not assume the converter exists anyway.
+        var referencedSource = """
+            using Modulus.Mediator.Abstractions;
+
+            namespace Domain;
+
+            [StronglyTypedId]
+            public readonly partial record struct OrderId;
+            """;
+
+        var hostSource = """
+            namespace HostAssemblyNamespace;
+
+            public class Marker;
+            """;
+
+        var (outputCompilation, diagnostics, runResult) = GeneratorTestHelper.RunGeneratorWithReferencedAssembly(
+            hostSource,
+            referencedSource,
+            hostIncludeEfCoreReference: true,
+            referencedIncludeEfCoreReference: false);
+
+        diagnostics.ShouldBeEmpty();
+
+        // No entries at all (the host declares no IDs of its own) — the bulk file is skipped
+        // entirely rather than emitted empty.
+        runResult.GeneratedTrees.ShouldAllBe(t => !t.FilePath.EndsWith("ModulusStronglyTypedIdConventions.g.cs"));
+
+        var errors = outputCompilation.GetDiagnostics()
+            .Where(d => d.Severity == DiagnosticSeverity.Error)
+            .ToList();
+        errors.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Generate_LocalAndReferencedIds_BulkRegistrationIncludesBoth()
+    {
+        var referencedSource = """
+            using Modulus.Mediator.Abstractions;
+
+            namespace Domain;
+
+            [StronglyTypedId]
+            public readonly partial record struct OrderId;
+            """;
+
+        var hostSource = """
+            using Modulus.Mediator.Abstractions;
+
+            namespace HostAssemblyNamespace;
+
+            [StronglyTypedId(typeof(int))]
+            public readonly partial record struct InvoiceNumber;
+            """;
+
+        var (outputCompilation, diagnostics, runResult) = GeneratorTestHelper.RunGeneratorWithReferencedAssembly(
+            hostSource,
+            referencedSource,
+            hostIncludeEfCoreReference: true,
+            referencedIncludeEfCoreReference: true);
+
+        diagnostics.ShouldBeEmpty();
+
+        var bulkGenerated = GeneratorTestHelper.GetGeneratedSource(runResult, "ModulusStronglyTypedIdConventions.g.cs");
+        bulkGenerated.ShouldContain("configurationBuilder.Properties<global::Domain.OrderId>().HaveConversion<global::Domain.OrderId.OrderIdValueConverter>();");
+        bulkGenerated.ShouldContain("configurationBuilder.Properties<global::HostAssemblyNamespace.InvoiceNumber>().HaveConversion<global::HostAssemblyNamespace.InvoiceNumber.InvoiceNumberValueConverter>();");
+
+        var errors = outputCompilation.GetDiagnostics()
+            .Where(d => d.Severity == DiagnosticSeverity.Error)
+            .ToList();
+        errors.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Generate_BulkRegistration_UsesRootNamespaceWhenProvided()
+    {
+        var source = """
+            using Modulus.Mediator.Abstractions;
+
+            namespace TestNamespace;
+
+            [StronglyTypedId]
+            public readonly partial record struct OrderId;
+            """;
+
+        var (_, diagnostics, runResult) = GeneratorTestHelper.RunGenerator(source, rootNamespace: "MyRootNamespace");
+
+        diagnostics.ShouldBeEmpty();
+
+        var bulkGenerated = GeneratorTestHelper.GetGeneratedSource(runResult, "ModulusStronglyTypedIdConventions.g.cs");
+        bulkGenerated.ShouldContain("namespace MyRootNamespace;");
     }
 }

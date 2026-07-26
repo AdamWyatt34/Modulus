@@ -65,7 +65,7 @@ public class AddEndpointHandlerTests
             "GET", "/", null, "GetProductList", "ProductDto");
 
         var content = _fs.ReadAllText(@"C:\work\EShop\src\Modules\Catalog\src\Catalog.Api\Endpoints\GetProducts.cs");
-        content.ShouldContain("mediator.Query(new GetProductList()");
+        content.ShouldContain("mediator.Query(new global::EShop.Catalog.Application.Queries.GetProductList.GetProductList()");
     }
 
     [Fact]
@@ -78,7 +78,7 @@ public class AddEndpointHandlerTests
             "POST", "/", "CreateProduct", null, null);
 
         var content = _fs.ReadAllText(@"C:\work\EShop\src\Modules\Catalog\src\Catalog.Api\Endpoints\CreateProduct.cs");
-        content.ShouldContain("mediator.Send(new CreateProduct()");
+        content.ShouldContain("mediator.Send(new global::EShop.Catalog.Application.Commands.CreateProduct.CreateProduct()");
     }
 
     [Fact]
@@ -247,8 +247,10 @@ public class AddEndpointHandlerTests
     [Fact]
     public async Task AddEndpoint_post_with_route_param_and_result_type_does_not_break_compilation()
     {
-        // H-CLI2 regression: --route "/{id:guid}" used to interpolate straight into a generated
-        // $"..." string, so the compiler saw "{id" as an interpolation hole (CS0103).
+        // H-CLI2 regression, now resolved rather than avoided: --route "/{id:guid}" binds "id" as
+        // a real lambda parameter, and the Location value interpolates the bare "{id}" hole
+        // rather than the raw "{id:guid}" route template (which would otherwise be parsed as an
+        // interpolation format-string clause and throw at runtime).
         SeedModulusSolutionWithModule();
         var handler = CreateHandler();
 
@@ -257,8 +259,69 @@ public class AddEndpointHandlerTests
 
         result.ShouldBe(0);
         var content = _fs.ReadAllText(@"C:\work\EShop\src\Modules\Catalog\src\Catalog.Api\Endpoints\UpdateProduct.cs");
-        content.ShouldContain("Results.Created(\"/api/catalog/{id:guid}\", value)");
-        content.ShouldNotContain("Results.Created($\"");
+        content.ShouldContain("async (Guid id, IMediator mediator, CancellationToken ct) =>");
+        content.ShouldContain("mediator.Send(new global::EShop.Catalog.Application.Commands.UpdateProduct.UpdateProduct(id), ct)");
+        content.ShouldContain("Results.Created($\"/api/catalog/{id}\", value)");
+
+        // The route template itself (the first MapPost argument) legitimately keeps its
+        // constraint — only the Location interpolation must strip it.
+        content.ShouldNotContain("Results.Created($\"/api/catalog/{id:guid}\"");
+    }
+
+    // ── Route parameter validation ───────────────────────────────
+
+    [Fact]
+    public async Task AddEndpoint_rejects_route_param_with_invalid_identifier_name()
+    {
+        SeedModulusSolutionWithModule();
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync("GetProducts", "Catalog", @"C:\work\EShop\EShop.slnx",
+            "GET", "/{123bad}", null, null, null);
+
+        result.ShouldBe(1);
+        _console.ErrorLines.ShouldContain(l => l.Contains("123bad"));
+    }
+
+    [Fact]
+    public async Task AddEndpoint_rejects_duplicate_route_param_names()
+    {
+        SeedModulusSolutionWithModule();
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync("GetItem", "Catalog", @"C:\work\EShop\EShop.slnx",
+            "GET", "/{id}/sub/{id}", null, null, null);
+
+        result.ShouldBe(1);
+        _console.ErrorLines.ShouldContain(l => l.Contains("more than once"));
+    }
+
+    [Fact]
+    public async Task AddEndpoint_rejects_route_param_colliding_with_reserved_lambda_parameter_name()
+    {
+        SeedModulusSolutionWithModule();
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync("GetProducts", "Catalog", @"C:\work\EShop\EShop.slnx",
+            "GET", "/{mediator}", null, null, null);
+
+        result.ShouldBe(1);
+        _console.ErrorLines.ShouldContain(l => l.Contains("mediator"));
+    }
+
+    [Fact]
+    public async Task AddEndpoint_with_multiple_route_params_binds_in_order()
+    {
+        SeedModulusSolutionWithModule();
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync("GetItem", "Catalog", @"C:\work\EShop\EShop.slnx",
+            "GET", "/{parentId:guid}/items/{itemId:guid}", null, "GetItem", "ItemDto");
+
+        result.ShouldBe(0);
+        var content = _fs.ReadAllText(@"C:\work\EShop\src\Modules\Catalog\src\Catalog.Api\Endpoints\GetItem.cs");
+        content.ShouldContain("async (Guid parentId, Guid itemId, IMediator mediator, CancellationToken ct) =>");
+        content.ShouldContain("mediator.Query(new global::EShop.Catalog.Application.Queries.GetItem.GetItem(parentId, itemId), ct)");
     }
 
     // ── Validation errors ────────────────────────────────────────
@@ -428,5 +491,32 @@ public class AddEndpointHandlerTests
 
         result.ShouldBe(0);
         _console.SuccessLines.ShouldContain(l => l.Contains("GetProducts"));
+    }
+
+    // ── --dry-run ─────────────────────────────────────────────────
+
+    [Fact]
+    public async Task AddEndpoint_dry_run_does_not_write_endpoint_file()
+    {
+        SeedModulusSolutionWithModule();
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync("GetProducts", "Catalog", @"C:\work\EShop\EShop.slnx",
+            "GET", "/", null, null, null, dryRun: true);
+
+        result.ShouldBe(0);
+        _fs.FileExists(@"C:\work\EShop\src\Modules\Catalog\src\Catalog.Api\Endpoints\GetProducts.cs").ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task AddEndpoint_dry_run_prints_the_file_that_would_be_created()
+    {
+        SeedModulusSolutionWithModule();
+        var handler = CreateHandler();
+
+        await handler.ExecuteAsync("GetProducts", "Catalog", @"C:\work\EShop\EShop.slnx",
+            "GET", "/", null, null, null, dryRun: true);
+
+        _console.Lines.ShouldContain(l => l.Contains("GetProducts.cs"));
     }
 }

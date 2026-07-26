@@ -21,6 +21,18 @@ public sealed class TemplateEngine
     /// <summary>
     /// Generates all files for a new solution scaffold.
     /// </summary>
+    /// <summary>
+    /// Root-level opt-in Docker files. Unlike <c>init/aspire/</c> (a nested folder that can be
+    /// filtered by prefix), the Dockerfile and .dockerignore live at the solution root alongside
+    /// unconditional files like Directory.Build.props, so they are filtered by their exact
+    /// manifest path instead of a folder prefix.
+    /// </summary>
+    private static readonly IReadOnlySet<string> DockerFilePaths = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "init/Dockerfile.template",
+        "init/.dockerignore.template",
+    };
+
     public IReadOnlyList<TemplateOutput> GenerateInit(InitOptions options)
     {
         var tokens = new Dictionary<string, string>
@@ -32,6 +44,8 @@ public sealed class TemplateEngine
             ["{{AspireVersion}}"] = AspireVersion,
         };
 
+        var includeCi = string.Equals(options.Ci, "github", StringComparison.OrdinalIgnoreCase);
+
         var outputs = new List<TemplateOutput>();
 
         foreach (var (resourceName, templatePath) in ResourceManifest.Entries)
@@ -42,6 +56,16 @@ public sealed class TemplateEngine
             }
 
             if (!options.IncludeAspire && templatePath.StartsWith("init/aspire/", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (!includeCi && templatePath.StartsWith("init/.github/", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (!options.IncludeDockerfile && DockerFilePaths.Contains(templatePath))
             {
                 continue;
             }

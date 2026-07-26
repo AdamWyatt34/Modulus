@@ -54,6 +54,11 @@ public static class AddEndpointCommand
         };
         solutionOption.Aliases.Add("-s");
 
+        var dryRunOption = new Option<bool>("--dry-run")
+        {
+            Description = "Print what would be created without writing any files.",
+        };
+
         var command = new Command("add-endpoint", "Add a new endpoint to a module's endpoint file")
         {
             endpointNameArg,
@@ -64,6 +69,7 @@ public static class AddEndpointCommand
             queryOption,
             resultTypeOption,
             solutionOption,
+            dryRunOption,
         };
 
         command.SetAction(async parseResult =>
@@ -76,10 +82,11 @@ public static class AddEndpointCommand
             var qryName = parseResult.GetValue(queryOption);
             var resultType = parseResult.GetValue(resultTypeOption);
             var solution = parseResult.GetValue(solutionOption);
+            var dryRun = parseResult.GetValue(dryRunOption);
 
             var solutionFinder = new SolutionFinder(fileSystem);
             var handler = new AddEndpointHandler(fileSystem, console, solutionFinder);
-            return await handler.ExecuteAsync(endpointName, moduleName, solution, method, route, cmdName, qryName, resultType);
+            return await handler.ExecuteAsync(endpointName, moduleName, solution, method, route, cmdName, qryName, resultType, dryRun);
         });
 
         return command;

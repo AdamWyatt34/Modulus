@@ -451,4 +451,88 @@ public class AddModuleHandlerTests
 
         return count;
     }
+
+    // ── --dry-run ─────────────────────────────────────────────────
+
+    [Fact]
+    public async Task AddModule_dry_run_writes_no_files()
+    {
+        SeedModulusSolution();
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync("Catalog", @"C:\work\EShop\EShop.slnx", noEndpoints: false, dryRun: true);
+
+        result.ShouldBe(0);
+        _fs.FileExists(@"C:\work\EShop\src\Modules\Catalog\src\Catalog.Domain\Catalog.Domain.csproj").ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task AddModule_dry_run_does_not_edit_host_csproj()
+    {
+        SeedModulusSolution();
+        var handler = CreateHandler();
+        var before = _fs.ReadAllText(HostCsprojPath);
+
+        await handler.ExecuteAsync("Catalog", @"C:\work\EShop\EShop.slnx", noEndpoints: false, dryRun: true);
+
+        _fs.ReadAllText(HostCsprojPath).ShouldBe(before);
+    }
+
+    [Fact]
+    public async Task AddModule_dry_run_runs_no_processes()
+    {
+        SeedModulusSolution();
+        var handler = CreateHandler();
+
+        await handler.ExecuteAsync("Catalog", @"C:\work\EShop\EShop.slnx", noEndpoints: false, dryRun: true);
+
+        _proc.Invocations.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task AddModule_dry_run_prints_planned_files_and_host_wiring()
+    {
+        SeedModulusSolution();
+        var handler = CreateHandler();
+
+        await handler.ExecuteAsync("Catalog", @"C:\work\EShop\EShop.slnx", noEndpoints: false, dryRun: true);
+
+        _console.Lines.ShouldContain(l => l.Contains("Catalog.Domain.csproj"));
+        _console.Lines.ShouldContain(l => l.Contains("EShop.WebApi.csproj") && l.Contains("Catalog.Infrastructure"));
+    }
+
+    // ── --no-restore ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task AddModule_no_restore_skips_dotnet_restore()
+    {
+        SeedModulusSolution();
+        var handler = CreateHandler();
+
+        await handler.ExecuteAsync("Catalog", @"C:\work\EShop\EShop.slnx", noEndpoints: false, noRestore: true);
+
+        _proc.Invocations.ShouldNotContain(i => i.Command == "dotnet" && i.Arguments.Contains("restore"));
+    }
+
+    [Fact]
+    public async Task AddModule_no_restore_still_adds_projects_to_solution()
+    {
+        SeedModulusSolution();
+        var handler = CreateHandler();
+
+        await handler.ExecuteAsync("Catalog", @"C:\work\EShop\EShop.slnx", noEndpoints: false, noRestore: true);
+
+        _proc.Invocations.ShouldContain(i => i.Command == "dotnet" && i.Arguments.Contains("sln"));
+    }
+
+    [Fact]
+    public async Task AddModule_no_restore_reports_skipped_in_summary()
+    {
+        SeedModulusSolution();
+        var handler = CreateHandler();
+
+        await handler.ExecuteAsync("Catalog", @"C:\work\EShop\EShop.slnx", noEndpoints: false, noRestore: true);
+
+        _console.Lines.ShouldContain(l => l.Contains("Restore:") && l.Contains("Skipped"));
+    }
 }

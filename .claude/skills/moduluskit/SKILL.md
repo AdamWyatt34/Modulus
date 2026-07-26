@@ -5,7 +5,7 @@ description: Builds .NET modular monoliths with the ModulusKit NuGet packages �
 
 # ModulusKit
 
-A NuGet library ecosystem (nine packages, one coordinated version) for building .NET modular monoliths with a custom CQRS mediator, event-driven messaging with transactional outbox/inbox, and compile-time handler registration. No MediatR, no MassTransit.
+A NuGet library ecosystem (ten packages, one coordinated version) for building .NET modular monoliths with a custom CQRS mediator, event-driven messaging with transactional outbox/inbox, and compile-time handler registration. No MediatR, no MassTransit.
 
 ## Packages
 
@@ -20,8 +20,9 @@ A NuGet library ecosystem (nine packages, one coordinated version) for building 
 | `ModulusKit.Generators` | `dotnet add package ModulusKit.Generators` | Source-generated `AddModulusHandlers()`, `AddAllModules()`, `MapAllModuleEndpoints()` |
 | `ModulusKit.Analyzers` | `dotnet add package ModulusKit.Analyzers` | Compile-time rules MOD001–MOD005 |
 | `ModulusKit.Cli` | `dotnet tool install -g ModulusKit.Cli` | `modulus init`, `add-module`, `doctor`, `dlq`, etc. |
+| `ModulusKit.Testing` | `dotnet add package ModulusKit.Testing` | `ModulusMessagingTestHarness`, `TestMessageTransport`, `AddModulusTestTransport()`, outbox/inbox test queries |
 
-All nine ship at one aligned version; `modulus upgrade` bumps every pin and `modulus doctor` warns on version skew.
+All ten ship at one aligned version; `modulus upgrade` bumps every pin and `modulus doctor` warns on version skew.
 
 ## Quick Start — Mediator (CQRS + Result Pattern)
 

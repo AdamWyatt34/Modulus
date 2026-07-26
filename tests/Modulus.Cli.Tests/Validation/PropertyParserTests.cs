@@ -156,4 +156,75 @@ public class PropertyParserTests
         error.ShouldNotBeNull();
         error.ShouldContain("more than once");
     }
+
+    // ── Generic property types — commas nested inside <...> must not split properties ────
+
+    [Fact]
+    public void Parse_accepts_generic_list_property_type()
+    {
+        var (props, error) = PropertyParser.Parse("Tags:List<string>");
+
+        error.ShouldBeNull();
+        props.Count.ShouldBe(1);
+        props[0].Name.ShouldBe("Tags");
+        props[0].Type.ShouldBe("List<string>");
+    }
+
+    [Fact]
+    public void Parse_dictionary_property_type_is_not_split_on_its_internal_comma()
+    {
+        var (props, error) = PropertyParser.Parse("Prices:Dictionary<string,decimal>");
+
+        error.ShouldBeNull();
+        props.Count.ShouldBe(1);
+        props[0].Name.ShouldBe("Prices");
+        props[0].Type.ShouldBe("Dictionary<string,decimal>");
+    }
+
+    [Fact]
+    public void Parse_multiple_properties_including_a_generic_one()
+    {
+        var (props, error) = PropertyParser.Parse("Name:string,Tags:List<string>,IsActive:bool");
+
+        error.ShouldBeNull();
+        props.Count.ShouldBe(3);
+        props[0].Type.ShouldBe("string");
+        props[1].Name.ShouldBe("Tags");
+        props[1].Type.ShouldBe("List<string>");
+        props[2].Type.ShouldBe("bool");
+    }
+
+    [Fact]
+    public void Parse_nested_generic_property_type_with_multiple_commas()
+    {
+        var (props, error) = PropertyParser.Parse(
+            "Lookup:Dictionary<string,List<int>>,Name:string");
+
+        error.ShouldBeNull();
+        props.Count.ShouldBe(2);
+        props[0].Name.ShouldBe("Lookup");
+        props[0].Type.ShouldBe("Dictionary<string,List<int>>");
+        props[1].Name.ShouldBe("Name");
+    }
+
+    [Fact]
+    public void Parse_nullable_and_array_property_types()
+    {
+        var (props, error) = PropertyParser.Parse("Nickname:string?,Scores:int[]");
+
+        error.ShouldBeNull();
+        props.Count.ShouldBe(2);
+        props[0].Type.ShouldBe("string?");
+        props[1].Type.ShouldBe("int[]");
+    }
+
+    [Fact]
+    public void Parse_rejects_unbalanced_generic_property_type()
+    {
+        var (props, error) = PropertyParser.Parse("Tags:List<string");
+
+        error.ShouldNotBeNull();
+        error.ShouldContain("List<string");
+        props.ShouldBeEmpty();
+    }
 }
