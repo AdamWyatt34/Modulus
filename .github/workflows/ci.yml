@@ -79,7 +79,7 @@ jobs:
       # Include the .snupkg symbol packages: `dotnet nuget push <pkg>.nupkg` only pushes
       # the matching symbols package when it sits next to the .nupkg in the same directory.
       - name: Upload NuGet packages
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nupkgs
           path: |
