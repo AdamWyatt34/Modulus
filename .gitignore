@@ -484,3 +484,4 @@ $RECYCLE.BIN/
 # Documentation site
 docs/.vitepress/dist/
 docs/.vitepress/cache/
+.claude/worktrees/
