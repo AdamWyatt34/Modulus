@@ -21,7 +21,8 @@ on:
     - cron: '0 6 * * 1'
 
 # Least privilege: every job only reads the repo. Publishing goes to nuget.org via
-# NUGET_API_KEY and Codecov via CODECOV_TOKEN — neither needs a GITHUB_TOKEN write scope.
+# NUGET_API_KEY-or-trusted-publishing and Codecov via CODECOV_TOKEN; only the publish job
+# elevates (id-token: write) for NuGet trusted publishing.
 permissions:
   contents: read
 
@@ -140,6 +141,9 @@ jobs:
 
   e2e:
     needs: build
+    # Run-grade E2E boots scaffolded hosts; a wedged Kestrel start must fail the job,
+    # not burn the 6-hour default.
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -236,6 +240,14 @@ jobs:
     needs: [build, e2e, messaging-integration]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
+    # id-token enables NuGet trusted publishing (OIDC): NuGet/login exchanges the GitHub
+    # OIDC token for a short-lived nuget.org API key, replacing the long-lived
+    # NUGET_API_KEY secret. Requires a trusted-publishing policy on nuget.org for this
+    # repo/workflow and the NUGET_USER repository variable (the nuget.org profile name) —
+    # see CONTRIBUTING's release section. Until both exist, the legacy secret is the fallback.
+    permissions:
+      contents: read
+      id-token: write
 
     steps:
       - name: Download NuGet packages
@@ -244,10 +256,17 @@ jobs:
           name: nupkgs
           path: ./nupkgs
 
+      - name: NuGet login (trusted publishing)
+        if: vars.NUGET_USER != ''
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ vars.NUGET_USER }}
+
       - name: Push tagged package only
         shell: pwsh
         env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY || secrets.NUGET_API_KEY }}
         run: |
           # Map MinVer tag prefix -> PackageId. Tag form: '<prefix>v<version>'.
           $prefixMap = @{

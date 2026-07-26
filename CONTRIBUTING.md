@@ -7,7 +7,7 @@ dotnet build Modulus.slnx
 dotnet test Modulus.slnx --filter "Category!=E2E"
 ```
 
-To run the end-to-end CLI integration test (slow — scaffolds a solution and runs `dotnet build` against it):
+To run the end-to-end CLI integration tests (slow — they scaffold solutions, run `dotnet build`, and the run-grade test additionally boots the scaffolded WebApi, asserts its HTTP endpoints, runs `doctor --strict`, and executes the scaffolded test suite):
 
 ```powershell
 # Pack HEAD into a local feed first, otherwise the scaffold pins the CLI's unpublished
@@ -65,6 +65,11 @@ If you publish a library at a different version than the CLI, users can pin a kn
 3. Tag all ten prefixes at the release version from that green SHA and push the tags (each tag triggers a `publish` run for its package; `--skip-duplicate` makes partial re-runs safe).
 4. Verify all ten publish runs succeeded and the packages are indexed on nuget.org (indexing can lag ~15 minutes).
 5. Smoke on a clean machine/directory (no `MODULUS_E2E_*` env vars): `dotnet tool install -g ModulusKit.Cli --version <x>`, `modulus init Smoke`, `dotnet build`, `modulus doctor`.
+6. Post-release hygiene bumps (one follow-up PR): set `PackageValidationBaselineVersion` in `Directory.Build.targets` to the version just released, so the next cycle's pack validates against it; promote each project's `PublicAPI.Unshipped.txt` entries into `PublicAPI.Shipped.txt` (leaving Unshipped with only the `#nullable enable` header); and if this was a brand-new package's first release, delete its `NoPackageBaseline` property so it joins baseline validation.
+
+### NuGet publishing credentials
+
+The `publish` job prefers **trusted publishing** (OIDC): configure a trusted-publishing policy for this repository/workflow on nuget.org and set the `NUGET_USER` repository *variable* to the nuget.org profile name — the `NuGet/login` action then mints a short-lived API key per run and no long-lived secret exists to leak. Until that policy exists (or if the variable is unset), the job falls back to the legacy `NUGET_API_KEY` repository secret. Once trusted publishing is verified working, delete the secret.
 
 ## Adding an analyzer rule
 

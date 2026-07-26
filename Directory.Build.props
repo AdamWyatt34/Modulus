@@ -38,15 +38,9 @@
     <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
   </ItemGroup>
 
-  <!-- Package hygiene: every packable, non-test project is validated at pack time, and
-       library packages are additionally checked for breaking changes against the last
-       released version. A brand-new package has no published baseline yet — it sets
-       NoPackageBaseline=true in its csproj until its first release. Bump the baseline
-       version as part of each release (see CONTRIBUTING's checklist). -->
-  <PropertyGroup Condition="'$(IsPackable)' != 'false' and '$(IsTestProject)' != 'true'">
-    <EnablePackageValidation>true</EnablePackageValidation>
-    <PackageValidationBaselineVersion Condition="'$(PackAsTool)' != 'true' and '$(NoPackageBaseline)' != 'true'">3.0.0</PackageValidationBaselineVersion>
-  </PropertyGroup>
+  <!-- Package hygiene (validation + baseline) lives in Directory.Build.targets: it must
+       evaluate after each csproj body so per-project opt-outs (NoPackageBaseline,
+       IsPackable, IsTestProject) are final. -->
 
   <!-- Mechanical public-API tracking for the library packages: RS0016/RS0017 keep
        PublicAPI.Shipped.txt / PublicAPI.Unshipped.txt in lockstep with the real surface,
