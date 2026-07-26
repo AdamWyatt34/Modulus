@@ -55,7 +55,7 @@ public class EndpointGeneratorTests
         // Default route is "/{id:guid}" — the route parameter is now bound as a leading lambda
         // parameter and forwarded positionally into the query's constructor.
         output.Content.ShouldContain("app.MapGet(\"/{id:guid}\", async (Guid id, IMediator mediator, CancellationToken ct) =>");
-        output.Content.ShouldContain("mediator.Query(new GetProductById(id), ct)");
+        output.Content.ShouldContain("mediator.Query(new global::EShop.Catalog.Application.Queries.GetProductById.GetProductById(id), ct)");
         output.Content.ShouldContain(".Produces<ProductDto>(StatusCodes.Status200OK)");
     }
 
@@ -71,7 +71,7 @@ public class EndpointGeneratorTests
             resultType: "Guid"));
 
         output.Content.ShouldContain("app.MapPost(\"\", async (IMediator mediator, CancellationToken ct) =>");
-        output.Content.ShouldContain("mediator.Send(new CreateProduct(), ct)");
+        output.Content.ShouldContain("mediator.Send(new global::EShop.Catalog.Application.Commands.CreateProduct.CreateProduct(), ct)");
         output.Content.ShouldContain("Results.Created(");
         output.Content.ShouldContain(".Produces<Guid>(StatusCodes.Status201Created)");
     }
@@ -107,7 +107,7 @@ public class EndpointGeneratorTests
             resultType: "Guid"));
 
         output.Content.ShouldContain("async (string itemId, IMediator mediator, CancellationToken ct) =>");
-        output.Content.ShouldContain("mediator.Send(new CreateProduct(itemId), ct)");
+        output.Content.ShouldContain("mediator.Send(new global::EShop.Catalog.Application.Commands.CreateProduct.CreateProduct(itemId), ct)");
         output.Content.ShouldContain("Results.Created($\"/api/catalog/items/{itemId}\", value)");
     }
 
@@ -128,7 +128,7 @@ public class EndpointGeneratorTests
             resultType: "Guid"));
 
         output.Content.ShouldContain("async (Guid id, IMediator mediator, CancellationToken ct) =>");
-        output.Content.ShouldContain("mediator.Send(new UpdateProduct(id), ct)");
+        output.Content.ShouldContain("mediator.Send(new global::EShop.Catalog.Application.Commands.UpdateProduct.UpdateProduct(id), ct)");
         output.Content.ShouldContain("Results.Created($\"/api/catalog/{id}\", value)");
 
         // The route template itself (the first MapPost argument) legitimately keeps its
@@ -148,7 +148,7 @@ public class EndpointGeneratorTests
             resultType: "ProductListDto"));
 
         output.Content.ShouldContain("async (int page, IMediator mediator, CancellationToken ct) =>");
-        output.Content.ShouldContain("mediator.Query(new ListProducts(page), ct)");
+        output.Content.ShouldContain("mediator.Query(new global::EShop.Catalog.Application.Queries.ListProducts.ListProducts(page), ct)");
     }
 
     [Fact]
@@ -177,7 +177,7 @@ public class EndpointGeneratorTests
             resultType: "ItemDto"));
 
         output.Content.ShouldContain("async (Guid parentId, Guid itemId, IMediator mediator, CancellationToken ct) =>");
-        output.Content.ShouldContain("mediator.Query(new GetItem(parentId, itemId), ct)");
+        output.Content.ShouldContain("mediator.Query(new global::EShop.Catalog.Application.Queries.GetItem.GetItem(parentId, itemId), ct)");
     }
 
     [Fact]
@@ -205,7 +205,7 @@ public class EndpointGeneratorTests
             resultType: "Guid"));
 
         output.Content.ShouldContain("async (IMediator mediator, CancellationToken ct) =>");
-        output.Content.ShouldContain("mediator.Send(new CreateProduct(), ct)");
+        output.Content.ShouldContain("mediator.Send(new global::EShop.Catalog.Application.Commands.CreateProduct.CreateProduct(), ct)");
     }
 
     [Fact]

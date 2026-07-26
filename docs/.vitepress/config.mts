@@ -37,7 +37,7 @@ export default withMermaid(
         },
         { text: 'Recipes', link: '/recipes/' },
         {
-          text: 'v2.1.0',
+          text: 'v3.0.0',
           items: [
             { text: 'Changelog', link: 'https://github.com/adamwyatt34/Modulus/blob/main/CHANGELOG.md' },
             { text: 'NuGet', link: 'https://www.nuget.org/packages/ModulusKit.Cli' },

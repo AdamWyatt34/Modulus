@@ -75,11 +75,25 @@ public class RunGradeE2ETests
             moduleName: moduleName,
             solutionPath: slnxPath,
             method: "GET",
-            route: "/names/{count:int}",
+            route: "/names",
             commandName: null,
             queryName: "GetProductNames",
             resultType: "List<string>"))
-            .ShouldBe(0, "add-endpoint with a typed route parameter should succeed");
+            .ShouldBe(0, "add-endpoint wired to the scaffolded query should succeed");
+
+        // Route params forward positionally into the wired command/query constructor, so
+        // wiring them to a freshly scaffolded (parameterless) record is documented as
+        // requiring a manual edit first — the pure-CLI shape with params is the unwired stub.
+        (await addEndpointHandler.ExecuteAsync(
+            endpointName: "GetProductById",
+            moduleName: moduleName,
+            solutionPath: slnxPath,
+            method: "GET",
+            route: "/products/{id:guid}",
+            commandName: null,
+            queryName: null,
+            resultType: null))
+            .ShouldBe(0, "add-endpoint stub with a typed route parameter should succeed");
 
         // ── Build ────────────────────────────────────────────────────────────
         var (buildExit, buildErrors) = await CapturingProcessRunner.BuildAsync(slnxPath, solutionRoot);

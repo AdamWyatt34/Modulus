@@ -72,7 +72,9 @@ public sealed class EndpointGenerator
 
             sb.AppendLine($"        app.{mapMethod}(\"{o.Route}\", async ({lambdaParams}) =>");
             sb.AppendLine("        {");
-            sb.AppendLine($"            var result = await mediator.Query(new {o.QueryName}({routeArgs}), ct);");
+            // global::-qualified: an endpoint named after its query (a natural choice) would
+            // otherwise have `new {QueryName}` resolve to the enclosing endpoint class itself.
+            sb.AppendLine($"            var result = await mediator.Query(new global::{o.SolutionName}.{o.ModuleName}.Application.Queries.{o.QueryName}.{o.QueryName}({routeArgs}), ct);");
             sb.AppendLine("            return result.Match(Results.Ok, ApiResults.Problem);");
             sb.AppendLine("        })");
             sb.AppendLine($"        .WithName(\"{o.EndpointName}\")");
@@ -87,7 +89,8 @@ public sealed class EndpointGenerator
 
             sb.AppendLine($"        app.{mapMethod}(\"{o.Route}\", async ({lambdaParams}) =>");
             sb.AppendLine("        {");
-            sb.AppendLine($"            var result = await mediator.Send(new {o.CommandName}({routeArgs}), ct);");
+            // global::-qualified for the same self-name-shadowing reason as the query shape.
+            sb.AppendLine($"            var result = await mediator.Send(new global::{o.SolutionName}.{o.ModuleName}.Application.Commands.{o.CommandName}.{o.CommandName}({routeArgs}), ct);");
 
             if (o.ResultType is not null && o.HttpMethod == "POST")
             {

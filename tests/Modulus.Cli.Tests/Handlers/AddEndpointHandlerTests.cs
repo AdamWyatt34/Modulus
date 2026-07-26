@@ -65,7 +65,7 @@ public class AddEndpointHandlerTests
             "GET", "/", null, "GetProductList", "ProductDto");
 
         var content = _fs.ReadAllText(@"C:\work\EShop\src\Modules\Catalog\src\Catalog.Api\Endpoints\GetProducts.cs");
-        content.ShouldContain("mediator.Query(new GetProductList()");
+        content.ShouldContain("mediator.Query(new global::EShop.Catalog.Application.Queries.GetProductList.GetProductList()");
     }
 
     [Fact]
@@ -78,7 +78,7 @@ public class AddEndpointHandlerTests
             "POST", "/", "CreateProduct", null, null);
 
         var content = _fs.ReadAllText(@"C:\work\EShop\src\Modules\Catalog\src\Catalog.Api\Endpoints\CreateProduct.cs");
-        content.ShouldContain("mediator.Send(new CreateProduct()");
+        content.ShouldContain("mediator.Send(new global::EShop.Catalog.Application.Commands.CreateProduct.CreateProduct()");
     }
 
     [Fact]
@@ -260,7 +260,7 @@ public class AddEndpointHandlerTests
         result.ShouldBe(0);
         var content = _fs.ReadAllText(@"C:\work\EShop\src\Modules\Catalog\src\Catalog.Api\Endpoints\UpdateProduct.cs");
         content.ShouldContain("async (Guid id, IMediator mediator, CancellationToken ct) =>");
-        content.ShouldContain("mediator.Send(new UpdateProduct(id), ct)");
+        content.ShouldContain("mediator.Send(new global::EShop.Catalog.Application.Commands.UpdateProduct.UpdateProduct(id), ct)");
         content.ShouldContain("Results.Created($\"/api/catalog/{id}\", value)");
 
         // The route template itself (the first MapPost argument) legitimately keeps its
@@ -321,7 +321,7 @@ public class AddEndpointHandlerTests
         result.ShouldBe(0);
         var content = _fs.ReadAllText(@"C:\work\EShop\src\Modules\Catalog\src\Catalog.Api\Endpoints\GetItem.cs");
         content.ShouldContain("async (Guid parentId, Guid itemId, IMediator mediator, CancellationToken ct) =>");
-        content.ShouldContain("mediator.Query(new GetItem(parentId, itemId), ct)");
+        content.ShouldContain("mediator.Query(new global::EShop.Catalog.Application.Queries.GetItem.GetItem(parentId, itemId), ct)");
     }
 
     // ── Validation errors ────────────────────────────────────────

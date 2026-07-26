@@ -103,7 +103,7 @@ internal sealed class MessagingRetentionService(
                     // (the store's DbContext) don't — same topology signal as no registration.
                     logger.LogWarning(
                         ex,
-                        "Messaging retention cannot construct the {Store} admin store; {Store} retention is disabled for this host.",
+                        "Messaging retention cannot construct the {Store} admin store; its retention is disabled for this host.",
                         storeName);
                     return false;
                 }
@@ -111,7 +111,7 @@ internal sealed class MessagingRetentionService(
                 if (store is null)
                 {
                     logger.LogWarning(
-                        "Messaging retention found no {Store} admin store registration; {Store} retention is disabled for this host.",
+                        "Messaging retention found no {Store} admin store registration; its retention is disabled for this host.",
                         storeName);
                     return false;
                 }
