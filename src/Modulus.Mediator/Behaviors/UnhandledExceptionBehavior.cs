@@ -16,7 +16,7 @@ public sealed class UnhandledExceptionBehavior<TRequest, TResponse>(
     {
         try
         {
-            return await next();
+            return await next(cancellationToken);
         }
         catch (OperationCanceledException)
         {

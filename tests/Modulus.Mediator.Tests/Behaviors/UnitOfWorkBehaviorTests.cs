@@ -20,7 +20,7 @@ public class UnitOfWorkBehaviorTests
 
         var result = await behavior.Handle(
             new TestCommand("ok"),
-            () => Task.FromResult(Result.Success()),
+            _ => Task.FromResult(Result.Success()),
             CancellationToken.None);
 
         result.IsSuccess.ShouldBeTrue();
@@ -38,7 +38,7 @@ public class UnitOfWorkBehaviorTests
 
         var result = await behavior.Handle(
             new TestCommand("fail"),
-            () => Task.FromResult(Result.Failure(Error.Failure("Test", "nope"))),
+            _ => Task.FromResult(Result.Failure(Error.Failure("Test", "nope"))),
             CancellationToken.None);
 
         result.IsFailure.ShouldBeTrue();
@@ -56,7 +56,7 @@ public class UnitOfWorkBehaviorTests
 
         var result = await behavior.Handle(
             new GetItemQuery(42),
-            () => Task.FromResult<Result<string>>("Item-42"),
+            _ => Task.FromResult<Result<string>>("Item-42"),
             CancellationToken.None);
 
         result.IsSuccess.ShouldBeTrue();
@@ -71,7 +71,7 @@ public class UnitOfWorkBehaviorTests
 
         var result = await behavior.Handle(
             new TestCommand("ok"),
-            () => Task.FromResult(Result.Success()),
+            _ => Task.FromResult(Result.Success()),
             CancellationToken.None);
 
         result.IsSuccess.ShouldBeTrue();
@@ -89,7 +89,7 @@ public class UnitOfWorkBehaviorTests
 
         await behavior.Handle(
             new TestCommand("ok"),
-            () => Task.FromResult(Result.Success()),
+            _ => Task.FromResult(Result.Success()),
             cts.Token);
 
         uow.LastToken.ShouldBe(cts.Token);
@@ -106,7 +106,7 @@ public class UnitOfWorkBehaviorTests
 
         var result = await behavior.Handle(
             new CreateItemCommand("ok"),
-            () => Task.FromResult<Result<int>>(7),
+            _ => Task.FromResult<Result<int>>(7),
             CancellationToken.None);
 
         result.IsSuccess.ShouldBeTrue();

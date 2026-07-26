@@ -19,7 +19,7 @@ public sealed class LoggingBehavior<TRequest, TResponse>(
         logger.LogInformation("Handling {RequestName}", requestName);
 
         var stopwatch = Stopwatch.StartNew();
-        var response = await next();
+        var response = await next(cancellationToken);
         stopwatch.Stop();
 
         if (response.IsSuccess)

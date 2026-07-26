@@ -37,7 +37,7 @@ public sealed class TracingBehavior<TRequest, TResponse> : IPipelineBehavior<TRe
 
         try
         {
-            var response = await next();
+            var response = await next(cancellationToken);
 
             if (activity is not null)
             {

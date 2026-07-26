@@ -16,7 +16,7 @@ public sealed class ValidationBehavior<TRequest, TResponse>(
     {
         var validatorList = validators.ToList();
         if (validatorList.Count == 0)
-            return await next();
+            return await next(cancellationToken);
 
         var validationResults = await Task.WhenAll(
             validatorList.Select(v => v.ValidateAsync(
@@ -34,6 +34,6 @@ public sealed class ValidationBehavior<TRequest, TResponse>(
             return ResultFactory.CreateValidationResult<TResponse>(errors);
         }
 
-        return await next();
+        return await next(cancellationToken);
     }
 }

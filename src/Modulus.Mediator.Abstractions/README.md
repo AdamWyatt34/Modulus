@@ -93,13 +93,15 @@ public class TimingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, T
         CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var response = await next();
+        var response = await next(cancellationToken);
         sw.Stop();
         // log elapsed time
         return response;
     }
 }
 ```
+
+> **4.0 — `RequestHandlerDelegate<TResponse>` takes a `CancellationToken`.** `next` now accepts an optional token (`next(CancellationToken cancellationToken = default)`), so a behavior can substitute a different token — e.g. a timeout's linked token — for every inner behavior and the handler. `await next()` still compiles and still means "flow the token I received"; see [Pipeline Behaviors](https://github.com/adamwyatt34/Modulus/blob/main/docs/mediator/pipeline-behaviors.md) for the full semantics and a timeout example.
 
 ## Source Generators & Analyzers
 

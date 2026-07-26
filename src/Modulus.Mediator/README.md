@@ -105,7 +105,7 @@ public sealed class AuditBehavior<TRequest, TResponse>(IAuditWriter audit)
         RequestHandlerDelegate<TResponse> next,
         CancellationToken cancellationToken)
     {
-        var response = await next().ConfigureAwait(false);
+        var response = await next(cancellationToken).ConfigureAwait(false);
         if (response.IsSuccess)
             await audit.RecordAsync(typeof(TRequest).Name, cancellationToken).ConfigureAwait(false);
         return response;
@@ -147,6 +147,25 @@ public class OrderPlacedHandler : IDomainEventHandler<OrderPlaced>
 // Publish
 await mediator.Publish(new OrderPlaced(order.Id, order.CustomerId));
 ```
+
+### Publish Strategies
+
+By default, `Publish` dispatches to every registered handler **sequentially**, collecting failures into a single `AggregateException`. Configure a different strategy at registration:
+
+```csharp
+services.AddModulusMediator(options =>
+{
+    options.PublishStrategy = PublishStrategy.Parallel; // or StopOnFirstFailure
+});
+```
+
+| Strategy | Behavior |
+|----------|----------|
+| `Sequential` (default) | One handler at a time; every handler runs even if earlier ones fail; failures aggregate into one `AggregateException` |
+| `Parallel` | Every handler starts concurrently (`Task.WhenAll`); failures still aggregate; cancellation surfaces only after every handler has settled — in-flight handlers are not interrupted |
+| `StopOnFirstFailure` | One handler at a time; rethrows the first failure immediately, unwrapped; later handlers never run |
+
+Not configuring `MediatorOptions` (or registering `IMediator` by hand instead of via `AddModulusMediator`) keeps the pre-4.0 default: `Sequential`. See [Domain Events](https://github.com/adamwyatt34/Modulus/blob/main/docs/mediator/domain-events.md#publish-strategies) for the full semantics.
 
 ## Learn More
 

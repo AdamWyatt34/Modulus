@@ -17,7 +17,13 @@ public interface IPipelineBehavior<in TRequest, TResponse>
     /// Executes the behavior, optionally calling the next delegate in the pipeline.
     /// </summary>
     /// <param name="request">The incoming request.</param>
-    /// <param name="next">The delegate representing the next action in the pipeline.</param>
+    /// <param name="next">
+    /// The delegate representing the next action in the pipeline. Call <c>next(cancellationToken)</c>
+    /// to flow the token this behavior received unchanged, or <c>next(someOtherToken)</c> — e.g. a
+    /// linked timeout token — to substitute a different token for every inner behavior and the
+    /// handler. See <see cref="RequestHandlerDelegate{TResponse}"/> for the exact semantics of
+    /// calling <c>next()</c> with no argument.
+    /// </param>
     /// <param name="cancellationToken">A token to observe for cancellation.</param>
     /// <returns>A task producing the response.</returns>
     Task<TResponse> Handle(

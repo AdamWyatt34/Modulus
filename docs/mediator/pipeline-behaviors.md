@@ -28,10 +28,20 @@ public interface IPipelineBehavior<in TRequest, TResponse>
 
 <!-- verify -->
 ```csharp
-public delegate Task<TResponse> RequestHandlerDelegate<TResponse>();
+public delegate Task<TResponse> RequestHandlerDelegate<TResponse>(CancellationToken cancellationToken = default);
 ```
 
-This delegate represents the next step in the pipeline. Call `await next()` to continue execution. Do not call it to short-circuit.
+This delegate represents the next step in the pipeline. Call `await next(cancellationToken)` to continue execution, flowing the token this behavior received unchanged. Do not call it to short-circuit.
+
+::: warning BREAKING in 4.0 — the delegate now takes a token
+Before 4.0, `RequestHandlerDelegate<TResponse>` was parameterless, so a behavior could never substitute its own token (a timeout, a linked token, ...) for the handler. The parameter is optional (`= default`), so `await next()` still compiles — but the *meaning* of an omitted argument changed: it now means **"flow the token I was given"**, not "pass `CancellationToken.None`". Concretely:
+
+- `await next(cancellationToken)` (recommended) explicitly flows the token this behavior received.
+- `await next()` flows the exact same token — the mediator's pipeline wiring treats a `default` argument as "keep mine", not as an explicit reset. This is what keeps every existing `await next()` call site correct without modification.
+- `await next(someOtherToken)` substitutes `someOtherToken` for every inner behavior and the handler — see [the timeout example](#example-timeout-behavior-substituting-a-token) below.
+
+**Caveat**: because of this convention, a behavior that explicitly passes `default` is indistinguishable from one that omits the argument — both flow the received token. There is no way to force `CancellationToken.None` through `next()`; a behavior that needs that must thread its own token through some other mechanism.
+:::
 
 ### Pipeline Execution Model
 
@@ -271,7 +281,7 @@ public sealed class TransactionBehavior<TRequest, TResponse>(ITransactionalUnitO
     {
         await unitOfWork.BeginTransactionAsync(cancellationToken);
 
-        var result = await next();
+        var result = await next(cancellationToken);
 
         if (result.IsSuccess)
         {
@@ -327,7 +337,7 @@ public sealed class CachingBehavior<TRequest, TResponse>
             return JsonSerializer.Deserialize<TResponse>(cached)!;
         }
 
-        var result = await next();
+        var result = await next(cancellationToken);
 
         var duration = request.CacheDuration ?? TimeSpan.FromMinutes(5);
 
@@ -341,6 +351,35 @@ public sealed class CachingBehavior<TRequest, TResponse>
     }
 }
 ```
+
+### Example: Timeout Behavior (Substituting a Token)
+
+Because `next` now takes a token, a behavior can hand the rest of the pipeline a *different* token than the one it was given — the pattern a timeout needs. Link the caller's token with a fresh timeout-bound one and pass the linked token to `next`:
+
+<!-- verify -->
+```csharp
+public sealed class TimeoutBehavior<TRequest, TResponse>(TimeSpan timeout)
+    : IPipelineBehavior<TRequest, TResponse>
+    where TRequest : notnull
+    where TResponse : Result
+{
+    public async Task<TResponse> Handle(
+        TRequest request,
+        RequestHandlerDelegate<TResponse> next,
+        CancellationToken cancellationToken)
+    {
+        using var timeoutCts = new CancellationTokenSource(timeout);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken, timeoutCts.Token);
+
+        // Every inner behavior and the handler receive linkedCts.Token, not cancellationToken --
+        // this substitution was impossible before 4.0, when `next` took no parameters.
+        return await next(linkedCts.Token);
+    }
+}
+```
+
+If the handler observes `linkedCts.Token` (for example by passing it to `Task.Delay`, an `HttpClient` call, or a database query) and the timeout elapses first, the handler sees cancellation even though the caller's own token was never cancelled. If the caller's token is cancelled first, `linkedCts.Token` reflects that too -- `CreateLinkedTokenSource` cancels its token when *either* source does.
 
 ### Registering Custom Behaviors
 

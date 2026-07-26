@@ -9,8 +9,20 @@ public static class ServiceCollectionExtensions
     /// Registers the Modulus mediator. Use the source-generated <c>AddModulusHandlers()</c>
     /// extension method to register command, query, and event handlers.
     /// </summary>
-    public static IServiceCollection AddModulusMediator(this IServiceCollection services)
+    /// <param name="services">The service collection.</param>
+    /// <param name="configure">
+    /// Optional callback to configure <see cref="MediatorOptions"/> — for example
+    /// <c>o.PublishStrategy = PublishStrategy.Parallel</c>. Not registering the mediator through
+    /// this overload (or omitting the callback) keeps the pre-4.0 default: <see cref="PublishStrategy.Sequential"/>.
+    /// </param>
+    public static IServiceCollection AddModulusMediator(
+        this IServiceCollection services,
+        Action<MediatorOptions>? configure = null)
     {
+        var options = new MediatorOptions();
+        configure?.Invoke(options);
+
+        services.AddSingleton(options);
         services.AddScoped<IMediator, Mediator>();
         return services;
     }

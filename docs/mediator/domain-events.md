@@ -270,6 +270,34 @@ Unlike commands and queries, if one domain event handler fails, the remaining ha
 Cancellation is the exception to the run-everything rule: if the `CancellationToken` is cancelled, dispatch stops **between** handlers -- handlers that have not started yet are skipped and the cancellation propagates as a cancellation (it is not folded into the `AggregateException` as a handler failure).
 :::
 
+## Publish Strategies
+
+The error-handling semantics above describe the default. `Publish` actually supports three dispatch strategies, chosen once at registration time via `MediatorOptions`:
+
+<!-- verify -->
+```csharp
+services.AddModulusMediator(options =>
+{
+    options.PublishStrategy = PublishStrategy.Parallel;
+});
+```
+
+| Strategy | Ordering | Failure handling | Cancellation |
+|---|---|---|---|
+| `Sequential` (default) | One handler at a time, in registration order | Every handler still runs; all failures are collected into a single `AggregateException` | Stops dispatch **between** handlers; handlers not yet started are skipped |
+| `Parallel` | Every handler starts at once (`Task.WhenAll`) | Every handler still runs to completion; all failures are collected into a single `AggregateException` | Every handler is already running before cancellation can be observed -- an in-flight handler is **not** interrupted, only observed after every handler has settled |
+| `StopOnFirstFailure` | One handler at a time, in registration order | The **first** failing handler's exception is rethrown immediately, unwrapped (not an `AggregateException`); handlers registered after it never run | Stops dispatch between handlers, same as `Sequential` |
+
+Not calling the `configure` delegate -- or not adopting the delegate overload of `AddModulusMediator` at all -- keeps the pre-4.0 default: `PublishStrategy.Sequential`.
+
+::: warning Choose `Parallel` deliberately
+`Parallel` changes two things at once: handler ordering is no longer meaningful (they all start together), and a handler that mutates shared state your other handlers also touch is now racing them. Reach for `Parallel` only when your domain event handlers are independent of each other and of their execution order -- for example, several read-model projections that each own a disjoint slice of state.
+:::
+
+::: info `StopOnFirstFailure` trades completeness for fail-fast
+Unlike `Sequential`/`Parallel`, `StopOnFirstFailure` does not attempt every handler -- it is closer to how a normal synchronous call chain behaves. Use it when a later handler depends on an earlier one having actually run (e.g. handler B assumes handler A already updated a read model).
+:::
+
 ## Domain Events vs Integration Events
 
 Modulus distinguishes between domain events and integration events:

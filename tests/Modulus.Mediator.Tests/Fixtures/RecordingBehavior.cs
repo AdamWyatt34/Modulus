@@ -16,7 +16,7 @@ public class RecordingBehavior1<TRequest, TResponse> : IPipelineBehavior<TReques
         CancellationToken cancellationToken)
     {
         _log.Add("Behavior1-Before");
-        var result = await next();
+        var result = await next(cancellationToken);
         _log.Add("Behavior1-After");
         return result;
     }
@@ -36,7 +36,7 @@ public class RecordingBehavior2<TRequest, TResponse> : IPipelineBehavior<TReques
         CancellationToken cancellationToken)
     {
         _log.Add("Behavior2-Before");
-        var result = await next();
+        var result = await next(cancellationToken);
         _log.Add("Behavior2-After");
         return result;
     }

@@ -39,7 +39,7 @@ public class MetricsBehaviorTests
 
         var result = await behavior.Handle(
             new TestCommand("test"),
-            () => Task.FromResult(Result.Success()),
+            _ => Task.FromResult(Result.Success()),
             CancellationToken.None);
 
         result.IsSuccess.ShouldBeTrue();
@@ -73,7 +73,7 @@ public class MetricsBehaviorTests
 
         var result = await behavior.Handle(
             new TestCommand("test"),
-            () => Task.FromResult(Result.Failure(Error.Failure("Test", "fail"))),
+            _ => Task.FromResult(Result.Failure(Error.Failure("Test", "fail"))),
             CancellationToken.None);
 
         result.IsFailure.ShouldBeTrue();
@@ -106,7 +106,7 @@ public class MetricsBehaviorTests
         {
             await behavior.Handle(
                 new TestCommand("test"),
-                () => throw new InvalidOperationException("boom"),
+                _ => throw new InvalidOperationException("boom"),
                 CancellationToken.None);
         });
 
