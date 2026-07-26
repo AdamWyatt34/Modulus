@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-Wave B from the 2026-07-25 full audit — the parked **breaking** items, targeting a coordinated **4.0.0** (`docs/audit/wave-b-4.0-plan.md`). Custom `IOutboxStore`/`IInboxStore` implementations and code referencing `RequestHandlerDelegate` by its old shape must update; both messaging schemas change (consumer-owned migrations — generate and apply them **before** deploying 4.0 binaries).
+Wave B from the 2026-07-25 full audit — the parked **breaking** items, targeting a coordinated **4.0.0** (`docs/audit/wave-b-4.0-plan.md`). Custom `IOutboxStore`/`IInboxStore` implementations and code referencing `RequestHandlerDelegate` by its old shape must update; both messaging schemas change (consumer-owned migrations — generate and apply them **before** deploying 4.0 binaries). The wave also brings the library packages to .NET 8 LTS consumers via multi-targeting (additive on its own, but it rides the same coordinated major).
 
 ### Changed
 
@@ -17,6 +17,7 @@ Wave B from the 2026-07-25 full audit — the parked **breaking** items, targeti
 
 ### Added
 
+- **Multi-targeting `net8.0;net10.0`** (audit item: net8.0/net9.0 multi-targeting): the seven runtime library packages — `ModulusKit.Mediator`, `.Mediator.Abstractions`, `.Messaging`, `.Messaging.Abstractions`, `.Messaging.RabbitMq`, `.Messaging.AzureServiceBus`, and `.Testing` — now ship both `net8.0` and `net10.0` assemblies, so LTS-pinned consumers on .NET 8 can reference them without adopting .NET 10. net9.0 is deliberately skipped — it is a Standard-Term-Support release that leaves support in May 2026, so the shipped set is both-LTS. On `net8.0` the EF Core dependency is pinned to the EF8 line (`8.0.29`; EF Core 10 ships no `net8.0` assets), which is a real behavioral fork versus EF10 for the outbox/inbox stores — the multi-targeted test suites run on both TFMs to guard it. `ModulusKit.Cli` (a `RollForward=LatestMajor` dotnet tool), the scaffolded solutions it emits, and the Roslyn-hosted `ModulusKit.Analyzers`/`ModulusKit.Generators` stay single-target (`net10.0` / `netstandard2.0`) — a global tool always runs on the installed SDK's runtime, and analyzers/generators load in the compiler's process.
 - **Mediator publish strategies**: `PublishStrategy` (`Sequential` — default, unchanged pre-4.0 behavior; `Parallel` — all handlers concurrently via `Task.WhenAll`, failures aggregated, cancellation observed only after every started handler settles; `StopOnFirstFailure` — sequential, first failure rethrown unwrapped, later handlers never run) configured via `AddModulusMediator(o => o.PublishStrategy = ...)` on the new `MediatorOptions`. The 3.0.0 cancellation contract (stop dispatching, rethrow on cancelled token) is preserved across all strategies. (`AddModulusMediator()`'s parameterless overload became an optional-parameter overload — source-compatible, recompile covers the binary change.)
 
 ### Removed
