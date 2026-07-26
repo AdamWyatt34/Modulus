@@ -35,4 +35,15 @@ public sealed class OutboxMessage
     /// dead-letters.
     /// </summary>
     public DateTime? NextAttemptOnUtc { get; set; }
+
+    /// <summary>
+    /// Gets the W3C <c>traceparent</c> of the operation that saved this message, or
+    /// <see langword="null"/> when no trace was active at save time (or the row predates
+    /// trace capture). The outbox dispatcher links its publish span to this context so the
+    /// originating request stays reachable from the consumer-side trace.
+    /// </summary>
+    public string? TraceParent { get; init; }
+
+    /// <summary>Gets the W3C <c>tracestate</c> accompanying <see cref="TraceParent"/>, if any.</summary>
+    public string? TraceState { get; init; }
 }

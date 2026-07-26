@@ -78,6 +78,8 @@ Both contexts are defined in this package and target the same database (or two s
 | `InboxMessages`           | `InboxDbContext` → `InboxMessage`       |
 | `InboxMessageConsumers`   | `InboxDbContext` → composite (Id, Name) |
 
+Since 3.1.0 `OutboxMessages` also carries two nullable trace-context columns (`TraceParent` max 55, `TraceState` max 512) used to link outbox dispatch spans back to the saving request — upgrading from 3.0.x needs a follow-up migration (below). Rows with `NULL` context behave exactly as before.
+
 The polling indexes (`ProcessedAt, CreatedAt` on Outbox; `ProcessedOnUtc, OccurredOnUtc` on Inbox) are configured in `OnModelCreating` and will be created automatically when you generate the migrations.
 
 ## Re-generating after schema changes

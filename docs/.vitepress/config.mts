@@ -111,6 +111,7 @@ export default withMermaid(
               { text: 'Outbox Pattern', link: '/messaging/outbox-pattern' },
               { text: 'Inbox Pattern', link: '/messaging/inbox-pattern' },
               { text: 'Dead-Letter Queues', link: '/messaging/dead-letter-queues' },
+              { text: 'Distributed Tracing', link: '/messaging/distributed-tracing' },
               { text: 'Graceful Shutdown', link: '/messaging/graceful-shutdown' },
               { text: 'Migrating from MassTransit', link: '/messaging/migrating-from-masstransit' },
             ]

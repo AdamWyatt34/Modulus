@@ -23,6 +23,9 @@ public sealed class OutboxDbContext : DbContext
             entity.Property(e => e.Attempts).IsRequired();
             entity.Property(e => e.LastError);
             entity.Property(e => e.NextAttemptOnUtc);
+            // W3C traceparent is exactly 55 chars; tracestate is spec-capped for propagation.
+            entity.Property(e => e.TraceParent).HasMaxLength(55);
+            entity.Property(e => e.TraceState).HasMaxLength(512);
 
             // Polling query: WHERE ProcessedAt IS NULL AND Attempts < N
             //   AND (NextAttemptOnUtc IS NULL OR NextAttemptOnUtc <= @now) ORDER BY CreatedAt.

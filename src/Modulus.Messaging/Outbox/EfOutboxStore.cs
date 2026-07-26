@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using System.Transactions;
 using Microsoft.EntityFrameworkCore;
@@ -9,12 +10,18 @@ internal sealed class EfOutboxStore(OutboxDbContext dbContext, IOutboxNotifier n
 {
     public async Task Save(IIntegrationEvent @event, CancellationToken cancellationToken = default)
     {
+        // Save runs inside the caller's request flow, so the ambient activity is the business
+        // operation — captured on the row so the (much later) dispatch can link back to it.
+        var activity = Activity.Current;
+
         var message = new OutboxMessage
         {
             Id = @event.EventId,
             EventType = @event.GetType().AssemblyQualifiedName!,
             Payload = JsonSerializer.Serialize(@event, @event.GetType()),
-            CreatedAt = @event.OccurredOn
+            CreatedAt = @event.OccurredOn,
+            TraceParent = activity?.Id,
+            TraceState = string.IsNullOrEmpty(activity?.TraceStateString) ? null : activity.TraceStateString,
         };
 
         dbContext.OutboxMessages.Add(message);

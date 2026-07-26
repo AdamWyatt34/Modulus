@@ -338,7 +338,9 @@ app.MapHealthChecks("/readyz", new HealthCheckOptions
 
 Checks: `modulus_messaging_transport` (via optional `ITransportHealthProbe`) and `modulus_messaging_outbox` (Degraded/Unhealthy thresholds configurable via `ModulusMessagingHealthCheckOptions`).
 
-Metrics: subscribe with `AddMeter("Modulus.Messaging")` — outbox dispatch outcomes, outbox wakeups, consumer handler duration, inbox dedup, retries, dead-letters. The mediator side has `MetricsBehavior` + `TracingBehavior` (ActivitySource `Modulus.Mediator`).
+Metrics: subscribe with `AddMeter("Modulus.Messaging")` — outbox dispatch outcomes, outbox wakeups, consumer handler duration, inbox dedup, retries, dead-letters, retention purges. The mediator side has `MetricsBehavior` + `TracingBehavior` (ActivitySource `Modulus.Mediator`).
+
+Distributed tracing: W3C trace context propagates across the broker automatically — `IMessageBus.Publish` emits a Producer span and injects `traceparent`/`tracestate` into `TransportEnvelope.Headers` (mapped to RabbitMQ headers / ASB application properties); the consumer pipeline starts a Consumer span per delivery parented on the extracted context, and `Activity.Current` flows into handlers. Outbox saves persist the request's context on the row; `outbox.dispatch` spans link back to it. Subscribe with `AddSource("Modulus.Messaging")` + `AddSource("Modulus.Messaging.Outbox")` (constants on `MessagingDiagnostics`). Upgrading from 3.0.x: `OutboxMessages` gains nullable `TraceParent`/`TraceState` columns — regenerate the consumer-owned migration.
 
 ---
 

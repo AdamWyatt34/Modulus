@@ -27,8 +27,41 @@ internal sealed class ConsumerDispatcher(
     MessagingOptions options,
     MessagingMetrics metrics)
 {
+    private static readonly ActivitySource Source = new(MessagingDiagnostics.ActivitySourceName);
+
     public async Task<MessageDispatchResult> DispatchAsync(
         TransportEnvelope envelope,
+        CancellationToken cancellationToken)
+    {
+        // One Consumer span per delivery, parented on the producer context that rode the
+        // envelope headers across the broker — this is what makes end-to-end traces possible.
+        // It spans the whole in-process retry loop; Activity.Current flows into handlers (and
+        // any TracingBehavior-instrumented mediator calls they make) for free.
+        using var activity = StartConsumeActivity(envelope);
+
+        var result = await DispatchCoreAsync(envelope, activity, cancellationToken).ConfigureAwait(false);
+
+        activity?.SetTag("modulus.outcome", result == MessageDispatchResult.Acknowledge ? "acknowledge" : "dead_letter");
+        if (result == MessageDispatchResult.DeadLetter)
+            activity?.SetStatus(ActivityStatusCode.Error, "Message was dead-lettered.");
+
+        return result;
+    }
+
+    private static Activity? StartConsumeActivity(TransportEnvelope envelope)
+    {
+        var activity = TraceContextPropagation.TryExtract(envelope.Headers, out var parentContext)
+            ? Source.StartActivity($"{envelope.MessageType} process", ActivityKind.Consumer, parentContext)
+            : Source.StartActivity($"{envelope.MessageType} process", ActivityKind.Consumer);
+
+        activity?.SetTag("modulus.message_id", envelope.MessageId);
+        activity?.SetTag("modulus.message_type", envelope.MessageType);
+        return activity;
+    }
+
+    private async Task<MessageDispatchResult> DispatchCoreAsync(
+        TransportEnvelope envelope,
+        Activity? activity,
         CancellationToken cancellationToken)
     {
         var eventType = typeRegistry.Resolve(envelope.MessageType);
@@ -38,6 +71,7 @@ internal sealed class ConsumerDispatcher(
                 "Received message {MessageId} with unknown or disallowed type {MessageType}. Acknowledging without dispatch.",
                 envelope.MessageId,
                 envelope.MessageType);
+            activity?.SetTag("modulus.dispatch", "unknown_type");
             return MessageDispatchResult.Acknowledge;
         }
 
@@ -54,6 +88,7 @@ internal sealed class ConsumerDispatcher(
                 envelope.MessageId,
                 envelope.MessageType);
             metrics.ConsumerDeadLettered(envelope.MessageType);
+            activity?.SetTag("modulus.dispatch", "deserialize_failed");
             return MessageDispatchResult.DeadLetter;
         }
 
@@ -114,6 +149,7 @@ internal sealed class ConsumerDispatcher(
                     attempt,
                     maxAttempts);
                 metrics.ConsumerRetry(envelope.MessageType);
+                activity?.SetTag("modulus.attempt", attempt + 1);
 
                 var delay = RetryDelayCalculator.GetDelay(options.ConsumerRetry, attempt);
                 if (delay > TimeSpan.Zero)

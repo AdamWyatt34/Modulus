@@ -111,7 +111,7 @@ internal sealed class OutboxDispatcher(
 
         foreach (var message in pending)
         {
-            using var activity = Source.StartActivity("outbox.dispatch", ActivityKind.Producer);
+            using var activity = StartDispatchActivity(message);
             activity?.SetTag("modulus.message_id", message.Id);
             activity?.SetTag("modulus.event_type", message.EventType);
 
@@ -170,7 +170,13 @@ internal sealed class OutboxDispatcher(
                     integrationEvent.EventId,
                     integrationEvent.CorrelationId,
                     integrationEvent.OccurredOn,
-                    Encoding.UTF8.GetBytes(message.Payload));
+                    Encoding.UTF8.GetBytes(message.Payload))
+                {
+                    // The dispatch activity's context (not the stored one): consumer latency
+                    // attributes to this publish, while the originating request stays
+                    // reachable through the ActivityLink on the dispatch span.
+                    Headers = TraceContextPropagation.Inject(activity),
+                };
 
                 await transport.PublishAsync(envelope, cancellationToken).ConfigureAwait(false);
                 processedIds.Add(message.Id);
@@ -216,6 +222,28 @@ internal sealed class OutboxDispatcher(
             await outboxStore.MarkAsProcessed(processedIds, cancellationToken).ConfigureAwait(false);
 
         return progressCount;
+    }
+
+    /// <summary>
+    /// Starts the per-row producer activity. When the row captured a trace context at save
+    /// time, it is attached as an <see cref="ActivityLink"/> rather than a parent — the
+    /// originating request finished long ago, and a link is the OTel shape for deferred/batch
+    /// producers. Rows without a stored context (pre-migration rows, no sampler at save time)
+    /// behave exactly as before.
+    /// </summary>
+    private static Activity? StartDispatchActivity(OutboxMessage message)
+    {
+        if (message.TraceParent is not null
+            && ActivityContext.TryParse(message.TraceParent, message.TraceState, isRemote: true, out var saved))
+        {
+            return Source.StartActivity(
+                "outbox.dispatch",
+                ActivityKind.Producer,
+                parentContext: default,
+                links: [new ActivityLink(saved)]);
+        }
+
+        return Source.StartActivity("outbox.dispatch", ActivityKind.Producer);
     }
 
     // A store hiccup here must never propagate: an unhandled exception would unwind the
