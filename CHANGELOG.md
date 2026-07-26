@@ -5,9 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [4.0.0] - 2026-07-26
 
-Wave B from the 2026-07-25 full audit — the parked **breaking** items, targeting a coordinated **4.0.0** (`docs/audit/wave-b-4.0-plan.md`). Custom `IOutboxStore`/`IInboxStore` implementations and code referencing `RequestHandlerDelegate` by its old shape must update; both messaging schemas change (consumer-owned migrations — generate and apply them **before** deploying 4.0 binaries). The wave also brings the library packages to .NET 8 LTS consumers via multi-targeting (additive on its own, but it rides the same coordinated major).
+Coordinated release of all ten packages at 4.0.0 — Wave B from the 2026-07-25 full audit: the parked **breaking** items (`docs/audit/wave-b-4.0-plan.md`). Custom `IOutboxStore`/`IInboxStore` implementations and code referencing `RequestHandlerDelegate` by its old shape must update; both messaging schemas change (consumer-owned migrations — generate and apply them **before** deploying 4.0 binaries). The wave also brings the library packages to .NET 8 LTS consumers via multi-targeting (additive on its own, but it rides the same coordinated major).
 
 ### Changed
 
@@ -184,6 +184,7 @@ Coordinated release of all nine packages at 2.0.0 — the scaffolded `Directory.
   - Entity Framework Core outbox implementation (`EfOutboxStore`)
   - Automatic handler discovery and consumer adapter registration
 
+[4.0.0]: https://github.com/adamwyatt34/Modulus/compare/messaging-v3.1.0...messaging-v4.0.0
 [3.1.0]: https://github.com/adamwyatt34/Modulus/compare/messaging-v3.0.0...messaging-v3.1.0
 [3.0.0]: https://github.com/adamwyatt34/Modulus/compare/messaging-v2.1.0...messaging-v3.0.0
 [2.1.0]: https://github.com/adamwyatt34/Modulus/compare/messaging-v2.0.0...messaging-v2.1.0
