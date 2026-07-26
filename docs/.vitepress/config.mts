@@ -144,6 +144,7 @@ export default withMermaid(
               { text: 'modulus remove-module', link: '/cli/remove-module' },
               { text: 'Renaming a module (manual)', link: '/cli/rename-module' },
               { text: 'modulus outbox', link: '/cli/outbox' },
+              { text: 'modulus inbox', link: '/cli/inbox' },
               { text: 'modulus dlq', link: '/cli/dlq' },
               { text: 'modulus doctor', link: '/cli/doctor' },
               { text: 'modulus upgrade', link: '/cli/upgrade' },

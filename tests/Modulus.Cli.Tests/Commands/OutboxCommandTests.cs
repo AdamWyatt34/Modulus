@@ -241,9 +241,92 @@ public class OutboxCommandTests
         _console.ErrorLines.ShouldContain(l => l.Contains("bad connection string"));
     }
 
+    [Fact]
+    public async Task PurgeProcessed_without_confirm_reports_count_and_deletes_nothing()
+    {
+        var store = new FakeOutboxAdminStore { CountResult = 12 };
+        var handler = new OutboxHandler(_fs, _console, _ => new FakeOutboxAdminSession(store));
+
+        var exit = await handler.PurgeProcessedAsync(TestConnection, olderThanDays: 7, batchSize: 500, confirm: false);
+
+        exit.ShouldBe(0);
+        store.PurgeCalls.ShouldBeEmpty();
+        _console.Lines.ShouldContain(l => l.Contains("12 processed outbox message(s)"));
+        _console.Lines.ShouldContain(l => l.Contains("--confirm"));
+    }
+
+    [Fact]
+    public async Task PurgeProcessed_with_confirm_repeats_batches_until_drained()
+    {
+        var store = new FakeOutboxAdminStore();
+        store.PurgeResults.Enqueue(500);
+        store.PurgeResults.Enqueue(3);
+        var handler = new OutboxHandler(_fs, _console, _ => new FakeOutboxAdminSession(store));
+
+        var exit = await handler.PurgeProcessedAsync(TestConnection, olderThanDays: 3, batchSize: 500, confirm: true);
+
+        exit.ShouldBe(0);
+        store.PurgeCalls.Count.ShouldBe(2);
+        _console.SuccessLines.ShouldContain(l => l.Contains("503 processed outbox message(s)"));
+    }
+
+    [Fact]
+    public async Task PurgeProcessed_rejects_negative_older_than_days()
+    {
+        var store = new FakeOutboxAdminStore();
+        var handler = new OutboxHandler(_fs, _console, _ => new FakeOutboxAdminSession(store));
+
+        var exit = await handler.PurgeProcessedAsync(TestConnection, olderThanDays: -1, batchSize: 500, confirm: true);
+
+        exit.ShouldBe(1);
+        _console.ErrorLines.ShouldContain(l => l.Contains("--older-than-days"));
+    }
+
+    [Fact]
+    public async Task PurgeProcessed_store_failure_reports_friendly_error()
+    {
+        var handler = new OutboxHandler(_fs, _console, _ => throw new InvalidOperationException("bad connection string"));
+
+        var exit = await handler.PurgeProcessedAsync(TestConnection, olderThanDays: 7, batchSize: 500, confirm: true);
+
+        exit.ShouldBe(1);
+        _console.ErrorLines.ShouldContain(l => l.Contains("bad connection string"));
+    }
+
     private sealed class InMemoryOutboxAdminSession(OutboxDbContext context) : IOutboxAdminSession
     {
         public IOutboxAdminStore Store { get; } = new EfOutboxAdminStore(context);
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class FakeOutboxAdminStore : IOutboxAdminStore
+    {
+        public int CountResult { get; set; }
+        public Queue<int> PurgeResults { get; } = new();
+        public List<(DateTime OlderThan, int BatchSize)> PurgeCalls { get; } = [];
+
+        public Task<IReadOnlyList<OutboxMessage>> GetFailedAsync(int maxAttempts, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<OutboxMessage>>([]);
+
+        public Task<bool> RetryAsync(Guid messageId, CancellationToken cancellationToken = default)
+            => Task.FromResult(false);
+
+        public Task<bool> PurgeAsync(Guid messageId, CancellationToken cancellationToken = default)
+            => Task.FromResult(false);
+
+        public Task<int> CountProcessedAsync(DateTime olderThanUtc, CancellationToken cancellationToken = default)
+            => Task.FromResult(CountResult);
+
+        public Task<int> PurgeProcessedAsync(DateTime olderThanUtc, int batchSize, CancellationToken cancellationToken = default)
+        {
+            PurgeCalls.Add((olderThanUtc, batchSize));
+            return Task.FromResult(PurgeResults.Count > 0 ? PurgeResults.Dequeue() : 0);
+        }
+    }
+
+    private sealed class FakeOutboxAdminSession(IOutboxAdminStore store) : IOutboxAdminSession
+    {
+        public IOutboxAdminStore Store { get; } = store;
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }

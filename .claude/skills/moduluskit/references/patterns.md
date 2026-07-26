@@ -304,6 +304,25 @@ Register with `AddModulusInbox(...)`. Consumption is **reservation-based**: each
 
 ---
 
+## Retention (Outbox + Inbox Cleanup)
+
+Delivered rows accumulate forever unless retention is on. Opt in via `MessagingOptions.Retention`:
+
+```csharp
+builder.Services.AddModulusMessaging(options =>
+{
+    options.Retention.Enabled = true;                            // default false
+    options.Retention.ProcessedOutboxAge = TimeSpan.FromDays(7); // published outbox rows
+    options.Retention.InboxAge = TimeSpan.FromDays(7);           // must exceed broker's max redelivery horizon
+    options.Retention.SweepInterval = TimeSpan.FromHours(1);
+    options.Retention.PurgeBatchSize = 500;
+});
+```
+
+A background sweep deletes old rows in batches. Outbox: only `ProcessedAt` rows are purged — pending/dead-lettered rows are never touched. Inbox: purging shortens the dedup window, so `InboxAge` must outlive every possible redelivery (DLQ replays included). One-off cleanup: `modulus outbox purge-processed` / `modulus inbox purge` (both preview counts until `--confirm`). Counter: `modulus.messaging.retention.purged` (tag `store`).
+
+---
+
 ## Health Checks and Metrics
 
 ```csharp

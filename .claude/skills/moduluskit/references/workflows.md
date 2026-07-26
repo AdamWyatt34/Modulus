@@ -54,6 +54,8 @@ modulus doctor                                       # six solution-health check
 
 modulus outbox list-failed                           # dead-lettered outbox rows
 modulus outbox retry --message-id <guid>             # options: --connection-string, --config, --provider, --max-attempts
+modulus outbox purge-processed --older-than-days 7 --confirm   # bulk retention purge (previews count without --confirm)
+modulus inbox purge --older-than-days 7 --confirm    # bulk inbox purge; shortens dedup window — mind redelivery horizon
 
 modulus dlq list --transport rabbitmq                # peek broker dead-letter queue
 modulus dlq replay --transport rabbitmq --message-id <guid>   # or --all; ASB also needs --event

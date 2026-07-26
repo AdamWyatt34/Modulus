@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Modulus.Cli.Infrastructure;
 using Modulus.Messaging.Abstractions;
@@ -110,6 +109,67 @@ public sealed class OutboxHandler(
         }
     }
 
+    public async Task<int> PurgeProcessedAsync(
+        OutboxConnection connection,
+        int olderThanDays,
+        int batchSize,
+        bool confirm,
+        CancellationToken cancellationToken = default)
+    {
+        if (olderThanDays < 0)
+        {
+            console.WriteError("--older-than-days must be zero or greater.");
+            return 1;
+        }
+
+        if (batchSize is <= 0 or > 10_000)
+        {
+            console.WriteError("--batch-size must be between 1 and 10000.");
+            return 1;
+        }
+
+        var cutoffUtc = DateTime.UtcNow.AddDays(-olderThanDays);
+
+        IOutboxAdminSession? session = null;
+        try
+        {
+            session = sessionFactory(connection);
+
+            if (!confirm)
+            {
+                var count = await session.Store.CountProcessedAsync(cutoffUtc, cancellationToken);
+                console.WriteLine(
+                    $"{count} processed outbox message(s) older than {olderThanDays} day(s) " +
+                    $"(processed before {cutoffUtc:yyyy-MM-dd HH:mm:ss} UTC) would be purged.");
+                console.WriteLine("Re-run with --confirm to delete them. Unprocessed and dead-lettered rows are never touched.");
+                return 0;
+            }
+
+            long total = 0;
+            int purged;
+            do
+            {
+                purged = await session.Store.PurgeProcessedAsync(cutoffUtc, batchSize, cancellationToken);
+                total += purged;
+            }
+            while (purged >= batchSize);
+
+            console.WriteSuccess(
+                $"Purged {total} processed outbox message(s) older than {olderThanDays} day(s).");
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            console.WriteError($"Failed to purge the outbox database: {ex.Message}");
+            return 1;
+        }
+        finally
+        {
+            if (session is not null)
+                await session.DisposeAsync();
+        }
+    }
+
     /// <summary>
     /// Resolution order: an explicit <c>--connection-string</c> flag, then
     /// <c>ConnectionStrings:Default</c> in the config file (the outbox is an EF Core database,
@@ -121,52 +181,7 @@ public sealed class OutboxHandler(
     /// resolve or, worse, hand `amqp://...`/a Service Bus namespace string to `UseSqlServer`.
     /// </summary>
     public OutboxConnection? ResolveConnection(string? connectionString, string? configPath, OutboxProvider provider)
-    {
-        if (!string.IsNullOrWhiteSpace(connectionString))
-            return new OutboxConnection(connectionString, provider);
-
-        var path = configPath ?? Path.Combine(fileSystem.GetCurrentDirectory(), "appsettings.json");
-        if (!fileSystem.FileExists(path))
-        {
-            console.WriteError($"Configuration file not found: {path}. Pass --connection-string explicitly.");
-            return null;
-        }
-
-        try
-        {
-            var json = fileSystem.ReadAllText(path);
-            using var doc = JsonDocument.Parse(json);
-
-            if (doc.RootElement.TryGetProperty("ConnectionStrings", out var connectionStrings)
-                && connectionStrings.TryGetProperty("Default", out var defaultCs)
-                && defaultCs.GetString() is { } defaultValue
-                && !string.IsNullOrWhiteSpace(defaultValue))
-            {
-                return new OutboxConnection(defaultValue, provider);
-            }
-
-            if (doc.RootElement.TryGetProperty("Messaging", out var messaging)
-                && messaging.TryGetProperty("ConnectionString", out var legacyCs)
-                && legacyCs.GetString() is { } legacyValue
-                && !string.IsNullOrWhiteSpace(legacyValue))
-            {
-                console.WriteLine(
-                    $"Warning: using Messaging:ConnectionString from '{path}' as the outbox database " +
-                    "connection. That is the broker connection string, not the outbox's EF Core database — " +
-                    "this fallback exists only for older configs. Add ConnectionStrings:Default (or pass " +
-                    "--connection-string) instead.");
-                return new OutboxConnection(legacyValue, provider);
-            }
-
-            console.WriteError($"'{path}' does not contain a ConnectionStrings:Default entry. Pass --connection-string explicitly, or add ConnectionStrings:Default to '{path}'.");
-            return null;
-        }
-        catch (JsonException ex)
-        {
-            console.WriteError($"Failed to parse '{path}': {ex.Message}");
-            return null;
-        }
-    }
+        => MessagingDatabaseResolver.Resolve(fileSystem, console, connectionString, configPath, provider, "outbox");
 
     private static string Truncate(string value, int maxLength)
         => value.Length <= maxLength ? value : value[..(maxLength - 1)] + "…";

@@ -13,6 +13,12 @@ modulus outbox retry 8f3c2a1e-...
 
 # Permanently delete a message
 modulus outbox purge 8f3c2a1e-...
+
+# Report how many delivered messages a 7-day retention purge would remove...
+modulus outbox purge-processed --older-than-days 7
+
+# ...then actually delete them
+modulus outbox purge-processed --older-than-days 7 --confirm
 ```
 
 ## Subcommands
@@ -22,6 +28,7 @@ modulus outbox purge 8f3c2a1e-...
 | `list-failed [--max-attempts N]` | List messages whose attempt count is at or above the threshold (default 5 — match your `MessagingOptions.RetryPolicy.MaxAttempts`). Shows id, attempts, creation time, event type, and last error. |
 | `retry <messageId>` | Reset the attempt counter and clear the last error. The `OutboxProcessor` picks the message up on its next poll. |
 | `purge <messageId>` | Permanently delete the message. |
+| `purge-processed [--older-than-days N] [--batch-size N] [--confirm]` | Bulk-delete successfully published messages whose `ProcessedAt` is older than N days (default 7), in batches (default 500) until drained. **Without `--confirm` it only reports the matching row count.** Unprocessed and dead-lettered rows are never touched. For automatic cleanup, enable `MessagingOptions.Retention` instead — see [Outbox Pattern § Retention](/messaging/outbox-pattern#retention-cleanup). |
 
 ## Common Options
 

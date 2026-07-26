@@ -355,13 +355,37 @@ flowchart TD
     H -->|No| I[Dead-lettered: visible in modulus outbox list-failed]
 ```
 
+## Retention & Cleanup
+
+Delivered rows accumulate forever unless something removes them, and an ever-growing `OutboxMessages` table slowly degrades the polling query. The built-in retention sweep bounds that growth:
+
+```csharp
+builder.Services.AddModulusMessaging(options =>
+{
+    options.Retention.Enabled = true;                              // opt-in; default off
+    options.Retention.ProcessedOutboxAge = TimeSpan.FromDays(7);   // published rows kept 7 days
+    options.Retention.InboxAge = TimeSpan.FromDays(7);             // inbox dedup window (see below)
+    options.Retention.SweepInterval = TimeSpan.FromHours(1);       // how often the sweep runs
+    options.Retention.PurgeBatchSize = 500;                        // rows per delete round trip
+});
+```
+
+When enabled, a background service (`MessagingRetentionService`) runs every `SweepInterval` and deletes, in `PurgeBatchSize`-row batches until drained:
+
+- **Outbox** — rows whose `ProcessedAt` is older than `ProcessedOutboxAge`. Unprocessed rows are **never** purged: pending and backing-off rows are undelivered work, and dead-lettered rows stay visible to `modulus outbox list-failed` until an operator retries or purges them.
+- **Inbox** — rows older than `InboxAge` (see the warning in [Inbox Pattern § Retention](./inbox-pattern#retention) before shortening it).
+
+Each sweep emits the `modulus.messaging.retention.purged` counter (tag `store`: `outbox`/`inbox`). Hosts that only register one of the two contexts get that store swept and the other skipped with a single warning.
+
+For one-off or scripted cleanup — e.g. before enabling retention on an old deployment — use the bulk CLI command instead: [`modulus outbox purge-processed`](/cli/outbox), which previews the row count until you pass `--confirm`. Custom `IOutboxAdminStore` implementations can opt into both by overriding `CountProcessedAsync`/`PurgeProcessedAsync` (the default implementations throw `NotSupportedException`).
+
 ## Best Practices
 
 - **For strict atomicity, save to the outbox within the same transaction as your domain changes.** That means the [same-DbContext configuration](#recommended-for-strict-atomicity-map-the-outbox-into-your-application-dbcontext): map `OutboxMessage` into your application `DbContext` and commit business rows and outbox rows in one `SaveChanges`. The default standalone store commits separately and leaves small crash/rollback windows -- know which configuration you are running.
 - **Treat `OutboxPollInterval` as a fallback, not the latency knob.** Rows saved through wired-up contexts dispatch immediately via the wake signal, so a longer interval (e.g. 30 seconds) cuts idle database queries without slowing delivery. Keep it short only when signals cannot reach the processor (multi-replica or dedicated-worker topologies).
 - **Monitor the outbox table.** If `ProcessedAt` is `null` for a large number of old messages, the processor may be failing silently. Set up alerts for outbox backlog.
 - **Pair with the inbox pattern.** The outbox guarantees at-least-once publishing. Use the [Inbox Pattern](./inbox-pattern) on the consumer side to achieve exactly-once processing.
-- **Clean up processed messages.** Over time, the outbox table grows. Implement a periodic job to delete or archive messages where `ProcessedAt` is not null and older than a retention period.
+- **Clean up processed messages.** Over time, the outbox table grows. Enable `MessagingOptions.Retention` (see [Retention & Cleanup](#retention-cleanup)) or schedule `modulus outbox purge-processed` to age delivered rows out.
 
 ## See Also
 

@@ -22,6 +22,7 @@ rootCommand.Subcommands.Add(ListArtifactsCommands.CreateListEvents(fileSystem, c
 rootCommand.Subcommands.Add(ListArtifactsCommands.CreateListConsumers(fileSystem, consoleOutput));
 rootCommand.Subcommands.Add(ListArtifactsCommands.CreateListEntities(fileSystem, consoleOutput));
 rootCommand.Subcommands.Add(OutboxCommand.Create(fileSystem, consoleOutput));
+rootCommand.Subcommands.Add(InboxCommand.Create(fileSystem, consoleOutput));
 rootCommand.Subcommands.Add(DlqCommand.Create(fileSystem, consoleOutput));
 rootCommand.Subcommands.Add(DoctorCommand.Create(fileSystem, consoleOutput));
 rootCommand.Subcommands.Add(UpgradeCommand.Create(fileSystem, consoleOutput));

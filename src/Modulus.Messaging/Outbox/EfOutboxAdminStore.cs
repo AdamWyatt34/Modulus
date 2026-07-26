@@ -49,4 +49,38 @@ public sealed class EfOutboxAdminStore(OutboxDbContext dbContext) : IOutboxAdmin
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return true;
     }
+
+    public async Task<int> CountProcessedAsync(DateTime olderThanUtc, CancellationToken cancellationToken = default)
+    {
+        return await dbContext.OutboxMessages
+            .AsNoTracking()
+            .CountAsync(m => m.ProcessedAt != null && m.ProcessedAt < olderThanUtc, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async Task<int> PurgeProcessedAsync(
+        DateTime olderThanUtc,
+        int batchSize,
+        CancellationToken cancellationToken = default)
+    {
+        // Select-then-delete instead of ExecuteDelete-with-Take: not every relational provider
+        // can translate a row-limited DELETE (SQLite needs a non-default build flag), and the
+        // id list keeps each round trip's lock footprint bounded to one batch.
+        var ids = await dbContext.OutboxMessages
+            .AsNoTracking()
+            .Where(m => m.ProcessedAt != null && m.ProcessedAt < olderThanUtc)
+            .OrderBy(m => m.ProcessedAt)
+            .Take(batchSize)
+            .Select(m => m.Id)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        if (ids.Count == 0)
+            return 0;
+
+        return await dbContext.OutboxMessages
+            .Where(m => ids.Contains(m.Id))
+            .ExecuteDeleteAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
 }

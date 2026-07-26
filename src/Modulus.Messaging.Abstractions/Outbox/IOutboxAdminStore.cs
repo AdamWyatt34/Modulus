@@ -27,4 +27,34 @@ public interface IOutboxAdminStore
     /// message is unknown.
     /// </summary>
     Task<bool> PurgeAsync(Guid messageId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Counts processed messages whose <see cref="OutboxMessage.ProcessedAt"/> is before
+    /// <paramref name="olderThanUtc"/> — the rows <see cref="PurgeProcessedAsync"/> would remove.
+    /// </summary>
+    /// <remarks>
+    /// A default interface implementation throws <see cref="NotSupportedException"/> so custom
+    /// stores written against earlier versions keep compiling; override to support retention.
+    /// </remarks>
+    Task<int> CountProcessedAsync(DateTime olderThanUtc, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException(
+            $"{GetType().Name} does not implement {nameof(CountProcessedAsync)}. " +
+            "Override it to support outbox retention.");
+
+    /// <summary>
+    /// Permanently removes at most <paramref name="batchSize"/> processed messages whose
+    /// <see cref="OutboxMessage.ProcessedAt"/> is before <paramref name="olderThanUtc"/>,
+    /// oldest first, and returns the number removed. Unprocessed rows — pending, backing off,
+    /// or dead-lettered — are never touched: they represent undelivered work an operator may
+    /// still retry. Callers purge to completion by repeating until the return value is less
+    /// than <paramref name="batchSize"/>.
+    /// </summary>
+    /// <remarks>
+    /// A default interface implementation throws <see cref="NotSupportedException"/> so custom
+    /// stores written against earlier versions keep compiling; override to support retention.
+    /// </remarks>
+    Task<int> PurgeProcessedAsync(DateTime olderThanUtc, int batchSize, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException(
+            $"{GetType().Name} does not implement {nameof(PurgeProcessedAsync)}. " +
+            "Override it to support outbox retention.");
 }

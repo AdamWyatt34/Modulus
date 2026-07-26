@@ -12,6 +12,7 @@ using Modulus.Messaging.Inbox;
 using Modulus.Messaging.InMemory;
 using Modulus.Messaging.Internals;
 using Modulus.Messaging.Outbox;
+using Modulus.Messaging.Retention;
 using Modulus.Messaging.Serialization;
 using Modulus.Messaging.Transports;
 
@@ -98,6 +99,7 @@ public static class ServiceCollectionExtensions
 
         ValidateRetryPolicy(options.RetryPolicy, nameof(MessagingOptions.RetryPolicy));
         ValidateRetryPolicy(options.ConsumerRetry, nameof(MessagingOptions.ConsumerRetry));
+        ValidateRetention(options.Retention);
         ValidateTransportConfiguration(options);
 
         // Must run before anything below reads options.Assemblies (MessageTypeRegistry,
@@ -147,6 +149,9 @@ public static class ServiceCollectionExtensions
         // drains in-flight consumers.
         services.AddHostedService<TransportConsumerHost>();
         services.AddHostedService<OutboxProcessor>();
+
+        if (options.Retention.Enabled)
+            services.AddHostedService<MessagingRetentionService>();
 
         return services;
     }
@@ -215,6 +220,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddDbContext<InboxDbContext>(configure);
         services.AddScoped<IInboxStore, EfInboxStore>();
+        services.AddScoped<IInboxAdminStore, EfInboxAdminStore>();
         return services;
     }
 
@@ -296,6 +302,30 @@ public static class ServiceCollectionExtensions
         }
 
         return registrations;
+    }
+
+    private static void ValidateRetention(RetentionOptions retention)
+    {
+        ArgumentNullException.ThrowIfNull(retention);
+
+        if (!retention.Enabled)
+            return;
+
+        if (retention.ProcessedOutboxAge < TimeSpan.FromMinutes(1))
+            throw new ArgumentOutOfRangeException(nameof(retention), retention.ProcessedOutboxAge,
+                "Retention.ProcessedOutboxAge must be at least 1 minute.");
+
+        if (retention.InboxAge < TimeSpan.FromMinutes(1))
+            throw new ArgumentOutOfRangeException(nameof(retention), retention.InboxAge,
+                "Retention.InboxAge must be at least 1 minute; it must also exceed the broker's maximum redelivery horizon.");
+
+        if (retention.SweepInterval < TimeSpan.FromMinutes(1))
+            throw new ArgumentOutOfRangeException(nameof(retention), retention.SweepInterval,
+                "Retention.SweepInterval must be at least 1 minute.");
+
+        if (retention.PurgeBatchSize is <= 0 or > 10_000)
+            throw new ArgumentOutOfRangeException(nameof(retention), retention.PurgeBatchSize,
+                "Retention.PurgeBatchSize must be between 1 and 10000.");
     }
 
     private static void ValidateRetryPolicy(RetryPolicyOptions retryPolicy, string optionName)

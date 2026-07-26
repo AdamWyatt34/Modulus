@@ -82,6 +82,52 @@ public sealed class MessagingOptions
     /// delivery can both execute. Defaults to 5 minutes.
     /// </summary>
     public TimeSpan ConsumerReservationTimeout { get; set; } = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// Gets or sets the retention policy for delivered outbox rows and aged inbox rows.
+    /// Disabled by default — see <see cref="RetentionOptions.Enabled"/>.
+    /// </summary>
+    public RetentionOptions Retention { get; set; } = new();
+}
+
+/// <summary>
+/// Retention settings for the messaging stores. When enabled, a background sweep permanently
+/// deletes outbox rows that were successfully published more than
+/// <see cref="ProcessedOutboxAge"/> ago and inbox rows older than <see cref="InboxAge"/>,
+/// bounding table growth that would otherwise degrade the polling and reservation queries.
+/// </summary>
+public sealed class RetentionOptions
+{
+    /// <summary>
+    /// Gets or sets whether the retention sweep runs. Defaults to <see langword="false"/> —
+    /// deleting rows is opt-in, never a surprise of an upgrade.
+    /// </summary>
+    public bool Enabled { get; set; }
+
+    /// <summary>
+    /// Gets or sets how long successfully published outbox rows are kept before being purged.
+    /// Unprocessed rows — pending, backing off, or dead-lettered — are never purged by the
+    /// sweep. Defaults to 7 days.
+    /// </summary>
+    public TimeSpan ProcessedOutboxAge { get; set; } = TimeSpan.FromDays(7);
+
+    /// <summary>
+    /// Gets or sets how long inbox rows are kept, measured from the event's
+    /// <c>OccurredOn</c> timestamp. Purged rows leave the deduplication window, so this must
+    /// exceed the broker's maximum redelivery horizon — dead-letter replays included — or a
+    /// late redelivery re-executes handlers. Defaults to 7 days.
+    /// </summary>
+    public TimeSpan InboxAge { get; set; } = TimeSpan.FromDays(7);
+
+    /// <summary>Gets or sets how often the retention sweep runs. Defaults to 1 hour.</summary>
+    public TimeSpan SweepInterval { get; set; } = TimeSpan.FromHours(1);
+
+    /// <summary>
+    /// Gets or sets the maximum rows deleted per round trip. Each sweep repeats batches until
+    /// the stores are drained, so this bounds lock footprint, not total throughput.
+    /// Defaults to 500.
+    /// </summary>
+    public int PurgeBatchSize { get; set; } = 500;
 }
 
 /// <summary>
