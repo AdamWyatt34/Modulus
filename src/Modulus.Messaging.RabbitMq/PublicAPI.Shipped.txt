@@ -1,0 +1,10 @@
+#nullable enable
+Modulus.Messaging.RabbitMq.RabbitMqTopology
+Modulus.Messaging.RabbitMq.ServiceCollectionExtensions
+static Modulus.Messaging.RabbitMq.RabbitMqTopology.DeadLetterExchangeName(string! endpointName) -> string!
+static Modulus.Messaging.RabbitMq.RabbitMqTopology.DeadLetterQueueName(string! endpointName) -> string!
+static Modulus.Messaging.RabbitMq.RabbitMqTopology.ExchangeName(string! messageTypeName) -> string!
+static Modulus.Messaging.RabbitMq.RabbitMqTopology.QueueName(string! endpointName) -> string!
+static Modulus.Messaging.RabbitMq.RabbitMqTopology.RetryQueueName(string! endpointName) -> string!
+static Modulus.Messaging.RabbitMq.RabbitMqTopology.ScheduledQueueName(string! messageTypeName) -> string!
+static Modulus.Messaging.RabbitMq.ServiceCollectionExtensions.AddModulusRabbitMqTransport(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

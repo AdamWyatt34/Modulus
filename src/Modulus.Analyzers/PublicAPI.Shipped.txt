@@ -1,0 +1,21 @@
+#nullable enable
+Modulus.Analyzers.DomainInfrastructureLeakAnalyzer
+Modulus.Analyzers.DomainInfrastructureLeakAnalyzer.DomainInfrastructureLeakAnalyzer() -> void
+Modulus.Analyzers.ExceptionThrowingInHandlerAnalyzer
+Modulus.Analyzers.ExceptionThrowingInHandlerAnalyzer.ExceptionThrowingInHandlerAnalyzer() -> void
+Modulus.Analyzers.HandlerReturnTypeAnalyzer
+Modulus.Analyzers.HandlerReturnTypeAnalyzer.HandlerReturnTypeAnalyzer() -> void
+Modulus.Analyzers.ModuleBoundaryAnalyzer
+Modulus.Analyzers.ModuleBoundaryAnalyzer.ModuleBoundaryAnalyzer() -> void
+Modulus.Analyzers.PublicSetterOnEntityAnalyzer
+Modulus.Analyzers.PublicSetterOnEntityAnalyzer.PublicSetterOnEntityAnalyzer() -> void
+override Modulus.Analyzers.DomainInfrastructureLeakAnalyzer.Initialize(Microsoft.CodeAnalysis.Diagnostics.AnalysisContext! context) -> void
+override Modulus.Analyzers.DomainInfrastructureLeakAnalyzer.SupportedDiagnostics.get -> System.Collections.Immutable.ImmutableArray<Microsoft.CodeAnalysis.DiagnosticDescriptor!>
+override Modulus.Analyzers.ExceptionThrowingInHandlerAnalyzer.Initialize(Microsoft.CodeAnalysis.Diagnostics.AnalysisContext! context) -> void
+override Modulus.Analyzers.ExceptionThrowingInHandlerAnalyzer.SupportedDiagnostics.get -> System.Collections.Immutable.ImmutableArray<Microsoft.CodeAnalysis.DiagnosticDescriptor!>
+override Modulus.Analyzers.HandlerReturnTypeAnalyzer.Initialize(Microsoft.CodeAnalysis.Diagnostics.AnalysisContext! context) -> void
+override Modulus.Analyzers.HandlerReturnTypeAnalyzer.SupportedDiagnostics.get -> System.Collections.Immutable.ImmutableArray<Microsoft.CodeAnalysis.DiagnosticDescriptor!>
+override Modulus.Analyzers.ModuleBoundaryAnalyzer.Initialize(Microsoft.CodeAnalysis.Diagnostics.AnalysisContext! context) -> void
+override Modulus.Analyzers.ModuleBoundaryAnalyzer.SupportedDiagnostics.get -> System.Collections.Immutable.ImmutableArray<Microsoft.CodeAnalysis.DiagnosticDescriptor!>
+override Modulus.Analyzers.PublicSetterOnEntityAnalyzer.Initialize(Microsoft.CodeAnalysis.Diagnostics.AnalysisContext! context) -> void
+override Modulus.Analyzers.PublicSetterOnEntityAnalyzer.SupportedDiagnostics.get -> System.Collections.Immutable.ImmutableArray<Microsoft.CodeAnalysis.DiagnosticDescriptor!>

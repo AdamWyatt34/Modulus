@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <EnforcePublicApi>true</EnforcePublicApi>
     <PackageId>ModulusKit.Messaging.AzureServiceBus</PackageId>
     <Description>Azure Service Bus transport for ModulusKit.Messaging, built directly on Azure.Messaging.ServiceBus with topic-per-event topology and subscription-per-endpoint consumers. Requires Standard or Premium tier (topics).</Description>
     <PackageTags>messaging;azure-service-bus;transport;outbox;modular-monolith</PackageTags>
