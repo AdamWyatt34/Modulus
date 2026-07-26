@@ -50,6 +50,11 @@ modulus add-endpoint GetOrder --module Orders --method GET --route "/{id:guid}" 
 modulus add-event OrderPlaced --module Orders --properties "OrderId:Guid,Total:decimal"
 modulus add-consumer OrderPlaced --module Loyalty --event-module Orders   # handler in Loyalty for Orders' event
 
+modulus add-migration AddOrderTable --module Orders  # wraps 'dotnet ef migrations add' with inferred
+                                                     # --project (module Infrastructure) and
+                                                     # --startup-project (WebApi host); needs dotnet-ef tool.
+                                                     # Only the write context — never {Module}ReadOnlyDbContext.
+
 modulus remove-module Orders                         # dry-run by default; --confirm to apply, --force to override blocks
 
 # --dry-run is available on EVERY mutating scaffold command (init, add-module, add-entity,

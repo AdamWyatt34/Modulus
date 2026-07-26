@@ -142,6 +142,7 @@ export default withMermaid(
               { text: 'modulus add-endpoint', link: '/cli/add-endpoint' },
               { text: 'modulus add-event', link: '/cli/add-event' },
               { text: 'modulus add-consumer', link: '/cli/add-consumer' },
+              { text: 'modulus add-migration', link: '/cli/add-migration' },
               { text: 'modulus remove-module', link: '/cli/remove-module' },
               { text: 'Renaming a module (manual)', link: '/cli/rename-module' },
               { text: 'modulus outbox', link: '/cli/outbox' },

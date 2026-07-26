@@ -17,6 +17,7 @@ rootCommand.Subcommands.Add(AddQueryCommand.Create(fileSystem, consoleOutput));
 rootCommand.Subcommands.Add(AddEndpointCommand.Create(fileSystem, consoleOutput));
 rootCommand.Subcommands.Add(AddEventCommand.Create(fileSystem, consoleOutput));
 rootCommand.Subcommands.Add(AddConsumerCommand.Create(fileSystem, consoleOutput));
+rootCommand.Subcommands.Add(AddMigrationCommand.Create(fileSystem, processRunner, consoleOutput));
 rootCommand.Subcommands.Add(ListModulesCommand.Create(fileSystem, consoleOutput));
 rootCommand.Subcommands.Add(ListArtifactsCommands.CreateListEvents(fileSystem, consoleOutput));
 rootCommand.Subcommands.Add(ListArtifactsCommands.CreateListConsumers(fileSystem, consoleOutput));

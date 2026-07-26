@@ -40,6 +40,7 @@ custom template engine bridge, rather than a thin wrapper around the current sca
 | [`modulus add-endpoint`](./add-endpoint) | Scaffold a minimal API endpoint |
 | [`modulus add-event`](./add-event) | Scaffold an integration event |
 | [`modulus add-consumer`](./add-consumer) | Scaffold an integration event handler and wire the cross-module reference |
+| [`modulus add-migration`](./add-migration) | Add an EF Core migration for a module's DbContext with inferred project paths |
 | [`modulus remove-module`](./remove-module) | Remove a module (dry-run by default) |
 | [`modulus outbox`](./outbox) | Inspect and operate the transactional outbox (list-failed / retry / purge) |
 | [`modulus dlq`](./dlq) | Inspect and replay broker dead-letter queues |
