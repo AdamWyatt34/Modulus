@@ -24,6 +24,11 @@ public sealed class InboxDbContext : DbContext
 
             // Polling query: WHERE ProcessedOnUtc IS NULL ORDER BY OccurredOnUtc.
             entity.HasIndex(e => new { e.ProcessedOnUtc, e.OccurredOnUtc });
+
+            // Retention purge: WHERE OccurredOnUtc < @cutoff — the composite above cannot
+            // seek on OccurredOnUtc alone, and retention targets exactly the large tables
+            // where a full scan per batch hurts most.
+            entity.HasIndex(e => e.OccurredOnUtc);
         });
 
         modelBuilder.Entity<InboxMessageConsumer>(entity =>

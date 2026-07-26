@@ -188,4 +188,51 @@ public sealed class EfAdminStoreRetentionTests : IDisposable
 
         count.ShouldBe(1);
     }
+
+    [Fact]
+    public async Task PurgeOld_never_touches_a_message_with_a_live_unprocessed_reservation()
+    {
+        // Old message, but a handler is executing it right now (e.g. a DLQ replay of an event
+        // past the retention age): deleting the reservation would let a concurrent duplicate
+        // delivery re-reserve and run the handler in parallel.
+        var oldMessage = await SeedInboxRow(DateTime.UtcNow.AddDays(-10));
+        _inboxContext.InboxMessageConsumers.Add(new InboxMessageConsumer
+        {
+            InboxMessageId = oldMessage.Id,
+            Name = "InFlightHandler",
+            ReservedOnUtc = DateTime.UtcNow,
+            ProcessedOnUtc = null,
+        });
+        await _inboxContext.SaveChangesAsync();
+        _inboxContext.ChangeTracker.Clear();
+
+        var counted = await _inboxAdmin.CountOldAsync(DateTime.UtcNow.AddDays(-7));
+        var purged = await _inboxAdmin.PurgeOldAsync(DateTime.UtcNow.AddDays(-7), batchSize: 100);
+
+        counted.ShouldBe(0);
+        purged.ShouldBe(0);
+        (await _inboxContext.InboxMessages.AsNoTracking().CountAsync()).ShouldBe(1);
+        (await _inboxContext.InboxMessageConsumers.AsNoTracking().CountAsync()).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task PurgeOld_removes_a_message_whose_reservation_is_long_abandoned()
+    {
+        var oldMessage = await SeedInboxRow(DateTime.UtcNow.AddDays(-10));
+        _inboxContext.InboxMessageConsumers.Add(new InboxMessageConsumer
+        {
+            InboxMessageId = oldMessage.Id,
+            Name = "CrashedHandler",
+            ReservedOnUtc = DateTime.UtcNow - EfInboxAdminStore.ActiveReservationGrace - TimeSpan.FromMinutes(5),
+            ProcessedOnUtc = null,
+        });
+        await _inboxContext.SaveChangesAsync();
+        _inboxContext.ChangeTracker.Clear();
+
+        var purged = await _inboxAdmin.PurgeOldAsync(DateTime.UtcNow.AddDays(-7), batchSize: 100);
+
+        purged.ShouldBe(1);
+        (await _inboxContext.InboxMessages.AsNoTracking().AnyAsync()).ShouldBeFalse();
+        (await _inboxContext.InboxMessageConsumers.AsNoTracking().AnyAsync()).ShouldBeFalse();
+    }
 }

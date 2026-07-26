@@ -168,10 +168,15 @@ internal sealed class RabbitMqTransport(
 
         try
         {
+            // Scheduled publishes go through the default exchange to a specific queue, so an
+            // unroutable publish (queue missing under AutoProvision=false) must fault the
+            // confirm via mandatory rather than be silently discarded-and-confirmed. Normal
+            // event publishes stay non-mandatory: a fanout exchange with no bindings yet
+            // (no subscriber has started) deliberately drops, as documented.
             await channel.BasicPublishAsync(
                 targetExchange,
                 routingKey,
-                mandatory: false,
+                mandatory: delay > TimeSpan.Zero,
                 basicProperties: properties,
                 body: envelope.Body,
                 cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -323,8 +328,18 @@ internal sealed class RabbitMqTransport(
                     {
                         logger.LogWarning(
                             ex,
-                            "Failed to schedule broker redelivery for message {MessageId}; requeueing for immediate redelivery instead.",
+                            "Failed to schedule broker redelivery for message {MessageId}; requeueing after an in-process backoff instead.",
                             envelope.MessageId);
+
+                        // Requeue keeps the attempt header unchanged, so without a wait a
+                        // persistently failing schedule path (e.g. dead publish channel)
+                        // would hot-loop handler executions. Sleeping the configured backoff
+                        // in process mirrors InProcess-mode semantics for this edge.
+                        var backoff = RetryDelayCalculator.GetDelay(
+                            options.ConsumerRetry, RedeliveryHeaders.GetAttempt(envelope));
+                        if (backoff > TimeSpan.Zero)
+                            await Task.Delay(backoff, delivery.CancellationToken).ConfigureAwait(false);
+
                         await consumeChannel.BasicNackAsync(delivery.DeliveryTag, multiple: false, requeue: true, delivery.CancellationToken)
                             .ConfigureAwait(false);
                         return;
@@ -410,10 +425,13 @@ internal sealed class RabbitMqTransport(
             .ToString(CultureInfo.InvariantCulture);
 
         var channel = await GetPublishChannelAsync(cancellationToken).ConfigureAwait(false);
+        // Mandatory: a missing retry queue (AutoProvision=false without the documented
+        // pre-created topology) must fault this publish so the caller requeues the original,
+        // instead of the broker confirming a silently discarded copy while we ack the original.
         await channel.BasicPublishAsync(
             exchange: string.Empty,
             routingKey: retryQueue,
-            mandatory: false,
+            mandatory: true,
             basicProperties: properties,
             body: copy.Body,
             cancellationToken: cancellationToken).ConfigureAwait(false);

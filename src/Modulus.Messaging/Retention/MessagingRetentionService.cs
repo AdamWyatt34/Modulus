@@ -50,11 +50,8 @@ internal sealed class MessagingRetentionService(
             _outboxUnavailable = !await TryPurgeAsync(
                 "outbox",
                 DateTime.UtcNow - options.Retention.ProcessedOutboxAge,
-                static (provider, olderThan, batchSize, ct) =>
-                {
-                    var store = provider.GetRequiredService<IOutboxAdminStore>();
-                    return store.PurgeProcessedAsync(olderThan, batchSize, ct);
-                },
+                static provider => provider.GetService<IOutboxAdminStore>(),
+                static (store, olderThan, batchSize, ct) => store.PurgeProcessedAsync(olderThan, batchSize, ct),
                 cancellationToken).ConfigureAwait(false);
         }
 
@@ -63,25 +60,26 @@ internal sealed class MessagingRetentionService(
             _inboxUnavailable = !await TryPurgeAsync(
                 "inbox",
                 DateTime.UtcNow - options.Retention.InboxAge,
-                static (provider, olderThan, batchSize, ct) =>
-                {
-                    var store = provider.GetRequiredService<IInboxAdminStore>();
-                    return store.PurgeOldAsync(olderThan, batchSize, ct);
-                },
+                static provider => provider.GetService<IInboxAdminStore>(),
+                static (store, olderThan, batchSize, ct) => store.PurgeOldAsync(olderThan, batchSize, ct),
                 cancellationToken).ConfigureAwait(false);
         }
     }
 
     /// <summary>
     /// Runs one store's purge to completion in batches. Returns <see langword="false"/> only
-    /// when the store cannot be constructed at all (its context is not registered), which
-    /// permanently disables that store's sweep; transient purge errors log and retry next sweep.
+    /// when the store cannot be RESOLVED (not registered, or its DbContext dependency is
+    /// missing) — a topology choice that permanently disables that store's sweep. Purge-time
+    /// errors, transient or not, always log and retry on the next sweep: a database hiccup on
+    /// the first batch must never silently turn retention off for the process lifetime.
     /// </summary>
-    private async Task<bool> TryPurgeAsync(
+    private async Task<bool> TryPurgeAsync<TStore>(
         string storeName,
         DateTime olderThanUtc,
-        Func<IServiceProvider, DateTime, int, CancellationToken, Task<int>> purge,
+        Func<IServiceProvider, TStore?> resolve,
+        Func<TStore, DateTime, int, CancellationToken, Task<int>> purge,
         CancellationToken cancellationToken)
+        where TStore : class
     {
         var batchSize = options.Retention.PurgeBatchSize;
         long total = 0;
@@ -94,22 +92,31 @@ internal sealed class MessagingRetentionService(
                 // lets long drains span connection recycling.
                 using var scope = scopeFactory.CreateScope();
 
-                int purged;
+                TStore? store;
                 try
                 {
-                    purged = await purge(scope.ServiceProvider, olderThanUtc, batchSize, cancellationToken)
-                        .ConfigureAwait(false);
+                    store = resolve(scope.ServiceProvider);
                 }
-                catch (InvalidOperationException ex) when (total == 0)
+                catch (InvalidOperationException ex)
                 {
-                    // GetRequiredService failed: the store's DbContext isn't registered in this
-                    // host. That is a topology choice, not an error — disable this store's sweep.
+                    // GetService throws when the registration exists but its dependencies
+                    // (the store's DbContext) don't — same topology signal as no registration.
                     logger.LogWarning(
                         ex,
-                        "Messaging retention cannot resolve the {Store} admin store; {Store} retention is disabled for this host.",
+                        "Messaging retention cannot construct the {Store} admin store; {Store} retention is disabled for this host.",
                         storeName);
                     return false;
                 }
+
+                if (store is null)
+                {
+                    logger.LogWarning(
+                        "Messaging retention found no {Store} admin store registration; {Store} retention is disabled for this host.",
+                        storeName);
+                    return false;
+                }
+
+                var purged = await purge(store, olderThanUtc, batchSize, cancellationToken).ConfigureAwait(false);
 
                 total += purged;
                 if (purged > 0)

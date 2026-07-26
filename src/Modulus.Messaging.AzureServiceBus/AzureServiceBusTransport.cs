@@ -263,6 +263,11 @@ internal sealed class AzureServiceBusTransport(
 
         var copy = envelope with
         {
+            // Fresh MessageId: a pre-created topic with duplicate detection would otherwise
+            // silently swallow every copy (same id as the original) while the original gets
+            // completed — message lost on first failure. Consumer idempotency is unaffected:
+            // the inbox keys on the event body's EventId, which is unchanged.
+            MessageId = Guid.NewGuid(),
             Headers = RedeliveryHeaders.ForRedelivery(envelope, targetEndpoint: endpointName),
             ScheduledEnqueueTimeUtc = DateTimeOffset.UtcNow + delay,
         };

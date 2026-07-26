@@ -304,6 +304,8 @@ builder.Services.AddModulusMessaging(options =>
 
 Size `InboxAge` beyond the *latest possible redelivery* of a message: broker redelivery windows, your dead-letter replay habits, and any manual re-publish tooling. Seven days is a safe default for most deployments; teams that replay months-old DLQ messages should either keep inbox rows longer or ensure handlers are naturally idempotent.
 
+The sweep never races live work: a message with an unprocessed reservation younger than one hour is skipped whatever its age, so a handler mid-execution (e.g. a DLQ replay of an old event) cannot have its reservation deleted out from under it. Reservations older than that are crashed owners' leftovers and are removed with the message.
+
 One-off cleanup uses [`modulus inbox purge`](/cli/inbox), which previews the row count until you pass `--confirm`. Configuration details for the sweep are shared with the outbox — see [Outbox Pattern § Retention & Cleanup](./outbox-pattern#retention-cleanup).
 
 ## Best Practices
