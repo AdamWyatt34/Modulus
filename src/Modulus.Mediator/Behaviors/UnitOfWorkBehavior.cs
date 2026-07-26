@@ -20,7 +20,7 @@ public sealed class UnitOfWorkBehavior<TRequest, TResponse>(IServiceProvider ser
         RequestHandlerDelegate<TResponse> next,
         CancellationToken cancellationToken)
     {
-        var response = await next().ConfigureAwait(false);
+        var response = await next(cancellationToken).ConfigureAwait(false);
 
         if (!IsCommand(request) || !response.IsSuccess)
             return response;

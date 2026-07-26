@@ -45,16 +45,16 @@ public class ModulusMessagingHealthCheckTests
         public Task Save(IIntegrationEvent @event, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
 
-        public Task<IReadOnlyList<OutboxMessage>> GetPending(int batchSize, int maxAttempts, CancellationToken cancellationToken = default)
+        public Task<IReadOnlyList<OutboxMessage>> ClaimPending(string ownerId, TimeSpan lease, int batchSize, int maxAttempts, CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<OutboxMessage>>([]);
 
         public Task<int> CountPending(int maxAttempts, CancellationToken cancellationToken = default)
             => Task.FromResult(pendingCount());
 
-        public Task MarkAsProcessed(IEnumerable<Guid> ids, CancellationToken cancellationToken = default)
+        public Task MarkAsProcessed(string ownerId, IEnumerable<Guid> ids, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
 
-        public Task MarkAsFailed(Guid messageId, string error, DateTime? nextAttemptOnUtc, CancellationToken cancellationToken = default)
+        public Task MarkAsFailed(string ownerId, Guid messageId, string error, DateTime? nextAttemptOnUtc, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
     }
 

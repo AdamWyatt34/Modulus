@@ -56,17 +56,17 @@ public interface IOutboxStore
 {
     Task Save(IIntegrationEvent @event, CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<OutboxMessage>> GetPending(int batchSize, int maxAttempts, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<OutboxMessage>> ClaimPending(string ownerId, TimeSpan lease, int batchSize, int maxAttempts, CancellationToken cancellationToken = default);
 
     Task<int> CountPending(int maxAttempts, CancellationToken cancellationToken = default);
 
-    Task MarkAsProcessed(IEnumerable<Guid> ids, CancellationToken cancellationToken = default);
+    Task MarkAsProcessed(string ownerId, IEnumerable<Guid> ids, CancellationToken cancellationToken = default);
 
-    Task MarkAsFailed(Guid messageId, string error, DateTime? nextAttemptOnUtc, CancellationToken cancellationToken = default);
+    Task MarkAsFailed(string ownerId, Guid messageId, string error, DateTime? nextAttemptOnUtc, CancellationToken cancellationToken = default);
 }
 ```
 
-`GetPending` skips dead-lettered rows (`Attempts >= maxAttempts`) and rows whose `NextAttemptOnUtc` backoff has not elapsed; `MarkAsFailed` records the failure and the next-attempt time computed from the retry policy. The inbox counterpart, `IInboxStore`, provides per-handler idempotent consumption (reserve → execute → mark processed, with reservation release on dead-letter).
+`ClaimPending` atomically claims rows for the caller's `ownerId` (a portable, EF-`ExecuteUpdateAsync`-based optimistic claim — no provider-specific row locking), so multiple dispatcher instances polling the same table never publish the same row twice; it skips dead-lettered rows (`Attempts >= maxAttempts`) and rows whose `NextAttemptOnUtc` backoff has not elapsed. `MarkAsProcessed`/`MarkAsFailed` only act on rows `ownerId` still holds the claim on; `MarkAsFailed` records the failure, the next-attempt time computed from the retry policy, and releases the claim so the row is immediately reclaimable once its backoff elapses. A claim's lease (`MessagingOptions.OutboxClaimLease`) expiring — e.g. because the owning instance crashed — is what makes an in-flight row recoverable without operator intervention. The inbox counterpart, `IInboxStore`, provides per-handler idempotent consumption (reserve → execute → mark processed, with reservation release on dead-letter).
 
 ## Learn More
 

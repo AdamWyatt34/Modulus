@@ -47,7 +47,7 @@ public sealed class MetricsBehavior<TRequest, TResponse> : IPipelineBehavior<TRe
 
         try
         {
-            var response = await next();
+            var response = await next(cancellationToken);
             stopwatch.Stop();
 
             _handlerDuration.Record(

@@ -41,21 +41,62 @@ internal sealed class EfOutboxStore(OutboxDbContext dbContext, IOutboxNotifier n
             notifier.Notify();
     }
 
-    public async Task<IReadOnlyList<OutboxMessage>> GetPending(
+    public async Task<IReadOnlyList<OutboxMessage>> ClaimPending(
+        string ownerId,
+        TimeSpan lease,
         int batchSize,
         int maxAttempts,
         CancellationToken cancellationToken = default)
     {
         var utcNow = DateTime.UtcNow;
 
-        return await dbContext.OutboxMessages
+        // Step 1: find candidates without taking a lock on them yet. AsNoTracking + Select(Id)
+        // keeps this a cheap read; the eligibility predicate is identical to pre-4.0 GetPending
+        // plus the claim clause (unclaimed, or a lease that has already expired).
+        var candidateIds = await dbContext.OutboxMessages
             .AsNoTracking()
             .Where(m => m.ProcessedAt == null
                 && m.Attempts < maxAttempts
                 && (m.NextAttemptOnUtc == null || m.NextAttemptOnUtc <= utcNow)
-                && (m.ScheduledOnUtc == null || m.ScheduledOnUtc <= utcNow))
+                && (m.ScheduledOnUtc == null || m.ScheduledOnUtc <= utcNow)
+                && (m.ClaimedUntil == null || m.ClaimedUntil < utcNow))
             .OrderBy(m => m.CreatedAt)
             .Take(batchSize)
+            .Select(m => m.Id)
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+
+        if (candidateIds.Count == 0)
+            return [];
+
+        // Step 2: atomic claim. The WHERE repeats the FULL eligibility predicate from step 1 —
+        // not just the claim clause — evaluated fresh against the current row state rather than
+        // the step-1 snapshot. The claim clause alone makes each row single-winner (whichever
+        // claimant's UPDATE commits first wins it; every later UPDATE no longer matches), but a
+        // competitor can do more than claim in the gap: it can claim, fail the publish, and
+        // MarkAsFailed — which clears the claim while bumping Attempts/NextAttemptOnUtc. Against
+        // a claim-only re-check, this stale candidate list would then re-claim a row that just
+        // became dead-lettered or entered retry backoff, publishing past maxAttempts or inside
+        // the backoff window. Re-checking eligibility closes that: a row mutated into
+        // ineligibility between the steps simply drops out of the match set.
+        var claimedUntil = utcNow + lease;
+        await dbContext.OutboxMessages
+            .Where(m => candidateIds.Contains(m.Id)
+                && m.ProcessedAt == null
+                && m.Attempts < maxAttempts
+                && (m.NextAttemptOnUtc == null || m.NextAttemptOnUtc <= utcNow)
+                && (m.ScheduledOnUtc == null || m.ScheduledOnUtc <= utcNow)
+                && (m.ClaimedUntil == null || m.ClaimedUntil < utcNow))
+            .ExecuteUpdateAsync(
+                s => s.SetProperty(m => m.ClaimedBy, ownerId).SetProperty(m => m.ClaimedUntil, claimedUntil),
+                cancellationToken).ConfigureAwait(false);
+
+        // Step 3: re-fetch only the rows this call actually won. A candidate lost to a
+        // competitor between steps 1 and 2 does not match ClaimedBy == ownerId here and is
+        // silently absent — that is exactly the desired outcome, not an error.
+        return await dbContext.OutboxMessages
+            .AsNoTracking()
+            .Where(m => candidateIds.Contains(m.Id) && m.ClaimedBy == ownerId && m.ClaimedUntil > utcNow)
+            .OrderBy(m => m.CreatedAt)
             .ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -79,35 +120,46 @@ internal sealed class EfOutboxStore(OutboxDbContext dbContext, IOutboxNotifier n
     }
 
     public async Task MarkAsProcessed(
+        string ownerId,
         IEnumerable<Guid> ids,
         CancellationToken cancellationToken = default)
     {
         var idList = ids.ToList();
+
+        // ClaimedBy == ownerId guards against a lease takeover: if this pass ran long enough
+        // that another owner reclaimed one of these rows in the meantime, that row is no
+        // longer this owner's to stamp — it silently drops out of the affected set instead of
+        // being marked processed on the loser's say-so.
         await dbContext.OutboxMessages
-            .Where(m => idList.Contains(m.Id))
+            .Where(m => idList.Contains(m.Id) && m.ClaimedBy == ownerId)
             .ExecuteUpdateAsync(
                 s => s.SetProperty(m => m.ProcessedAt, DateTime.UtcNow),
                 cancellationToken).ConfigureAwait(false);
     }
 
-    // Single-writer assumption: the outbox processor is registered as a HostedService and
-    // processes one batch sequentially. Multi-replica deployments should consider a partitioned
-    // outbox or row-level locking instead of relying on this load-modify-save pattern.
     public async Task MarkAsFailed(
+        string ownerId,
         Guid messageId,
         string error,
         DateTime? nextAttemptOnUtc,
         CancellationToken cancellationToken = default)
     {
-        var message = await dbContext.OutboxMessages
-            .FirstOrDefaultAsync(m => m.Id == messageId, cancellationToken).ConfigureAwait(false);
-
-        if (message is null)
-            return;
-
-        message.Attempts += 1;
-        message.LastError = error;
-        message.NextAttemptOnUtc = nextAttemptOnUtc;
-        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        // Single set-based ExecuteUpdate instead of the old load-modify-save: the previous
+        // pattern raced Attempts under multi-instance polling (two readers loading the same row,
+        // both incrementing from the same stale value, one increment silently lost). The
+        // ClaimedBy guard is the same lease-takeover protection as MarkAsProcessed; clearing the
+        // claim (rather than leaving it to expire) makes a durably-recorded failure immediately
+        // reclaimable once nextAttemptOnUtc elapses, instead of idling out the rest of this
+        // pass's lease first.
+        await dbContext.OutboxMessages
+            .Where(m => m.Id == messageId && m.ClaimedBy == ownerId)
+            .ExecuteUpdateAsync(
+                s => s
+                    .SetProperty(m => m.Attempts, m => m.Attempts + 1)
+                    .SetProperty(m => m.LastError, error)
+                    .SetProperty(m => m.NextAttemptOnUtc, nextAttemptOnUtc)
+                    .SetProperty(m => m.ClaimedBy, (string?)null)
+                    .SetProperty(m => m.ClaimedUntil, (DateTime?)null),
+                cancellationToken).ConfigureAwait(false);
     }
 }

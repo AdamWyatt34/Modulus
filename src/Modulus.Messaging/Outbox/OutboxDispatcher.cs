@@ -28,6 +28,14 @@ internal sealed class OutboxDispatcher(
 
     private static readonly ActivitySource Source = new(ActivitySourceName);
 
+    // A stable per-instance identity for the lifetime of this dispatcher (one per process,
+    // registered as a singleton) — the "me" in ClaimPending's "unclaimed or claimed by me"
+    // semantics. Machine name alone is not enough (multiple replicas can share a host, e.g.
+    // containers or several instances of a Windows service); the GUID suffix makes it unique
+    // even then. Generated once and reused for every dispatch pass this process runs, so
+    // MarkAsProcessed/MarkAsFailed always match the claim ClaimPending just took.
+    private readonly string _ownerId = $"{Environment.MachineName}:{Guid.NewGuid():N}";
+
     // Strips ", Version=..." / ", Culture=..." / ", PublicKeyToken=..." segments from an
     // assembly-qualified name, including ones nested inside generic-argument brackets
     // ("[[...]]"), so a deploy that only bumps the assembly's version/culture/key does not
@@ -94,7 +102,7 @@ internal sealed class OutboxDispatcher(
 
         var maxAttempts = options.RetryPolicy.MaxAttempts;
         var pending = await outboxStore
-            .GetPending(options.OutboxBatchSize, maxAttempts, cancellationToken)
+            .ClaimPending(_ownerId, options.OutboxClaimLease, options.OutboxBatchSize, maxAttempts, cancellationToken)
             .ConfigureAwait(false);
 
         if (pending.Count == 0)
@@ -218,8 +226,15 @@ internal sealed class OutboxDispatcher(
             }
         }
 
+        // Not wrapped in try/catch like TryMarkAsFailedAsync below: if this throws (e.g. the
+        // store goes unreachable mid-flush), the rows already published this pass stay claimed
+        // by _ownerId with their lease still running. That is the correct failure mode under the
+        // claim model — they are not immediately re-fetched and re-published by this same
+        // instance's very next pass (they would be, pre-4.0, with no claim to hold them back);
+        // they simply wait out the remainder of the lease, after which any dispatcher —
+        // including this one — may claim and (safely, at-least-once) re-publish them.
         if (processedIds.Count > 0)
-            await outboxStore.MarkAsProcessed(processedIds, cancellationToken).ConfigureAwait(false);
+            await outboxStore.MarkAsProcessed(_ownerId, processedIds, cancellationToken).ConfigureAwait(false);
 
         return progressCount;
     }
@@ -248,9 +263,10 @@ internal sealed class OutboxDispatcher(
 
     // A store hiccup here must never propagate: an unhandled exception would unwind the
     // foreach loop and skip the MarkAsProcessed flush above for rows already published this
-    // pass, so they would be re-fetched and re-published next pass (batch-wide republish).
-    // Logging and continuing means, at worst, this one row's failure isn't durably recorded
-    // and it is re-attempted next pass — no different from today's un-backed-off behavior.
+    // pass, abandoning the rest of the batch mid-loop. Logging and continuing means, at worst,
+    // this one row's failure isn't durably recorded — it stays claimed by _ownerId (not
+    // reverted to unclaimed) and simply waits out the remainder of this pass's lease before
+    // anyone, including this instance, can claim and retry it. No hot loop, no lost row.
     private async Task<bool> TryMarkAsFailedAsync(
         IOutboxStore outboxStore,
         Guid messageId,
@@ -260,7 +276,7 @@ internal sealed class OutboxDispatcher(
     {
         try
         {
-            await outboxStore.MarkAsFailed(messageId, error, nextAttemptOnUtc, cancellationToken).ConfigureAwait(false);
+            await outboxStore.MarkAsFailed(_ownerId, messageId, error, nextAttemptOnUtc, cancellationToken).ConfigureAwait(false);
             return true;
         }
         catch (Exception ex)

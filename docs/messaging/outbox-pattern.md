@@ -38,11 +38,11 @@ sequenceDiagram
     DB-->>Outbox: Wake signal (commit-time notification)
 
     loop On wake signal, or every OutboxPollInterval as fallback
-        Outbox->>DB: GetPending(batchSize)
-        DB-->>Outbox: Pending messages
+        Outbox->>DB: ClaimPending(ownerId, lease, batchSize)
+        DB-->>Outbox: Claimed messages
         Outbox->>Bus: Publish deserialized events
         Bus->>Consumer: Deliver messages
-        Outbox->>DB: MarkAsProcessed(messageIds)
+        Outbox->>DB: MarkAsProcessed(ownerId, messageIds)
     end
 ```
 
@@ -61,20 +61,24 @@ The `IOutboxStore` interface defines the contract for outbox persistence:
 public interface IOutboxStore
 {
     Task Save(IIntegrationEvent @event, CancellationToken cancellationToken = default);
-    Task<IReadOnlyList<OutboxMessage>> GetPending(int batchSize, int maxAttempts, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<OutboxMessage>> ClaimPending(string ownerId, TimeSpan lease, int batchSize, int maxAttempts, CancellationToken cancellationToken = default);
     Task<int> CountPending(int maxAttempts, CancellationToken cancellationToken = default);
-    Task MarkAsProcessed(IEnumerable<Guid> ids, CancellationToken cancellationToken = default);
-    Task MarkAsFailed(Guid messageId, string error, DateTime? nextAttemptOnUtc, CancellationToken cancellationToken = default);
+    Task MarkAsProcessed(string ownerId, IEnumerable<Guid> ids, CancellationToken cancellationToken = default);
+    Task MarkAsFailed(string ownerId, Guid messageId, string error, DateTime? nextAttemptOnUtc, CancellationToken cancellationToken = default);
 }
 ```
 
 | Method | Description |
 |---|---|
 | `Save` | Serializes and saves an integration event as an `OutboxMessage`. |
-| `GetPending` | Retrieves up to `batchSize` unprocessed messages whose attempt count is below `maxAttempts` and whose `NextAttemptOnUtc` is unset or has elapsed, ordered by creation time. Dead-lettered rows and rows still serving out a retry backoff are excluded so they do not starve newer rows or busy-loop the dispatcher. |
-| `CountPending` | Counts unprocessed, not-yet-dead-lettered messages. Used by the backlog-depth health check; intentionally includes rows currently in backoff, so backlog depth reflects true outstanding work. |
-| `MarkAsProcessed` | Marks the specified messages as processed so they are not picked up again. |
-| `MarkAsFailed` | Increments a message's attempt counter, records the failure message, and sets `NextAttemptOnUtc` from the configured retry backoff (pass `null` for immediately-eligible). |
+| `ClaimPending` | Atomically claims up to `batchSize` unprocessed messages for `ownerId`, so concurrent dispatcher instances polling the same table never publish the same row twice (see [Multi-instance dispatch](#multi-instance-dispatch-the-claim-lease) below). Excludes dead-lettered rows, rows still serving out a retry backoff, and rows another owner currently holds a live claim on. |
+| `CountPending` | Counts unprocessed, not-yet-dead-lettered messages. Used by the backlog-depth health check; intentionally includes rows currently in backoff **and** rows another instance has claimed but not yet published, so backlog depth reflects true outstanding work rather than just what the caller could claim right now. |
+| `MarkAsProcessed` | Marks the specified messages as processed, but only the ones `ownerId` still holds the claim on — a row whose claim was taken over by another owner is silently left alone. |
+| `MarkAsFailed` | Increments a message's attempt counter, records the failure message, sets `NextAttemptOnUtc` from the configured retry backoff (pass `null` for immediately-eligible), and releases the claim — but again, only if `ownerId` still holds it. |
+
+::: warning BREAKING in 4.0.0
+Prior to 4.0.0 this interface had a plain `GetPending(batchSize, maxAttempts)` and owner-less `MarkAsProcessed`/`MarkAsFailed` overloads. 4.0.0 replaces `GetPending` with `ClaimPending` and adds a required `ownerId` parameter to `MarkAsProcessed`/`MarkAsFailed`. Custom `IOutboxStore` implementations must update to the new signatures — see [Multi-instance dispatch](#multi-instance-dispatch-the-claim-lease) for the claim semantics they need to implement.
+:::
 
 ## OutboxMessage Model
 
@@ -92,6 +96,8 @@ public sealed class OutboxMessage
     public int Attempts { get; set; }
     public string? LastError { get; set; }
     public DateTime? NextAttemptOnUtc { get; set; }
+    public string? ClaimedBy { get; set; }
+    public DateTime? ClaimedUntil { get; set; }
 }
 ```
 
@@ -105,6 +111,8 @@ public sealed class OutboxMessage
 | `Attempts` | `int` | Number of failed publish attempts. Once it reaches `RetryPolicy.MaxAttempts` the message is dead-lettered. |
 | `LastError` | `string?` | Error message from the most recent failed publish attempt. |
 | `NextAttemptOnUtc` | `DateTime?` | When the row becomes eligible for another dispatch attempt (set from the retry backoff on failure). `null` if it never failed or is immediately eligible. |
+| `ClaimedBy` | `string?` | The owner id of the dispatcher instance currently holding a claim on this row, or `null` if unclaimed. |
+| `ClaimedUntil` | `DateTime?` | UTC time the current claim expires, or `null` if unclaimed. A row whose claim has expired is claimable by anyone, including the instance that let it lapse — this is 4.0.0's crash-recovery mechanism (see below). |
 
 ## EfOutboxStore
 
@@ -188,16 +196,16 @@ The `OutboxProcessor` is a `BackgroundService` that runs continuously in your ap
 
 **Processing flow (drain-then-wait):**
 
-1. Call `IOutboxStore.GetPending(batchSize)` to retrieve up to `OutboxBatchSize` (default: 100) pending messages.
+1. Call `IOutboxStore.ClaimPending(ownerId, lease, batchSize)` to atomically claim up to `OutboxBatchSize` (default: 100) pending messages for this dispatcher instance's own `ownerId` — see [Multi-instance dispatch](#multi-instance-dispatch-the-claim-lease) below for what "claim" means and why it exists.
 2. For each message, deserialize the `Payload` using the `EventType` to resolve the concrete type. Rows that cannot be dispatched -- unknown event type or a payload that fails to deserialize -- are marked failed via `MarkAsFailed` rather than silently retried, so a poison row cannot wedge the head of the queue or starve newer rows.
 3. Publish each deserialized event through the configured transport. On RabbitMQ, publisher confirmations are enabled, so a publish only counts as successful once the broker confirms it.
-4. Call `IOutboxStore.MarkAsProcessed(ids)` for all successfully published messages; failed publishes are recorded with `MarkAsFailed` and retried with the configured `RetryPolicy` backoff until `MaxAttempts` dead-letters them.
+4. Call `IOutboxStore.MarkAsProcessed(ownerId, ids)` for all successfully published messages; failed publishes are recorded with `MarkAsFailed` (which also releases the claim) and retried with the configured `RetryPolicy` backoff until `MaxAttempts` dead-letters them.
 5. If the fetch returned a **full batch**, more rows are probably waiting -- dispatch again immediately.
 6. Otherwise wait until either a **wake signal** arrives (new rows committed -- dispatch immediately) or `OutboxPollInterval` (default: 5 seconds) elapses as the fallback sweep. Repeat.
 
 ### Configuration
 
-Control the polling interval and batch size through `MessagingOptions`:
+Control the polling interval, batch size, and claim lease through `MessagingOptions`:
 
 <!-- verify -->
 ```csharp
@@ -211,6 +219,7 @@ builder.Services.AddModulusMessaging(options =>
     // Outbox configuration
     options.OutboxPollInterval = TimeSpan.FromSeconds(10); // Default: 5 seconds
     options.OutboxBatchSize = 50;                          // Default: 100
+    options.OutboxClaimLease = TimeSpan.FromMinutes(2);    // Default: 5 minutes
 });
 ```
 
@@ -218,6 +227,7 @@ builder.Services.AddModulusMessaging(options =>
 |---|---|---|
 | `OutboxPollInterval` | `5 seconds` | Fallback sweep frequency. Rows saved through wired-up contexts are dispatched immediately via the wake signal, so this only bounds latency for rows the signal cannot see (other replicas, external writers, non-EF transactions). Minimum: 1 second. Raising it (e.g. to 30 seconds) reduces idle database load without adding dispatch latency for signaled rows. |
 | `OutboxBatchSize` | `100` | Maximum messages processed per cycle. Valid range: 1–1000. Tune based on your throughput requirements. |
+| `OutboxClaimLease` | `5 minutes` | How long a `ClaimPending` claim is held before it becomes reclaimable by any dispatcher instance. Must be greater than `OutboxPollInterval` and at least 30 seconds. See [Multi-instance dispatch](#multi-instance-dispatch-the-claim-lease). |
 
 ## Immediate Dispatch (Change Notification)
 
@@ -266,11 +276,39 @@ public sealed class PostgresOutboxListener(IOutboxNotifier notifier) : Backgroun
 Only the application instance that wrote the row is woken. Other replicas, dedicated worker deployments where a different process runs the outbox, external writers, and transactions EF Core does not observe (an externally-owned transaction passed to `Database.UseTransaction`, or an ambient `TransactionScope`) all fall back to the `OutboxPollInterval` sweep. Delivery guarantees are unchanged in every case -- the signal only removes latency, it never carries correctness.
 :::
 
-::: warning Run a single logical dispatcher
-The outbox store has no cross-instance claim coordination (no `SKIP LOCKED`-style row leases). Every host that calls `AddModulusMessaging` runs an `OutboxProcessor`, and processors that poll the same outbox table concurrently can each pick up and publish the same pending rows. Delivery is **at-least-once** either way -- the [inbox](./inbox-pattern) deduplicates on the consumer side -- but to avoid routine duplicate publishes, run a **single logical dispatcher** per outbox table: either a single host instance with the outbox registered, or a dedicated worker process, with web replicas writing rows only.
+::: tip Every replica can run the dispatcher
+Prior to 4.0.0, processors that polled the same outbox table concurrently could each pick up and publish the same pending rows, so the docs recommended a single logical dispatcher. 4.0.0's claim lease (below) makes that recommendation obsolete: run `OutboxProcessor` on every replica.
 :::
 
 The `modulus.messaging.outbox.wakeups` metric (tag `reason`: `signal` / `poll` / `backlog`) shows whether wake signals are actually arriving in a deployment or the processor is effectively poll-only -- see the [OpenTelemetry recipe](../recipes/opentelemetry).
+
+## Multi-Instance Dispatch (The Claim Lease)
+
+Scaled-out deployments routinely run more than one process capable of dispatching the outbox -- multiple web replicas, a dedicated worker alongside them, or both. Before 4.0.0, `IOutboxStore` had no cross-instance coordination at all: `GetPending` was a plain fetch, so two processors polling the same table at the same time could -- and, at any real scale, eventually would -- both pick up and publish the same pending row. The workaround was operational discipline: run a single logical dispatcher and let every other replica only *write* outbox rows.
+
+4.0.0 removes that constraint with a portable optimistic claim, `IOutboxStore.ClaimPending(ownerId, lease, batchSize, maxAttempts)`, built entirely on `ExecuteUpdateAsync` -- no `SELECT ... FOR UPDATE SKIP LOCKED`, no provider-specific row-locking hint, so the mechanism works identically on SQL Server, PostgreSQL, SQLite, or any other relational EF Core provider.
+
+### How the claim works
+
+Each `OutboxDispatcher` instance generates a stable owner id once per process (machine name plus a per-process GUID, so replicas sharing a host still get distinct owners) and reuses it for every dispatch pass it runs. A single `ClaimPending` call then does three things:
+
+1. **Find candidates.** Select up to `batchSize` eligible row ids -- unprocessed, under `MaxAttempts`, past their retry backoff and schedule, and either unclaimed or past their `ClaimedUntil` lease -- ordered by `CreatedAt`.
+2. **Claim atomically.** A single set-based `ExecuteUpdateAsync` stamps `(ClaimedBy, ClaimedUntil)` onto those ids, re-checking the same unclaimed-or-lease-expired condition against the *current* row state (not the step-1 snapshot). A competitor that claims one of those ids in the gap between steps 1 and 2 simply drops out of this update's matched rows -- this is what makes each row single-winner under concurrency, without needing a database-specific locking primitive.
+3. **Fetch the winners.** Re-select only the rows this call's `ownerId` actually ended up owning.
+
+`MarkAsProcessed` and `MarkAsFailed` both gained a required `ownerId` parameter for the same reason: each re-checks `ClaimedBy == ownerId` before writing, so a pass whose lease already expired and was taken over by another instance can't stamp `ProcessedAt` or increment `Attempts` on a row it no longer owns. `MarkAsFailed` additionally clears the claim on success, so a durably-recorded failure is immediately reclaimable once its retry backoff elapses -- it does not sit out the remainder of the lease first.
+
+### Sizing `OutboxClaimLease`
+
+`MessagingOptions.OutboxClaimLease` (default 5 minutes) must comfortably outlast a real dispatch pass: deserializing, publishing, and marking processed for up to `OutboxBatchSize` rows. Registration validates `OutboxClaimLease >= 30 seconds` and `OutboxClaimLease > OutboxPollInterval`, but those are floor checks, not a guarantee that your lease is long enough for your actual publish latency and batch size -- size it with real numbers from your deployment (the `modulus.messaging.outbox.wakeups` and publish-latency metrics help here).
+
+### Crash recovery is lease expiry
+
+A dispatcher instance that crashes (or is killed, or hangs) mid-pass leaves its claimed rows exactly where they are -- claimed, unprocessed. No operator step recovers them: once `ClaimedUntil` elapses, any instance, including the crashed one restarting, can claim and publish those rows on its very next pass. This is the direct replacement for the old "run a single logical dispatcher, and if it dies, restart it promptly" operational story -- now every replica is a peer, and a dead one's in-flight work self-heals on a timer.
+
+### Still exactly-one-publisher-per-row, not exactly-once-delivery
+
+The claim guarantees that, at any instant, at most one live lease exists on a given row -- not that the row is published exactly once, ever. If a pass runs long enough to outlive its own lease (the scenario `OutboxClaimLease` sizing exists to make vanishingly rare -- a stalled transport call, a GC pause, a genuinely oversized batch), a second instance can legitimately claim and publish the same row while the first is still mid-flight, unaware it already lost the race. That is not a defect in the claim; it is the same at-least-once guarantee the outbox has always made, now extended across instances instead of within one. Pair the outbox with the [inbox pattern](./inbox-pattern) for consumer-side deduplication regardless of how many dispatcher instances are running.
 
 ## Usage Example
 
@@ -338,18 +376,20 @@ The outbox pattern is inherently resilient:
 - **Broker unavailable:** The `OutboxProcessor` catches publish failures, records them via `MarkAsFailed`, and retries with backoff on later cycles. Messages remain in the outbox until successfully published or dead-lettered after `RetryPolicy.MaxAttempts`.
 - **Application crash after commit:** The outbox messages are persisted in the database. When the application restarts, the `OutboxProcessor` picks up where it left off.
 - **Application crash before commit:** In the same-DbContext configuration, the transaction rolls back and neither the domain entity nor the outbox message is persisted -- the correct behavior. With the default standalone store, the two commits are independent, so a crash between them can lose the event (see [the failure windows](#default-standalone-outboxdbcontext-two-transactions)).
-- **Duplicate publishing:** If the application crashes after publishing but before marking messages as processed, the same messages may be published again on the next cycle. Delivery is **at-least-once** by design; use the [Inbox Pattern](./inbox-pattern) on the consumer side to deduplicate.
+- **Instance crash mid-dispatch:** Since 4.0.0, rows in flight when a dispatcher instance dies stay claimed (see [Multi-Instance Dispatch](#multi-instance-dispatch-the-claim-lease)) until their `OutboxClaimLease` expires, at which point any instance -- including the crashed one restarting -- claims and retries them automatically. No operator step required, and this now applies uniformly whether it's the only dispatcher or one of many scaled-out replicas.
+- **Duplicate publishing:** If a dispatcher crashes after publishing but before marking a message processed -- or a claim lease expires mid-pass and a second instance claims the same row before the first finishes -- the same message may be published again. Delivery is **at-least-once** by design, across one instance or many; use the [Inbox Pattern](./inbox-pattern) on the consumer side to deduplicate.
 
 ```mermaid
 flowchart TD
-    A[OutboxProcessor wakes: signal or poll] --> B{Pending messages?}
+    A[OutboxProcessor wakes: signal or poll] --> Z[ClaimPending: claim rows as ownerId]
+    Z --> B{Claimed any messages?}
     B -->|No| A
     B -->|Yes| C[Deserialize events]
     C --> D[Publish via transport]
     D --> E{Publish succeeded?}
-    E -->|Yes| F[Mark as processed]
+    E -->|Yes| F[MarkAsProcessed as ownerId]
     F --> A
-    E -->|No| G[MarkAsFailed: record attempt + error]
+    E -->|No| G[MarkAsFailed as ownerId: record attempt + error, release claim]
     G --> H{Attempts < MaxAttempts?}
     H -->|Yes, retry with backoff| A
     H -->|No| I[Dead-lettered: visible in modulus outbox list-failed]
@@ -364,7 +404,7 @@ The scheduled `Save` overload gives delayed publishing the outbox's durability: 
 await outbox.Save(new OrderFollowUpDue(order.Id), DateTimeOffset.UtcNow.AddDays(3), ct);
 ```
 
-The row's `ScheduledOnUtc` gates `GetPending`, and — deliberately — the backlog count: a message scheduled a week out is not outstanding work, so it never trips the backlog health check. Once due, the message dispatches like any other; precision is bounded by `OutboxPollInterval` (default 5 seconds). For sub-poll precision without durability, `IMessageBus.PublishScheduled` hands the delay to the broker instead — see [Message Bus](./message-bus#imessagebus-interface).
+The row's `ScheduledOnUtc` gates `ClaimPending`, and — deliberately — the backlog count: a message scheduled a week out is not outstanding work, so it never trips the backlog health check. Once due, the message dispatches like any other; precision is bounded by `OutboxPollInterval` (default 5 seconds). For sub-poll precision without durability, `IMessageBus.PublishScheduled` hands the delay to the broker instead — see [Message Bus](./message-bus#imessagebus-interface).
 
 Custom `IOutboxStore` implementations opt in by overriding the scheduled `Save` overload (the default implementation throws `NotSupportedException`).
 
@@ -399,6 +439,7 @@ For one-off or scripted cleanup — e.g. before enabling retention on an old dep
 - **Monitor the outbox table.** If `ProcessedAt` is `null` for a large number of old messages, the processor may be failing silently. Set up alerts for outbox backlog.
 - **Pair with the inbox pattern.** The outbox guarantees at-least-once publishing. Use the [Inbox Pattern](./inbox-pattern) on the consumer side to achieve exactly-once processing.
 - **Clean up processed messages.** Over time, the outbox table grows. Enable `MessagingOptions.Retention` (see [Retention & Cleanup](#retention-cleanup)) or schedule `modulus outbox purge-processed` to age delivered rows out.
+- **Size `OutboxClaimLease` for your real publish latency, not just the validation floor.** It only has to exceed `OutboxPollInterval` and 30 seconds to register; a lease that is merely valid but too short for your actual batch-publish time invites the exact race (a second instance claiming a still-in-flight row) it exists to make rare. See [Multi-Instance Dispatch](#multi-instance-dispatch-the-claim-lease).
 
 ## See Also
 

@@ -78,16 +78,21 @@ Both contexts are defined in this package and target the same database (or two s
 | `InboxMessages`           | `InboxDbContext` → `InboxMessage`       |
 | `InboxMessageConsumers`   | `InboxDbContext` → composite (Id, Name) |
 
-Since 3.1.0 `OutboxMessages` also carries three new nullable columns — `TraceParent` (max 55) and `TraceState` (max 512) linking outbox dispatch spans back to the saving request, and `ScheduledOnUtc` gating scheduled publishes — and the polling index becomes `{ProcessedAt, NextAttemptOnUtc, ScheduledOnUtc, CreatedAt}`. Upgrading from 3.0.x needs a follow-up migration (below). Rows with `NULL` values behave exactly as before.
+Since 3.1.0 `OutboxMessages` also carries three new nullable columns — `TraceParent` (max 55) and `TraceState` (max 512) linking outbox dispatch spans back to the saving request, and `ScheduledOnUtc` gating scheduled publishes — and the polling index became `{ProcessedAt, NextAttemptOnUtc, ScheduledOnUtc, CreatedAt}`.
 
-The polling indexes (`ProcessedAt, CreatedAt` on Outbox; `ProcessedOnUtc, OccurredOnUtc` on Inbox) are configured in `OnModelCreating` and will be created automatically when you generate the migrations.
+Since 4.0.0 `OutboxMessages` additionally carries two new nullable columns — `ClaimedBy` (max 100, the owning dispatcher instance's id) and `ClaimedUntil` (the claim's UTC lease expiry) — backing the multi-instance optimistic claim (`IOutboxStore.ClaimPending`) that replaced the plain `GetPending` fetch, so scaled-out dispatcher replicas no longer publish the same row twice. The polling index becomes `{ProcessedAt, NextAttemptOnUtc, ScheduledOnUtc, ClaimedUntil, CreatedAt}`. Upgrading from 3.x needs a follow-up migration (below); rows with `NULL` values in the new columns are simply unclaimed and behave exactly as before.
+
+Also since 4.0.0, `InboxMessages` **loses** the `ProcessedOnUtc` column and the `{ProcessedOnUtc, OccurredOnUtc}` index that backed the removed dead API surface (`IInboxStore.GetPending`/`MarkAsProcessed`) — the reservation model in `InboxMessageConsumers` is the real processing record, and retention purges by `OccurredOnUtc`. The standalone `OccurredOnUtc` retention index stays. The same follow-up migration that adds the outbox claim columns will emit the column/index drop for the inbox context (run it for **both** contexts, as below).
+
+The current polling/retention indexes (`{ProcessedAt, NextAttemptOnUtc, ScheduledOnUtc, ClaimedUntil, CreatedAt}` on Outbox; `OccurredOnUtc` on Inbox) are configured in `OnModelCreating` and will be created automatically when you generate the migrations.
 
 ## Re-generating after schema changes
 
 Future schema changes (added columns, indexes, etc.) ship as updates to the entity classes in this package. After updating to a newer `ModulusKit.Messaging` version, generate a follow-up migration in your host project:
 
 ```powershell
-dotnet ef migrations add MessagingV2 --context OutboxDbContext --output-dir Migrations/Outbox
+dotnet ef migrations add MessagingV4 --context OutboxDbContext --output-dir Migrations/Outbox
+dotnet ef migrations add MessagingV4 --context InboxDbContext  --output-dir Migrations/Inbox
 ```
 
-`UseModulusMessagingMigrationsAsync` will pick it up at the next startup.
+(The 4.0 upgrade touches both contexts — outbox claim columns added, inbox `ProcessedOnUtc` dropped — so generate for both.) `UseModulusMessagingMigrationsAsync` will pick them up at the next startup.

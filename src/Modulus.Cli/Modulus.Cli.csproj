@@ -1,6 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <!-- The tool always installs against the SDK's own .NET version (RollForward=LatestMajor
+         below), so multi-targeting a dotnet-tool package buys nothing — single-target the
+         current .NET 10 SDK; the scaffolds it emits are net10.0-only too. -->
+    <TargetFramework>net10.0</TargetFramework>
     <OutputType>Exe</OutputType>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>modulus</ToolCommandName>

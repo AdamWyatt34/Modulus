@@ -98,7 +98,7 @@ public sealed class CachingBehavior<TRequest, TResponse>
         // Cache miss -- execute the handler
         _logger.LogDebug("Cache miss for {CacheKey}", request.CacheKey);
 
-        var result = await next();
+        var result = await next(cancellationToken);
 
         // Cache the result
         var duration = request.CacheDuration ?? TimeSpan.FromMinutes(5);

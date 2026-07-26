@@ -32,7 +32,7 @@ public class TracingBehaviorTests : IDisposable
 
         var result = await behavior.Handle(
             new TestCommand("test"),
-            () => Task.FromResult(Result.Success()),
+            _ => Task.FromResult(Result.Success()),
             CancellationToken.None);
 
         result.IsSuccess.ShouldBeTrue();
@@ -50,7 +50,7 @@ public class TracingBehaviorTests : IDisposable
 
         var result = await behavior.Handle(
             new TestCommand("test"),
-            () => Task.FromResult(Result.Failure(
+            _ => Task.FromResult(Result.Failure(
                 Error.Validation("Test.Invalid", "invalid"),
                 Error.Validation("Test.Other", "other"))),
             CancellationToken.None);
@@ -72,7 +72,7 @@ public class TracingBehaviorTests : IDisposable
         await Should.ThrowAsync<InvalidOperationException>(() =>
             behavior.Handle(
                 new TestCommand("test"),
-                () => throw new InvalidOperationException("boom"),
+                _ => throw new InvalidOperationException("boom"),
                 CancellationToken.None));
 
         _completed.Count.ShouldBe(1);
@@ -89,7 +89,7 @@ public class TracingBehaviorTests : IDisposable
 
         var result = await behavior.Handle(
             new TestCommand("test"),
-            () => Task.FromResult(Result.Success()),
+            _ => Task.FromResult(Result.Success()),
             CancellationToken.None);
 
         result.IsSuccess.ShouldBeTrue();

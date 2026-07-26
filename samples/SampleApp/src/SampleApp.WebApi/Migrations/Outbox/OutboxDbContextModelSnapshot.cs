@@ -26,6 +26,13 @@ namespace SampleApp.WebApi.Migrations.Outbox
                     b.Property<int>("Attempts")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("ClaimedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ClaimedUntil")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
@@ -37,6 +44,9 @@ namespace SampleApp.WebApi.Migrations.Outbox
                     b.Property<string>("LastError")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("NextAttemptOnUtc")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Payload")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -44,9 +54,20 @@ namespace SampleApp.WebApi.Migrations.Outbox
                     b.Property<DateTime?>("ProcessedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("ScheduledOnUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TraceParent")
+                        .HasMaxLength(55)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TraceState")
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("ProcessedAt", "CreatedAt");
+                    b.HasIndex("ProcessedAt", "NextAttemptOnUtc", "ScheduledOnUtc", "ClaimedUntil", "CreatedAt");
 
                     b.ToTable("OutboxMessages");
                 });

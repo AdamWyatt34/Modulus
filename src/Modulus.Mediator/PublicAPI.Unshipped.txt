@@ -1,1 +1,11 @@
 #nullable enable
+Modulus.Mediator.MediatorOptions
+Modulus.Mediator.MediatorOptions.MediatorOptions() -> void
+Modulus.Mediator.MediatorOptions.PublishStrategy.get -> Modulus.Mediator.PublishStrategy
+Modulus.Mediator.MediatorOptions.PublishStrategy.set -> void
+Modulus.Mediator.PublishStrategy
+Modulus.Mediator.PublishStrategy.Parallel = 1 -> Modulus.Mediator.PublishStrategy
+Modulus.Mediator.PublishStrategy.Sequential = 0 -> Modulus.Mediator.PublishStrategy
+Modulus.Mediator.PublishStrategy.StopOnFirstFailure = 2 -> Modulus.Mediator.PublishStrategy
+*REMOVED*static Modulus.Mediator.ServiceCollectionExtensions.AddModulusMediator(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Modulus.Mediator.ServiceCollectionExtensions.AddModulusMediator(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<Modulus.Mediator.MediatorOptions!>? configure = null) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

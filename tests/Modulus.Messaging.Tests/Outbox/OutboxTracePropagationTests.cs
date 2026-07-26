@@ -82,7 +82,7 @@ public sealed class OutboxTracePropagationTests : IDisposable
 
         using var readScope = provider.CreateScope();
         var row = (await readScope.ServiceProvider.GetRequiredService<IOutboxStore>()
-            .GetPending(10, int.MaxValue)).ShouldHaveSingleItem();
+            .ClaimPending("test-reader", TimeSpan.FromMinutes(5), 10, int.MaxValue)).ShouldHaveSingleItem();
 
         row.TraceParent.ShouldNotBeNull();
         row.TraceParent.ShouldContain(businessTraceId.ToString());
@@ -103,7 +103,7 @@ public sealed class OutboxTracePropagationTests : IDisposable
 
         using var readScope = provider.CreateScope();
         var row = (await readScope.ServiceProvider.GetRequiredService<IOutboxStore>()
-            .GetPending(10, int.MaxValue)).ShouldHaveSingleItem();
+            .ClaimPending("test-reader", TimeSpan.FromMinutes(5), 10, int.MaxValue)).ShouldHaveSingleItem();
 
         row.TraceParent.ShouldBeNull();
         row.TraceState.ShouldBeNull();
@@ -170,6 +170,9 @@ public sealed class OutboxTracePropagationTests : IDisposable
         var envelope = transport.Published.ShouldHaveSingleItem();
         // No saved context: dispatch still emits its own span and injects it.
         envelope.Headers.ShouldNotBeNull();
-        envelope.Headers.ShouldContainKey("traceparent");
+        // .Keys.ShouldContain, not .ShouldContainKey: Shouldly 4.3.0's net8.0 build only
+        // overloads that assertion for IDictionary<,>, not IReadOnlyDictionary<,> (the net9.0/
+        // net10.0 build has both) — this form compiles identically on both TFMs.
+        envelope.Headers.Keys.ShouldContain("traceparent");
     }
 }

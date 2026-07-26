@@ -1,5 +1,19 @@
 <Project>
 
+  <!-- Directory.Build.props defaults every project to <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+       (the multi-target for the seven runtime library packages); a project that must
+       single-target instead sets its own <TargetFramework> in its csproj body. NuGet Restore
+       computes a project's restore target frameworks from TargetFrameworks whenever it is
+       non-empty — regardless of whether TargetFramework is also set (unlike the SDK's own
+       build-time cross-targeting split, which does respect TargetFramework taking precedence) —
+       so a single-target override alone still restores (and, for netstandard2.0 overrides,
+       fails NETSDK1005 trying to compile against) the wrong TFM set unless TargetFrameworks is
+       explicitly cleared here too. Lives in .targets, not .props, so it evaluates after each
+       csproj body's TargetFramework override is already in effect. -->
+  <PropertyGroup Condition="'$(TargetFramework)' != ''">
+    <TargetFrameworks></TargetFrameworks>
+  </PropertyGroup>
+
   <!-- Imported after each project file, so IsTestProject is already set. -->
   <ItemGroup Condition="'$(IsTestProject)' == 'true'">
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
@@ -14,7 +28,7 @@
        conditions evaluate. -->
   <PropertyGroup Condition="'$(IsPackable)' != 'false' and '$(IsTestProject)' != 'true'">
     <EnablePackageValidation>true</EnablePackageValidation>
-    <PackageValidationBaselineVersion Condition="'$(PackAsTool)' != 'true' and '$(NoPackageBaseline)' != 'true'">3.0.0</PackageValidationBaselineVersion>
+    <PackageValidationBaselineVersion Condition="'$(PackAsTool)' != 'true' and '$(NoPackageBaseline)' != 'true'">3.1.0</PackageValidationBaselineVersion>
   </PropertyGroup>
 
 </Project>

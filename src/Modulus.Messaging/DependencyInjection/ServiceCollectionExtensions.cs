@@ -89,6 +89,15 @@ public static class ServiceCollectionExtensions
             throw new ArgumentOutOfRangeException(nameof(options), options.OutboxPollInterval,
                 "OutboxPollInterval must be at least 1 second.");
 
+        if (options.OutboxClaimLease < TimeSpan.FromSeconds(30))
+            throw new ArgumentOutOfRangeException(nameof(options), options.OutboxClaimLease,
+                "OutboxClaimLease must be at least 30 seconds.");
+
+        if (options.OutboxClaimLease <= options.OutboxPollInterval)
+            throw new ArgumentOutOfRangeException(nameof(options), options.OutboxClaimLease,
+                "OutboxClaimLease must be greater than OutboxPollInterval, or a lease can expire " +
+                "mid-dispatch and race a concurrent claimant over the same rows.");
+
         if (options.PrefetchCount is <= 0 or > 1000)
             throw new ArgumentOutOfRangeException(nameof(options), options.PrefetchCount,
                 "PrefetchCount must be between 1 and 1000.");
@@ -332,7 +341,7 @@ public static class ServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(retryPolicy);
 
-        // MaxAttempts < 1 would starve the outbox (EfOutboxStore.GetPending filters Attempts < MaxAttempts).
+        // MaxAttempts < 1 would starve the outbox (EfOutboxStore.ClaimPending filters Attempts < MaxAttempts).
         if (retryPolicy.MaxAttempts < 1)
             throw new ArgumentOutOfRangeException(optionName, retryPolicy.MaxAttempts,
                 $"{optionName}.MaxAttempts must be at least 1.");

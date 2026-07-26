@@ -72,17 +72,17 @@ public class CreateOrderHandlerTests
             return Task.CompletedTask;
         }
 
-        public Task<IReadOnlyList<OutboxMessage>> GetPending(
-            int batchSize, int maxAttempts, CancellationToken cancellationToken = default)
+        public Task<IReadOnlyList<OutboxMessage>> ClaimPending(
+            string ownerId, TimeSpan lease, int batchSize, int maxAttempts, CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<OutboxMessage>>([]);
 
         public Task<int> CountPending(int maxAttempts, CancellationToken cancellationToken = default)
             => Task.FromResult(0);
 
-        public Task MarkAsProcessed(IEnumerable<Guid> ids, CancellationToken cancellationToken = default)
+        public Task MarkAsProcessed(string ownerId, IEnumerable<Guid> ids, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
 
-        public Task MarkAsFailed(Guid messageId, string error, DateTime? nextAttemptOnUtc = null, CancellationToken cancellationToken = default)
+        public Task MarkAsFailed(string ownerId, Guid messageId, string error, DateTime? nextAttemptOnUtc = null, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
     }
 }

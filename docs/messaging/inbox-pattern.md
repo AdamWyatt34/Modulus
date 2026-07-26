@@ -88,10 +88,6 @@ public interface IInboxStore
 {
     Task Save(IIntegrationEvent @event, CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<InboxMessage>> GetPending(int batchSize, CancellationToken cancellationToken = default);
-
-    Task MarkAsProcessed(IEnumerable<Guid> ids, CancellationToken cancellationToken = default);
-
     Task<bool> HasBeenProcessed(Guid messageId, string handlerName, CancellationToken cancellationToken = default);
 
     Task<bool> TryReserve(Guid messageId, string handlerName, TimeSpan staleAfter, CancellationToken cancellationToken = default);
@@ -105,8 +101,6 @@ public interface IInboxStore
 | Method | Description |
 |---|---|
 | `Save` | Persists the incoming event as an `InboxMessage`. |
-| `GetPending` | Retrieves unprocessed inbox messages (used for reprocessing scenarios). |
-| `MarkAsProcessed` | Marks inbox messages as fully processed. |
 | `HasBeenProcessed` | Checks if a specific handler has already **completed** a specific message (a live reservation does not count). |
 | `TryReserve` | Atomically claims the `(messageId, handlerName)` pair before execution. Returns `false` when already processed or when another delivery holds a reservation younger than `staleAfter`; takes over older unprocessed reservations. |
 | `MarkConsumerProcessed` | Marks a reserved pair as successfully processed. |
@@ -124,7 +118,6 @@ public sealed class InboxMessage
     public required string Type { get; init; }
     public required string Content { get; init; }
     public required DateTime OccurredOnUtc { get; init; }
-    public DateTime? ProcessedOnUtc { get; set; }
 }
 ```
 
@@ -134,7 +127,6 @@ public sealed class InboxMessage
 | `Type` | `string` | Assembly-qualified type name of the event. |
 | `Content` | `string` | JSON-serialized event payload. |
 | `OccurredOnUtc` | `DateTime` | When the original event was raised. |
-| `ProcessedOnUtc` | `DateTime?` | When all handlers for this message completed. `null` while pending. |
 
 ## InboxMessageConsumer Model
 

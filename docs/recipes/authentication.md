@@ -177,7 +177,7 @@ public sealed class AuthorizationBehavior<TRequest, TResponse>
                     $"Permission '{request.RequiredPermission}' is required."));
         }
 
-        return await next();
+        return await next(cancellationToken);
     }
 }
 ```

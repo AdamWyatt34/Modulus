@@ -28,15 +28,32 @@
     <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="8.0.0" />
     <PackageVersion Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="5.6.0" />
     <PackageVersion Include="MinVer" Version="6.0.0" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.3" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.3" />
     <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.3" />
     <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="10.0.3" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.3" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.3" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.3" />
+    <!-- EF Core is the one hard fork in the net8.0;net10.0 multi-target: 10.0.x ships no net8.0
+         assets at all, so net8.0 consumers need the last EF8 line instead. The two blocks below
+         pin every EF Core package (+ its Microsoft.Data.Sqlite dependency) per-TFM; CPM evaluates
+         PackageVersion Condition per inner TFM during restore, same as any other conditional
+         MSBuild property. Design/Tools/Microsoft.Data.Sqlite aren't referenced by any project in
+         this repo today (only by scaffolded/sample solutions, which own their own CPM file) — the
+         pins exist so a net8.0 restore never fails NU1008 if one is added later. -->
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Condition="'$(TargetFramework)' == 'net10.0'" Version="10.0.3" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Condition="'$(TargetFramework)' == 'net10.0'" Version="10.0.3" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Condition="'$(TargetFramework)' == 'net10.0'" Version="10.0.3" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Condition="'$(TargetFramework)' == 'net10.0'" Version="10.0.3" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Condition="'$(TargetFramework)' == 'net10.0'" Version="10.0.3" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Condition="'$(TargetFramework)' == 'net8.0'" Version="8.0.29" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Condition="'$(TargetFramework)' == 'net8.0'" Version="8.0.29" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Condition="'$(TargetFramework)' == 'net8.0'" Version="8.0.29" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Condition="'$(TargetFramework)' == 'net8.0'" Version="8.0.29" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Condition="'$(TargetFramework)' == 'net8.0'" Version="8.0.29" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Condition="'$(TargetFramework)' == 'net8.0'" Version="8.0.29" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Condition="'$(TargetFramework)' == 'net8.0'" Version="8.0.29" />
+    <PackageVersion Include="Microsoft.Data.Sqlite" Condition="'$(TargetFramework)' == 'net8.0'" Version="8.0.29" />
     <!-- Transitive pin (via EF Core Sqlite): 2.1.11 has GHSA-2m69-gcr7-jv3q; the 2.1.x line
-         ended there, so the pin moves to the current 3.x native-lib release. -->
+         ended there, so the pin moves to the current 3.x native-lib release. Not TFM-conditioned:
+         it's a native-library package with its own internal multi-targeting, compatible with both
+         EF8 and EF10's Sqlite provider. -->
     <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.50.3" />
     <PackageVersion Include="System.CommandLine" Version="2.0.3" />
     <!-- Source generators & analyzers -->

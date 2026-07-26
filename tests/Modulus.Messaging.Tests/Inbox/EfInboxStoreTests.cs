@@ -59,7 +59,6 @@ public sealed class EfInboxStoreTests : IDisposable
         messages[0].Id.ShouldBe(@event.EventId);
         messages[0].Type.ShouldContain(nameof(TestIntegrationEvent));
         messages[0].Content.ShouldNotBeNullOrEmpty();
-        messages[0].ProcessedOnUtc.ShouldBeNull();
     }
 
     [Fact]
@@ -106,40 +105,6 @@ public sealed class EfInboxStoreTests : IDisposable
         await Should.ThrowAsync<DbUpdateException>(() => throwingStore.Save(@event));
 
         (await _dbContext.InboxMessages.AsNoTracking().AnyAsync(m => m.Id == @event.EventId)).ShouldBeFalse();
-    }
-
-    [Fact]
-    public async Task GetPending_ReturnsUnprocessedMessages()
-    {
-        // Arrange
-        var event1 = new TestIntegrationEvent { OccurredOn = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc) };
-        var event2 = new TestIntegrationEvent { OccurredOn = new DateTime(2025, 1, 2, 0, 0, 0, DateTimeKind.Utc) };
-
-        await _store.Save(event1);
-        await _store.Save(event2);
-
-        // Act
-        var pending = await _store.GetPending(10);
-
-        // Assert — ordered by OccurredOnUtc ascending
-        pending.Count.ShouldBe(2);
-        pending[0].Id.ShouldBe(event1.EventId);
-        pending[1].Id.ShouldBe(event2.EventId);
-    }
-
-    [Fact]
-    public async Task GetPending_ExcludesProcessedMessages()
-    {
-        // Arrange
-        var @event = new TestIntegrationEvent();
-        await _store.Save(@event);
-        await _store.MarkAsProcessed([@event.EventId]);
-
-        // Act
-        var pending = await _store.GetPending(10);
-
-        // Assert
-        pending.Count.ShouldBe(0);
     }
 
     [Fact]

@@ -93,6 +93,28 @@ public class OutboxCommandTests
     }
 
     [Fact]
+    public async Task Retry_clears_a_stale_claim_so_the_row_is_immediately_reclaimable()
+    {
+        // An operator retry must win over an in-flight claim: a message a live dispatcher
+        // instance still (or once) held the claim on must not stay locked out of the next poll
+        // for the rest of that instance's lease just because an operator intervened.
+        await using var context = NewInMemoryContext(nameof(Retry_clears_a_stale_claim_so_the_row_is_immediately_reclaimable));
+        var msg = NewMessage(attempts: 7);
+        msg.ClaimedBy = "some-instance:abc123";
+        msg.ClaimedUntil = DateTime.UtcNow.AddMinutes(5);
+        context.OutboxMessages.Add(msg);
+        await context.SaveChangesAsync();
+
+        var handler = CreateHandler(context);
+        var exit = await handler.RetryAsync(TestConnection, msg.Id);
+
+        exit.ShouldBe(0);
+        var stored = await context.OutboxMessages.AsNoTracking().FirstAsync(m => m.Id == msg.Id);
+        stored.ClaimedBy.ShouldBeNull();
+        stored.ClaimedUntil.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task Retry_with_unknown_id_reports_error_and_returns_nonzero()
     {
         await using var context = NewInMemoryContext(nameof(Retry_with_unknown_id_reports_error_and_returns_nonzero));

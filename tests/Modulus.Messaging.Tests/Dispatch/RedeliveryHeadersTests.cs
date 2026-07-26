@@ -48,7 +48,10 @@ public class RedeliveryHeadersTests
 
         headers["modulus-delivery-attempt"].ShouldBe("3");
         headers["traceparent"].ShouldBe("00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01");
-        headers.ShouldNotContainKey("modulus-redeliver-endpoint");
+        // .Keys.ShouldNotContain, not .ShouldNotContainKey: Shouldly 4.3.0's net8.0 build only
+        // overloads that assertion for IDictionary<,>, not IReadOnlyDictionary<,> (the net9.0/
+        // net10.0 build has both) — this form compiles identically on both TFMs.
+        headers.Keys.ShouldNotContain("modulus-redeliver-endpoint");
     }
 
     [Fact]

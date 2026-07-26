@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!-- https://learn.microsoft.com/dotnet/fundamentals/package-validation/diagnostic-ids -->
+<Suppressions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Modulus.Mediator.ServiceCollectionExtensions.AddModulusMediator(Microsoft.Extensions.DependencyInjection.IServiceCollection)</Target>
+    <Left>lib/net10.0/Modulus.Mediator.dll</Left>
+    <Right>lib/net10.0/Modulus.Mediator.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+</Suppressions>

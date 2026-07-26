@@ -141,10 +141,32 @@ internal sealed class Mediator(IServiceProvider serviceProvider) : IMediator
         }
     }
 
-    private async Task PublishInternal<TEvent>(TEvent domainEvent, CancellationToken cancellationToken)
+    private Task PublishInternal<TEvent>(TEvent domainEvent, CancellationToken cancellationToken)
         where TEvent : IDomainEvent
     {
-        var handlers = serviceProvider.GetServices<IDomainEventHandler<TEvent>>();
+        var handlers = serviceProvider.GetServices<IDomainEventHandler<TEvent>>().ToList();
+
+        // MediatorOptions is only registered by AddModulusMediator(configure); a container built
+        // by hand (or an older caller that never adopted the configure overload) has none
+        // registered, and PublishStrategy.Sequential — the pre-4.0 behavior — is the correct
+        // fallback in that case.
+        var strategy = serviceProvider.GetService<MediatorOptions>()?.PublishStrategy
+            ?? PublishStrategy.Sequential;
+
+        return strategy switch
+        {
+            PublishStrategy.Parallel => PublishParallel(handlers, domainEvent, cancellationToken),
+            PublishStrategy.StopOnFirstFailure => PublishStopOnFirstFailure(handlers, domainEvent, cancellationToken),
+            _ => PublishSequential(handlers, domainEvent, cancellationToken),
+        };
+    }
+
+    private static async Task PublishSequential<TEvent>(
+        IReadOnlyList<IDomainEventHandler<TEvent>> handlers,
+        TEvent domainEvent,
+        CancellationToken cancellationToken)
+        where TEvent : IDomainEvent
+    {
         var exceptions = new List<Exception>();
 
         foreach (var handler in handlers)
@@ -175,6 +197,112 @@ internal sealed class Mediator(IServiceProvider serviceProvider) : IMediator
         }
     }
 
+    private static async Task PublishStopOnFirstFailure<TEvent>(
+        IReadOnlyList<IDomainEventHandler<TEvent>> handlers,
+        TEvent domainEvent,
+        CancellationToken cancellationToken)
+        where TEvent : IDomainEvent
+    {
+        foreach (var handler in handlers)
+        {
+            // Same stop-before-dispatch cancellation check as Sequential.
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // No try/catch: the first handler failure — expected or a genuine
+            // OperationCanceledException raised by the handler itself — propagates immediately,
+            // unwrapped, and every handler after it never runs.
+            await handler.Handle(domainEvent, cancellationToken);
+        }
+    }
+
+    private static async Task PublishParallel<TEvent>(
+        IReadOnlyList<IDomainEventHandler<TEvent>> handlers,
+        TEvent domainEvent,
+        CancellationToken cancellationToken)
+        where TEvent : IDomainEvent
+    {
+        // An already-cancelled token still means "stop before dispatching anything", matching
+        // Sequential/StopOnFirstFailure's pre-handler check.
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // StartHandler shields against a handler that throws synchronously instead of returning a
+        // faulted Task: without it, that throw would happen while building `tasks` below — outside
+        // the try block — and stop every remaining handler from ever starting.
+        var tasks = handlers
+            .Select(handler => StartHandler(handler, domainEvent, cancellationToken))
+            .ToArray();
+
+        var whenAll = Task.WhenAll(tasks);
+
+        try
+        {
+            await whenAll;
+        }
+        catch
+        {
+            // Unlike Sequential/StopOnFirstFailure, every handler is already started before
+            // cancellation can be observed here — an in-flight handler is never interrupted, only
+            // observed after every task has settled. Cancellation still takes priority over
+            // aggregating handler failures, mirroring Sequential's `catch (OperationCanceledException)
+            // { throw; }`.
+            if (cancellationToken.IsCancellationRequested)
+            {
+                throw new OperationCanceledException(cancellationToken);
+            }
+
+            // `await whenAll` only rethrows the first failure, so walk the tasks to report every
+            // handler's. Faulted tasks contribute their exceptions; a task that ended Canceled
+            // (the handler threw OperationCanceledException from a token of its own — the publish
+            // token is checked above and wasn't cancelled) is just as much a handler failure and
+            // must be included: Task.WhenAll's own Exception property ignores cancelled tasks
+            // entirely, and with no faulted task it is null — aggregating from it alone would
+            // throw an AggregateException with zero inner exceptions, losing the failure.
+            var failures = new List<Exception>();
+            foreach (var task in tasks)
+            {
+                if (task.Exception is not null)
+                {
+                    failures.AddRange(task.Exception.InnerExceptions);
+                }
+                else if (task.IsCanceled)
+                {
+                    failures.Add(new TaskCanceledException(task));
+                }
+            }
+
+            if (failures.Count == 0)
+            {
+                throw; // unreachable in practice: await whenAll only throws when a task failed
+            }
+
+            throw new AggregateException(
+                $"One or more handlers for {typeof(TEvent).Name} threw an exception.",
+                failures);
+        }
+
+        // Every handler completed without faulting or being cancelled, but one of them may have
+        // cancelled the token as a side effect (the same pattern the CancelingOrderPlacedHandler
+        // fixture exercises for Sequential/StopOnFirstFailure) rather than by throwing. Surface
+        // that here too, consistent with the other strategies' stop-and-rethrow contract.
+        cancellationToken.ThrowIfCancellationRequested();
+    }
+
+    private static Task StartHandler<TEvent>(
+        IDomainEventHandler<TEvent> handler,
+        TEvent domainEvent,
+        CancellationToken cancellationToken)
+        where TEvent : IDomainEvent
+    {
+        try
+        {
+            return handler.Handle(domainEvent, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            return Task.FromException(ex);
+        }
+    }
+
     private async Task<Result> SendCommandInternal<TCommand>(TCommand command, CancellationToken cancellationToken)
         where TCommand : ICommand
     {
@@ -183,7 +311,7 @@ internal sealed class Mediator(IServiceProvider serviceProvider) : IMediator
                 $"No handler registered for {typeof(TCommand).Name}. " +
                 $"Ensure a class implementing ICommandHandler<{typeof(TCommand).Name}> is registered.");
 
-        RequestHandlerDelegate<Result> handlerDelegate = () => handler.Handle(command, cancellationToken);
+        RequestHandlerDelegate<Result> handlerDelegate = ct => handler.Handle(command, ct);
 
         return await ExecutePipeline(command, handlerDelegate, cancellationToken);
     }
@@ -197,7 +325,7 @@ internal sealed class Mediator(IServiceProvider serviceProvider) : IMediator
                 $"No handler registered for {typeof(TCommand).Name}. " +
                 $"Ensure a class implementing ICommandHandler<{typeof(TCommand).Name}, {typeof(TResult).Name}> is registered.");
 
-        RequestHandlerDelegate<Result<TResult>> handlerDelegate = () => handler.Handle(command, cancellationToken);
+        RequestHandlerDelegate<Result<TResult>> handlerDelegate = ct => handler.Handle(command, ct);
 
         return await ExecutePipeline(command, handlerDelegate, cancellationToken);
     }
@@ -211,7 +339,7 @@ internal sealed class Mediator(IServiceProvider serviceProvider) : IMediator
                 $"No handler registered for {typeof(TQuery).Name}. " +
                 $"Ensure a class implementing IQueryHandler<{typeof(TQuery).Name}, {typeof(TResult).Name}> is registered.");
 
-        RequestHandlerDelegate<Result<TResult>> handlerDelegate = () => handler.Handle(query, cancellationToken);
+        RequestHandlerDelegate<Result<TResult>> handlerDelegate = ct => handler.Handle(query, ct);
 
         return await ExecutePipeline(query, handlerDelegate, cancellationToken);
     }
@@ -244,9 +372,21 @@ internal sealed class Mediator(IServiceProvider serviceProvider) : IMediator
         {
             var currentNext = next;
             var currentBehavior = behavior;
-            next = () => currentBehavior.Handle(request, currentNext, cancellationToken);
+
+            // Each wrapper closes over `ct` — the token *this* behavior is invoked with — and
+            // hands the behavior an inner delegate that substitutes `ct` whenever the behavior
+            // calls `next()` with no argument (i.e. the inner call arrives as `default`). This is
+            // what lets `await next()` keep meaning "flow my own token" while still letting a
+            // behavior that explicitly calls `next(someOtherToken)` (e.g. a timeout's linked
+            // token) override the token for every inner behavior and the handler.
+            next = ct =>
+            {
+                RequestHandlerDelegate<TResponse> innerNext = innerCt =>
+                    currentNext(innerCt == default ? ct : innerCt);
+                return currentBehavior.Handle(request, innerNext, ct);
+            };
         }
 
-        return await next();
+        return await next(cancellationToken);
     }
 }

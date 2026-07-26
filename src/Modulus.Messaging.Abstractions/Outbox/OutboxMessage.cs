@@ -57,4 +57,25 @@ public sealed class OutboxMessage
 
     /// <summary>Gets the W3C <c>tracestate</c> accompanying <see cref="TraceParent"/>, if any.</summary>
     public string? TraceState { get; init; }
+
+    /// <summary>
+    /// Gets or sets the identifier of the dispatcher instance currently holding a claim on this
+    /// row, or <see langword="null"/> if unclaimed. Set by
+    /// <see cref="IOutboxStore.ClaimPending"/> so that multiple <c>OutboxDispatcher</c> instances
+    /// polling the same table (scaled-out replicas) do not publish the same row twice; cleared by
+    /// <see cref="IOutboxStore.MarkAsFailed"/> so a durably-recorded failure is immediately
+    /// reclaimable rather than waiting out the lease. The owner id alone does not make a row
+    /// claimed — see <see cref="ClaimedUntil"/>.
+    /// </summary>
+    public string? ClaimedBy { get; set; }
+
+    /// <summary>
+    /// Gets or sets the UTC time the current claim on this row expires, or <see langword="null"/>
+    /// if the row has never been claimed. A row whose claim has expired (this value is
+    /// <see langword="null"/> or in the past) is eligible for any dispatcher — including the one
+    /// that let it expire — to claim again, regardless of <see cref="ClaimedBy"/>: the lease
+    /// expiring, not the owner id changing, is what makes a crashed instance's in-flight rows
+    /// recoverable without operator intervention.
+    /// </summary>
+    public DateTime? ClaimedUntil { get; set; }
 }

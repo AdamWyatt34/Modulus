@@ -24,6 +24,8 @@ A NuGet library ecosystem (ten packages, one coordinated version) for building .
 
 All ten ship at one aligned version; `modulus upgrade` bumps every pin and `modulus doctor` warns on version skew.
 
+Since 4.0 the seven runtime library packages multi-target `net8.0;net10.0` (both LTS; on net8.0 the EF Core dependency is the EF8 line, since EF Core 10 has no net8.0 assets). The `modulus` CLI and the solutions it scaffolds require the .NET 10 SDK; the analyzers/generators are `netstandard2.0` and run anywhere the compiler does.
+
 ## Quick Start — Mediator (CQRS + Result Pattern)
 
 ### 1. Install packages
@@ -96,7 +98,7 @@ app.MapPost("/orders", async (PlaceOrderCommand cmd, IMediator mediator, Cancell
 });
 ```
 
-`IMediator` members: `Send(ICommand)`, `Send<TResult>(ICommand<TResult>)`, `Query<TResult>(IQuery<TResult>)`, `Stream<TResult>(IStreamQuery<TResult>)`, `Publish<TEvent>` (domain events, in-process only).
+`IMediator` members: `Send(ICommand)`, `Send<TResult>(ICommand<TResult>)`, `Query<TResult>(IQuery<TResult>)`, `Stream<TResult>(IStreamQuery<TResult>)`, `Publish<TEvent>` (domain events, in-process only; dispatch strategy configurable since 4.0 via `AddModulusMediator(o => o.PublishStrategy = ...)` — Sequential default / Parallel / StopOnFirstFailure).
 
 ## Quick Start — Messaging (Integration Events)
 

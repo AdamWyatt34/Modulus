@@ -22,7 +22,9 @@ public class MessagingMetricsTests
     {
         private readonly MeterListener _listener = new();
         private readonly List<(string Instrument, object Value, Dictionary<string, object?> Tags)> _measurements = [];
-        private readonly System.Threading.Lock _sync = new();
+        // Plain object monitor, not System.Threading.Lock: that type is net9.0+ only and this
+        // suite multi-targets net8.0;net10.0.
+        private readonly object _sync = new();
 
         public MeterCapture(MessagingMetrics metrics)
         {

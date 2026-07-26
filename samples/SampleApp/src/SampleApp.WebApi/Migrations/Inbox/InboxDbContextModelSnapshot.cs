@@ -30,9 +30,6 @@ namespace SampleApp.WebApi.Migrations.Inbox
                     b.Property<DateTime>("OccurredOnUtc")
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTime?>("ProcessedOnUtc")
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasMaxLength(500)
@@ -40,7 +37,7 @@ namespace SampleApp.WebApi.Migrations.Inbox
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ProcessedOnUtc", "OccurredOnUtc");
+                    b.HasIndex("OccurredOnUtc");
 
                     b.ToTable("InboxMessages");
                 });
@@ -52,6 +49,12 @@ namespace SampleApp.WebApi.Migrations.Inbox
 
                     b.Property<string>("Name")
                         .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ProcessedOnUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ReservedOnUtc")
                         .HasColumnType("TEXT");
 
                     b.HasKey("InboxMessageId", "Name");

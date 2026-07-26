@@ -20,14 +20,8 @@ public sealed class InboxDbContext : DbContext
             entity.Property(e => e.Type).IsRequired().HasMaxLength(500);
             entity.Property(e => e.Content).IsRequired();
             entity.Property(e => e.OccurredOnUtc).IsRequired();
-            entity.Property(e => e.ProcessedOnUtc);
 
-            // Polling query: WHERE ProcessedOnUtc IS NULL ORDER BY OccurredOnUtc.
-            entity.HasIndex(e => new { e.ProcessedOnUtc, e.OccurredOnUtc });
-
-            // Retention purge: WHERE OccurredOnUtc < @cutoff — the composite above cannot
-            // seek on OccurredOnUtc alone, and retention targets exactly the large tables
-            // where a full scan per batch hurts most.
+            // Retention purge: WHERE OccurredOnUtc < @cutoff.
             entity.HasIndex(e => e.OccurredOnUtc);
         });
 

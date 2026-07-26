@@ -233,4 +233,44 @@ public class ServiceCollectionExtensionsTests
 
         ex.Message.ShouldContain("ConnectionString");
     }
+
+    [Fact]
+    public void OutboxClaimLease_BelowThirtySeconds_Throws()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+
+        var ex = Should.Throw<ArgumentOutOfRangeException>(() =>
+            services.AddModulusMessaging(options => options.OutboxClaimLease = TimeSpan.FromSeconds(10)));
+
+        ex.Message.ShouldContain("OutboxClaimLease");
+    }
+
+    [Fact]
+    public void OutboxClaimLease_NotGreaterThanPollInterval_Throws()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+
+        var ex = Should.Throw<ArgumentOutOfRangeException>(() =>
+            services.AddModulusMessaging(options =>
+            {
+                options.OutboxPollInterval = TimeSpan.FromMinutes(10);
+                options.OutboxClaimLease = TimeSpan.FromMinutes(10);
+            }));
+
+        ex.Message.ShouldContain("OutboxClaimLease");
+        ex.Message.ShouldContain("OutboxPollInterval");
+    }
+
+    [Fact]
+    public async Task OutboxClaimLease_DefaultValue_IsFiveMinutes()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddModulusMessaging(options => options.Transport = Transport.InMemory);
+
+        await using var provider = services.BuildServiceProvider();
+        provider.GetRequiredService<MessagingOptions>().OutboxClaimLease.ShouldBe(TimeSpan.FromMinutes(5));
+    }
 }

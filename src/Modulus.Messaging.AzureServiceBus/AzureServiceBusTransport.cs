@@ -45,8 +45,12 @@ internal sealed class AzureServiceBusTransport(
 
     private readonly List<ServiceBusProcessor> _processors = [];
     private readonly SemaphoreSlim _provisionLock = new(1, 1);
-    private readonly Lock _clientLock = new();
-    private readonly Lock _adminClientLock = new();
+    // Plain object monitors, not System.Threading.Lock: that type is net9.0+ only and this
+    // package multi-targets net8.0;net10.0. These guard a lazy client construction that happens
+    // once and is never contended in practice, so Lock's uncontended-path speedup is irrelevant
+    // here — one code path for both TFMs beats an #if NET9_0_OR_GREATER shim for no measurable gain.
+    private readonly object _clientLock = new();
+    private readonly object _adminClientLock = new();
 
     private ServiceBusClient? _client;
     private ServiceBusAdministrationClient? _adminClient;

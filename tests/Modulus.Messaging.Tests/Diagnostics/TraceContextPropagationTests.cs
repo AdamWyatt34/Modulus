@@ -47,7 +47,10 @@ public sealed class TraceContextPropagationTests : IDisposable
         headers.ShouldNotBeNull();
         headers[MessagingDiagnostics.TraceParentHeader].ShouldBe(activity.Id);
         headers["custom"].ShouldBe("value");
-        headers.ShouldNotContainKey(MessagingDiagnostics.TraceStateHeader);
+        // .Keys.ShouldNotContain, not .ShouldNotContainKey: Shouldly 4.3.0's net8.0 build only
+        // overloads that assertion for IDictionary<,>, not IReadOnlyDictionary<,> (the net9.0/
+        // net10.0 build has both) — this form compiles identically on both TFMs.
+        headers.Keys.ShouldNotContain(MessagingDiagnostics.TraceStateHeader);
     }
 
     [Fact]
