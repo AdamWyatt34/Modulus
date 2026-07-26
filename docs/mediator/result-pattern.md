@@ -295,6 +295,72 @@ public static async Task<IResult> HandleCreateProduct(
 }
 ```
 
+## Combinators
+
+`Result` and `Result<T>` carry a set of combinators for railway-oriented chaining, so multi-step handlers compose instead of nesting `if (result.IsFailure)` blocks. Failure short-circuits every combinator: later steps never run, and the original errors propagate unchanged.
+
+| Combinator | Purpose | On failure |
+|---|---|---|
+| `Bind(next)` | Chain a step that itself returns a `Result`/`Result<T>` | Skips `next`, propagates errors |
+| `Map(transform)` | Transform the value into a new value | Skips `transform`, propagates errors |
+| `Tap(action)` | Run a side effect (logging, metrics), result unchanged | Skips `action` |
+| `Ensure(predicate, error)` | Fail a success when `predicate` returns `false` | Passes through unchanged |
+| `Match` / `MatchAsync` | Fold both branches into one output value | Calls `onFailure` |
+| `FirstError` | First error of a failed result (property) | Throws on success, like `Value` throws on failure |
+
+Each combinator has an async variant (`BindAsync`, `MapAsync`, `TapAsync`, `MatchAsync`) that accepts a `Task`-returning delegate.
+
+### Chaining synchronous steps
+
+```csharp
+public Result<string> Describe(int orderId) =>
+    FindOrder(orderId)                       // Result<Order>
+        .Ensure(o => o.IsOpen, Error.Conflict("Orders.Closed", "Order already closed."))
+        .Map(o => o.TotalAmount)             // Result<decimal>
+        .Bind(total => FormatTotal(total));  // Result<string>
+```
+
+### Chaining asynchronous steps
+
+The static `ResultExtensions` class defines the same combinators over `Task<Result>` and `Task<Result<T>>` sources, so a pipeline of async steps reads top-to-bottom without awaiting each stage:
+
+```csharp
+public Task<Result<Guid>> Handle(ShipOrderCommand command, CancellationToken ct) =>
+    LoadOrder(command.OrderId, ct)                                // Task<Result<Order>>
+        .Ensure(o => o.IsOpen, Error.Conflict("Orders.Closed", "Order already closed."))
+        .Bind(o => Ship(o, ct))                                   // Order → Task<Result<Shipment>>
+        .Tap(s => logger.LogInformation("Shipped {Id}", s.Id))
+        .Map(s => s.Id);                                          // Shipment → Guid
+```
+
+### Ensure with an error factory
+
+When the error message should include the offending value, pass a factory instead of a fixed error:
+
+```csharp
+Result<int> result = quantity
+    .Ensure(q => q > 0, q => Error.Validation("Order.InvalidQuantity", $"Quantity {q} must be at least 1."));
+```
+
+### FirstError
+
+`FirstError` replaces the `result.Errors.First()` idiom in endpoints and log statements:
+
+```csharp
+return result.Match(
+    onSuccess: id => Results.Created($"/products/{id}", new { id }),
+    onFailure: failure => failure.FirstError.Type switch
+    {
+        ErrorType.Validation => Results.BadRequest(failure.Errors),
+        ErrorType.NotFound => Results.NotFound(failure.Errors),
+        _ => Results.Problem(failure.FirstError.Description)
+    });
+```
+
+::: warning Map must produce a non-null value
+`Map`/`MapAsync` feed their return value into `Result<T>.Success`, which throws `ArgumentNullException` on `null` — the same contract as every other success path. Use `Bind` with an explicit `Result` when a step can legitimately produce "nothing".
+:::
+
 ## ValidationResult
 
 `ValidationResult` and `ValidationResult<TValue>` are specialized result types designed for the validation pipeline behavior. They carry multiple validation errors and are created with the `WithErrors` factory method:

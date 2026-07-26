@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+Feature wave from the 2026-07-25 full audit's "Missing features" list (`docs/audit/full-scan-2026-07-25.md`). Additive only — no breaking changes from 3.0.0.
+
+### Added
+
+- **Result combinators**: `Result` and `Result<T>` gain `Bind`, `Map`, `Tap`, `Ensure`, `BindAsync`, `MapAsync`, `TapAsync`, `MatchAsync`, and a `FirstError` property (first error of a failed result; throws on success like `Value` does on failure). A new `ResultExtensions` class provides the same combinators over `Task<Result>`/`Task<Result<T>>` sources, so handler chains compose fluently — `await LoadOrder(id).Ensure(o => o.IsOpen, error).Bind(o => Ship(o)).Map(o => o.Id)` — instead of nesting `if (r.IsFailure)` blocks. Failure short-circuits: later steps never run and errors propagate unchanged.
+
 ## [3.0.0] - 2026-07-25
 
 Coordinated release of all nine packages at 3.0.0 — the fix wave from the 2026-07-25 full audit (`docs/audit/full-scan-2026-07-25.md`). Major because of the interface and schema changes to the messaging stores (see Changed); everything else is bug fixes.

@@ -48,14 +48,35 @@ if (result.IsFailure) { /* ... */ }
 // Result<T>:  Match<TOut>(Func<T, TOut> onSuccess, Func<Result<T>, TOut> onFailure)
 return result.Match(
     value => Results.Ok(value),
-    failure => Results.Problem(failure.Errors.First().Description));
+    failure => Results.Problem(failure.FirstError.Description));
 
 // Access value (throws if failed)
 var value = result.Value;
 
+// First error of a failed result (throws if successful, like Value on failure)
+var error = result.FirstError;
+
 // Access errors (IReadOnlyList<Error>)
 foreach (var error in result.Errors)
     logger.LogWarning("{Code}: {Description}", error.Code, error.Description);
+```
+
+### Combinators (railway-oriented chaining)
+
+`Result`/`Result<T>` carry `Bind`, `Map`, `Tap`, `Ensure` (+ `BindAsync`/`MapAsync`/`TapAsync`/`MatchAsync`); `ResultExtensions` provides the same names over `Task<Result>`/`Task<Result<T>>` so chains compose without intermediate awaits. Failure short-circuits — later steps never run, errors propagate unchanged.
+
+```csharp
+// Instead of nested if (r.IsFailure) blocks:
+public Task<Result<Guid>> Handle(ShipOrderCommand cmd, CancellationToken ct) =>
+    LoadOrder(cmd.OrderId, ct)                                   // Task<Result<Order>>
+        .Ensure(o => o.IsOpen, Error.Conflict("Orders.Closed", "Order already closed."))
+        .Bind(o => Ship(o, ct))                                  // Order → Task<Result<Shipment>>
+        .Tap(s => logger.LogInformation("Shipped {Id}", s.Id))   // side effect on success only
+        .Map(s => s.Id);                                         // Shipment → Guid
+
+// Bind = chain a Result-returning step; Map = transform the value;
+// Tap = side effect, result unchanged; Ensure = predicate or fail with the given Error.
+// Ensure also takes an error factory: .Ensure(v => v > 0, v => Error.Validation("Neg", $"{v} < 0"))
 ```
 
 ### ValidationResult
