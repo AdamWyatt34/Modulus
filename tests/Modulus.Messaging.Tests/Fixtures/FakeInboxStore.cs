@@ -29,12 +29,6 @@ public class FakeInboxStore : IInboxStore
         return Task.CompletedTask;
     }
 
-    public Task<IReadOnlyList<InboxMessage>> GetPending(int batchSize, CancellationToken cancellationToken = default)
-        => Task.FromResult<IReadOnlyList<InboxMessage>>([]);
-
-    public Task MarkAsProcessed(IEnumerable<Guid> ids, CancellationToken cancellationToken = default)
-        => Task.CompletedTask;
-
     public Task<bool> HasBeenProcessed(Guid messageId, string handlerName, CancellationToken cancellationToken = default)
         => Task.FromResult(
             _consumers.TryGetValue((messageId, handlerName), out var state) && state.ProcessedOnUtc is not null);

@@ -10,8 +10,6 @@ namespace Modulus.Messaging.Abstractions;
 public interface IInboxStore
 {
     Task Save(IIntegrationEvent @event, CancellationToken cancellationToken = default);
-    Task<IReadOnlyList<InboxMessage>> GetPending(int batchSize, CancellationToken cancellationToken = default);
-    Task MarkAsProcessed(IEnumerable<Guid> ids, CancellationToken cancellationToken = default);
 
     /// <summary>Whether the handler has already <em>completed</em> this message (a live reservation does not count).</summary>
     Task<bool> HasBeenProcessed(Guid messageId, string handlerName, CancellationToken cancellationToken = default);

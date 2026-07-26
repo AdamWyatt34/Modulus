@@ -12,7 +12,5 @@ public class InboxConfiguration : IEntityTypeConfiguration<InboxMessage>
         builder.Property(e => e.Type).IsRequired().HasMaxLength(500);
         builder.Property(e => e.Content).IsRequired();
         builder.Property(e => e.OccurredOnUtc).IsRequired();
-        builder.Property(e => e.ProcessedOnUtc);
-        builder.HasIndex(e => e.ProcessedOnUtc);
     }
 }

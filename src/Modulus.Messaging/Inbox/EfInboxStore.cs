@@ -47,30 +47,6 @@ internal sealed class EfInboxStore(InboxDbContext dbContext) : IInboxStore
         }
     }
 
-    public async Task<IReadOnlyList<InboxMessage>> GetPending(
-        int batchSize,
-        CancellationToken cancellationToken = default)
-    {
-        return await dbContext.InboxMessages
-            .AsNoTracking()
-            .Where(m => m.ProcessedOnUtc == null)
-            .OrderBy(m => m.OccurredOnUtc)
-            .Take(batchSize)
-            .ToListAsync(cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task MarkAsProcessed(
-        IEnumerable<Guid> ids,
-        CancellationToken cancellationToken = default)
-    {
-        var idList = ids.ToList();
-        await dbContext.InboxMessages
-            .Where(m => idList.Contains(m.Id))
-            .ExecuteUpdateAsync(
-                s => s.SetProperty(m => m.ProcessedOnUtc, DateTime.UtcNow),
-                cancellationToken).ConfigureAwait(false);
-    }
-
     public async Task<bool> HasBeenProcessed(
         Guid messageId,
         string handlerName,
