@@ -5,9 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [3.1.0] - 2026-07-26
 
-Feature wave from the 2026-07-25 full audit's "Missing features" list (`docs/audit/full-scan-2026-07-25.md`). Additive only — no breaking API changes from 3.0.0 (verified mechanically by the new package-validation baseline). **One action required on upgrade**: the messaging schema gains nullable columns (`OutboxMessages.TraceParent`/`TraceState`/`ScheduledOnUtc`, a reshaped outbox polling index, and an `InboxMessages.OccurredOnUtc` index) — outbox polling queries reference the new columns immediately, so generate and apply the consumer-owned follow-up migration **before** deploying 3.1.0 binaries (`src/Modulus.Messaging/Migrations/README.md`); this applies equally to application contexts that map the outbox table themselves.
+Coordinated release of all ten packages at 3.1.0 — the first release including `ModulusKit.Testing`. Feature wave from the 2026-07-25 full audit's "Missing features" list (`docs/audit/full-scan-2026-07-25.md`). Additive only — no breaking API changes from 3.0.0 (verified mechanically by the new package-validation baseline). **One action required on upgrade**: the messaging schema gains nullable columns (`OutboxMessages.TraceParent`/`TraceState`/`ScheduledOnUtc`, a reshaped outbox polling index, and an `InboxMessages.OccurredOnUtc` index) — outbox polling queries reference the new columns immediately, so generate and apply the consumer-owned follow-up migration **before** deploying 3.1.0 binaries (`src/Modulus.Messaging/Migrations/README.md`); this applies equally to application contexts that map the outbox table themselves.
 
 ### Added
 
@@ -165,6 +165,7 @@ Coordinated release of all nine packages at 2.0.0 — the scaffolded `Directory.
   - Entity Framework Core outbox implementation (`EfOutboxStore`)
   - Automatic handler discovery and consumer adapter registration
 
+[3.1.0]: https://github.com/adamwyatt34/Modulus/compare/messaging-v3.0.0...messaging-v3.1.0
 [3.0.0]: https://github.com/adamwyatt34/Modulus/compare/messaging-v2.1.0...messaging-v3.0.0
 [2.1.0]: https://github.com/adamwyatt34/Modulus/compare/messaging-v2.0.0...messaging-v2.1.0
 [2.0.0]: https://github.com/adamwyatt34/Modulus/compare/v1.1.0...messaging-v2.0.0
