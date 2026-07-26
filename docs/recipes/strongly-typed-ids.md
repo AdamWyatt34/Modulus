@@ -140,7 +140,7 @@ public class GetProductEndpoint : IEndpoint
 }
 ```
 
-The `TypeConverter` handles parsing the route parameter string directly into a `ProductId` -- no manual `Guid` parsing required.
+Minimal APIs bind the route parameter through the generated static `TryParse` (the `IParsable<ProductId>` convention) -- no manual `Guid` parsing required.
 
 ### Step 5: Use in Commands and Queries
 

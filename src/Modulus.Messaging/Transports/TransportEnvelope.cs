@@ -26,4 +26,12 @@ public sealed record TransportEnvelope(
     /// entries. <see langword="null"/> when the message carries no headers.
     /// </summary>
     public IReadOnlyDictionary<string, string>? Headers { get; init; }
+
+    /// <summary>
+    /// Gets the earliest UTC time the broker should make this message available to
+    /// consumers, or <see langword="null"/> for immediate delivery. Azure Service Bus
+    /// schedules natively; RabbitMQ routes through a per-event-type TTL queue; the
+    /// in-memory transport delays in process. Set via <c>IMessageBus.PublishScheduled</c>.
+    /// </summary>
+    public DateTimeOffset? ScheduledEnqueueTimeUtc { get; init; }
 }

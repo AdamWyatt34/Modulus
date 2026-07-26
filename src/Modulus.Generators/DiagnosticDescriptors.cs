@@ -39,7 +39,7 @@ internal static class DiagnosticDescriptors
     public static readonly DiagnosticDescriptor UnsupportedBackingType = new(
         id: "MODGEN005",
         title: "Unsupported StronglyTypedId backing type",
-        messageFormat: "Type '{0}' specifies an unsupported [StronglyTypedId] backing type; supported types are Guid, int, and long",
+        messageFormat: "Type '{0}' specifies an unsupported [StronglyTypedId] backing type; supported types are Guid, int, long, and string",
         category: "ModulusGenerator",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
