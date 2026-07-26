@@ -1,0 +1,33 @@
+#nullable enable
+Modulus.Testing.InboxTestQueries
+Modulus.Testing.ModulusMessagingTestHarness
+Modulus.Testing.ModulusMessagingTestHarness.DisposeAsync() -> System.Threading.Tasks.ValueTask
+Modulus.Testing.ModulusMessagingTestHarness.Provider.get -> Microsoft.Extensions.DependencyInjection.ServiceProvider!
+Modulus.Testing.ModulusMessagingTestHarness.Transport.get -> Modulus.Testing.TestMessageTransport!
+Modulus.Testing.OutboxTestQueries
+Modulus.Testing.ServiceCollectionExtensions
+Modulus.Testing.TestMessageTransport
+Modulus.Testing.TestMessageTransport.CheckHealthAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Modulus.Messaging.Transports.TransportHealth>
+Modulus.Testing.TestMessageTransport.DeadLettered.get -> System.Collections.Generic.IReadOnlyList<Modulus.Messaging.Transports.TransportEnvelope!>!
+Modulus.Testing.TestMessageTransport.DeadLetteredEventsOf<TEvent>() -> System.Collections.Generic.IReadOnlyList<TEvent>!
+Modulus.Testing.TestMessageTransport.DisposeAsync() -> System.Threading.Tasks.ValueTask
+Modulus.Testing.TestMessageTransport.PublishAsync(Modulus.Messaging.Transports.TransportEnvelope! envelope, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Modulus.Testing.TestMessageTransport.PublishFailure.get -> System.Exception?
+Modulus.Testing.TestMessageTransport.PublishFailure.set -> void
+Modulus.Testing.TestMessageTransport.Published.get -> System.Collections.Generic.IReadOnlyList<Modulus.Messaging.Transports.TransportEnvelope!>!
+Modulus.Testing.TestMessageTransport.PublishedEventsOf<TEvent>() -> System.Collections.Generic.IReadOnlyList<TEvent>!
+Modulus.Testing.TestMessageTransport.StartConsumingAsync(System.Collections.Generic.IReadOnlyList<Modulus.Messaging.Transports.TransportSubscription!>! subscriptions, System.Func<Modulus.Messaging.Transports.TransportEnvelope!, System.Threading.CancellationToken, System.Threading.Tasks.Task<Modulus.Messaging.Transports.MessageDispatchResult>!>! onMessage, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Modulus.Testing.TestMessageTransport.StopConsumingAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Modulus.Testing.TestMessageTransport.TestMessageTransport(Modulus.Messaging.MessagingOptions? options = null) -> void
+Modulus.Testing.TestWait
+const Modulus.Testing.TestMessageTransport.DeliveryAttemptHeader = "modulus-delivery-attempt" -> string!
+static Modulus.Testing.InboxTestQueries.GetInboxMessagesAsync(this System.IServiceProvider! services, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Modulus.Messaging.Abstractions.InboxMessage!>!>!
+static Modulus.Testing.InboxTestQueries.HasHandlerProcessedAsync(this System.IServiceProvider! services, System.Guid eventId, string! handlerFullName, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<bool>!
+static Modulus.Testing.ModulusMessagingTestHarness.StartAsync(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> System.Threading.Tasks.Task<Modulus.Testing.ModulusMessagingTestHarness!>!
+static Modulus.Testing.OutboxTestQueries.GetDeadLetteredOutboxMessagesAsync(this System.IServiceProvider! services, int maxAttempts = 5, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Modulus.Messaging.Abstractions.OutboxMessage!>!>!
+static Modulus.Testing.OutboxTestQueries.GetOutboxMessagesAsync(this System.IServiceProvider! services, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Modulus.Messaging.Abstractions.OutboxMessage!>!>!
+static Modulus.Testing.OutboxTestQueries.GetPendingOutboxMessagesAsync(this System.IServiceProvider! services, int maxAttempts = 5, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Modulus.Messaging.Abstractions.OutboxMessage!>!>!
+static Modulus.Testing.OutboxTestQueries.WaitForOutboxDrainAsync(this System.IServiceProvider! services, System.TimeSpan? timeout = null, int maxAttempts = 5, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+static Modulus.Testing.ServiceCollectionExtensions.AddModulusTestTransport(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Modulus.Testing.TestWait.WaitForConditionAsync(System.Func<System.Threading.Tasks.Task<bool>!>! condition, System.TimeSpan? timeout = null, string? because = null) -> System.Threading.Tasks.Task!
+static Modulus.Testing.TestWait.WaitForConditionAsync(System.Func<bool>! condition, System.TimeSpan? timeout = null, string? because = null) -> System.Threading.Tasks.Task!

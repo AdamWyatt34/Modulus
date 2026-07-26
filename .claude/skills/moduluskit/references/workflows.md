@@ -515,6 +515,6 @@ public sealed class OrderCreatedEventHandlerTests
 - Suppress with `#pragma warning disable MOD001` if truly intentional
 
 ### "Package version skew after upgrading"
-- All nine ModulusKit.* packages ship at one aligned version
+- All ten ModulusKit.* packages ship at one aligned version
 - Run `modulus upgrade` to bump every pin in `Directory.Packages.props`, then `dotnet restore`
 - Run `modulus doctor` — it warns when pins don't match the CLI version

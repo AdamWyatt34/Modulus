@@ -163,6 +163,7 @@ export default withMermaid(
               { text: 'Architecture Tests', link: '/testing/architecture-tests' },
               { text: 'Unit Testing', link: '/testing/unit-testing' },
               { text: 'Integration Testing', link: '/testing/integration-testing' },
+              { text: 'ModulusKit.Testing', link: '/testing/modulus-testing' },
             ]
           }
         ],

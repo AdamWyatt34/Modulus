@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <PackageId>ModulusKit.Testing</PackageId>
+    <Description>Test harness, in-memory test transport, and outbox/inbox assertion helpers for ModulusKit.Messaging — module-level integration testing without hand-rolled fakes.</Description>
+    <PackageTags>testing;messaging;outbox;inbox;test-harness;integration-testing;xunit</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <EnforcePublicApi>true</EnforcePublicApi>
+    <MinVerTagPrefix>testing-v</MinVerTagPrefix>
+    <MinVerDefaultPreReleaseIdentifiers>alpha.0</MinVerDefaultPreReleaseIdentifiers>
+    <!-- No published version exists yet, so there is no package-validation baseline to
+         compare against. Remove this after the first release and let Directory.Build.props
+         apply the shared baseline version. -->
+    <NoPackageBaseline>true</NoPackageBaseline>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MinVer" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Modulus.Messaging\Modulus.Messaging.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+  </ItemGroup>
+
+</Project>

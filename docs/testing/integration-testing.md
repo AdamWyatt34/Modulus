@@ -249,6 +249,15 @@ public async Task CreateProduct_WritesCatalogItemCreatedEventToOutbox()
 
 To verify end-to-end consumption, register a recording `IIntegrationEventHandler<T>` in an assembly included in `MessagingOptions.Assemblies` and assert it was invoked.
 
+::: tip Prefer ModulusKit.Testing over hand-written queries
+The `outbox.OutboxMessages.AnyAsync(...)` query above is the raw version of what
+[`ModulusKit.Testing`](./modulus-testing)'s `OutboxTestQueries` gives you as a one-liner
+(`await Factory.Services.GetOutboxMessagesAsync()`), and its `ModulusMessagingTestHarness` +
+`TestMessageTransport` replace hand-rolling a fake `IMessageTransport` for module-level messaging
+tests that don't need a full `WebApplicationFactory`. See [ModulusKit.Testing](./modulus-testing)
+for the full reference.
+:::
+
 ::: info Broker-level integration tests
 The InMemory transport covers the consumer pipeline (deserialization, inbox idempotency, retry) but not broker topology. For tests against a real broker, spin up RabbitMQ with Testcontainers -- this is how the Modulus library itself tests its RabbitMQ transport (tests marked `Category=Integration`).
 :::

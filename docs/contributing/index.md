@@ -235,7 +235,7 @@ dotnet format
 Modulus uses GitHub Actions for CI/CD:
 
 1. **On every push and PR** -- The CI workflow runs `dotnet build` and `dotnet test` (plus vulnerable-package scanning, docs snippet validation, E2E scaffold builds, and broker integration tests).
-2. **On version tags** -- Each of the nine `ModulusKit.*` packages is versioned by [MinVer](https://github.com/adamralph/minver) with a per-package tag prefix (`cli-v*`, `mediator-v*`, `messaging-v*`, ...). Pushing a tag (e.g. `cli-v2.1.0`) triggers the publish job, which packs and pushes **only the matching package** (with its symbols package) to [NuGet.org](https://www.nuget.org/). Coordinated releases tag all nine prefixes at the same version -- see the repository's `CONTRIBUTING.md` for the full checklist.
+2. **On version tags** -- Each of the ten `ModulusKit.*` packages is versioned by [MinVer](https://github.com/adamralph/minver) with a per-package tag prefix (`cli-v*`, `mediator-v*`, `messaging-v*`, ...). Pushing a tag (e.g. `cli-v2.1.0`) triggers the publish job, which packs and pushes **only the matching package** (with its symbols package) to [NuGet.org](https://www.nuget.org/). Coordinated releases tag all ten prefixes at the same version -- see the repository's `CONTRIBUTING.md` for the full checklist.
 
 Version numbers follow [Semantic Versioning](https://semver.org/):
 

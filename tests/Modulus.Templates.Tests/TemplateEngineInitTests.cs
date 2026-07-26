@@ -123,6 +123,7 @@ public class TemplateEngineInitTests
         packages.Content.ShouldContain("<PackageVersion Include=\"ModulusKit.Messaging\" Version=\"9.9.9\" />");
         packages.Content.ShouldContain("<PackageVersion Include=\"ModulusKit.Analyzers\" Version=\"9.9.9\" />");
         packages.Content.ShouldContain("<PackageVersion Include=\"ModulusKit.Generators\" Version=\"9.9.9\" />");
+        packages.Content.ShouldContain("<PackageVersion Include=\"ModulusKit.Testing\" Version=\"9.9.9\" />");
     }
 
     [Fact]

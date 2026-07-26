@@ -435,6 +435,7 @@ No handler or business logic changes are needed — the mediator and messaging a
 | [`ModulusKit.Messaging.AzureServiceBus`](https://www.nuget.org/packages/ModulusKit.Messaging.AzureServiceBus) | Azure Service Bus transport built on Azure.Messaging.ServiceBus |
 | [`ModulusKit.Generators`](https://www.nuget.org/packages/ModulusKit.Generators) | Source generators for strongly typed IDs, handler registration, and module discovery |
 | [`ModulusKit.Analyzers`](https://www.nuget.org/packages/ModulusKit.Analyzers) | Roslyn analyzers enforcing modular architecture conventions |
+| [`ModulusKit.Testing`](https://www.nuget.org/packages/ModulusKit.Testing) | Test harness, in-memory test transport, and outbox/inbox assertion helpers |
 
 `ModulusKit.Generators` and `ModulusKit.Analyzers` are development-dependency packages, so they do **not** flow transitively through other `ModulusKit.*` packages (or through `ProjectReference`s). Reference them explicitly in each project that needs them:
 

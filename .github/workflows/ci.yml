@@ -13,6 +13,7 @@ on:
       - 'messaging-asb-v*'
       - 'generators-v*'
       - 'analyzers-v*'
+      - 'testing-v*'
   pull_request:
     branches: [main]
   schedule:
@@ -259,6 +260,7 @@ jobs:
             'messaging-asb-v'      = 'ModulusKit.Messaging.AzureServiceBus'
             'generators-v'    = 'ModulusKit.Generators'
             'analyzers-v'     = 'ModulusKit.Analyzers'
+            'testing-v'       = 'ModulusKit.Testing'
           }
 
           $tagName = "${env:GITHUB_REF}" -replace '^refs/tags/', ''
