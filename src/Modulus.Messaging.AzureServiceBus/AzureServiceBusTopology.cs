@@ -49,8 +49,10 @@ public static class AzureServiceBusTopology
         if (sanitized.Length <= MaxSubscriptionNameLength)
             return sanitized;
 
-        var hash = Convert.ToHexStringLower(
-            SHA256.HashData(Encoding.UTF8.GetBytes(sanitized)))[..8];
+        // Convert.ToHexStringLower is net9.0+ only; ToHexString + ToLowerInvariant works
+        // identically on both net8.0 and net10.0 and only the first 8 characters are kept anyway.
+        var hash = Convert.ToHexString(
+            SHA256.HashData(Encoding.UTF8.GetBytes(sanitized))).ToLowerInvariant()[..8];
 
         return $"{sanitized[..(MaxSubscriptionNameLength - 9)]}-{hash}";
     }

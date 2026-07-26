@@ -13,7 +13,9 @@ namespace Modulus.Testing.Tests.Fixtures;
 /// </summary>
 public sealed class FlakyOrderPlacedHandler(int failuresBeforeSuccess = 0) : IIntegrationEventHandler<TestOrderPlacedEvent>
 {
-    private readonly System.Threading.Lock _sync = new();
+    // Plain object monitor, not System.Threading.Lock: that type is net9.0+ only and this suite
+    // multi-targets net8.0;net10.0.
+    private readonly object _sync = new();
 
     public int Attempts { get; private set; }
 

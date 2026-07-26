@@ -60,8 +60,11 @@ public class AzureServiceBusEnvelopeHeaderTests
         envelope.Headers.ShouldNotBeNull();
         envelope.Headers["traceparent"].ShouldBe(TraceParent);
         envelope.Headers["custom-header"].ShouldBe("custom-value");
-        envelope.Headers.ShouldNotContainKey("numeric-property");
-        envelope.Headers.ShouldNotContainKey(AzureServiceBusEnvelopeMapper.OccurredOnProperty);
+        // .Keys.ShouldNotContain, not .ShouldNotContainKey: Shouldly 4.3.0's net8.0 build only
+        // overloads that assertion for IDictionary<,>, not IReadOnlyDictionary<,> (the net9.0/
+        // net10.0 build has both) — this form compiles identically on both TFMs.
+        envelope.Headers.Keys.ShouldNotContain("numeric-property");
+        envelope.Headers.Keys.ShouldNotContain(AzureServiceBusEnvelopeMapper.OccurredOnProperty);
     }
 
     [Fact]

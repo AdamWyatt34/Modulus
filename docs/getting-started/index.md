@@ -6,7 +6,7 @@ Modulus is a .NET global tool that scaffolds production-ready modular monolith s
 
 ### .NET 10 SDK
 
-Modulus targets .NET 10.0. You need the SDK installed to both run the CLI and build generated solutions.
+The `ModulusKit.Cli` tool and every scaffolded solution require the .NET 10 SDK to run the CLI and build generated solutions. You need the SDK installed even if your own application targets an older LTS — the tool itself always runs on .NET 10.
 
 [Download .NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 
@@ -16,6 +16,10 @@ Verify your installation:
 dotnet --version
 # 10.0.100 or later
 ```
+
+::: tip Library packages also support .NET 8
+The seven `ModulusKit.*` runtime library packages (Mediator, Mediator.Abstractions, Messaging, Messaging.Abstractions, Messaging.RabbitMq, Messaging.AzureServiceBus, Testing) multi-target `net8.0;net10.0`, so you can reference them from a .NET 8 LTS project. The CLI tool and its scaffolded solution templates remain .NET 10-only.
+:::
 
 ### Docker (optional)
 

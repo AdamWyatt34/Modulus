@@ -1,7 +1,16 @@
 <Project>
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <!-- Default for the seven runtime library packages (Mediator[.Abstractions],
+         Messaging[.Abstractions], Messaging.RabbitMq, Messaging.AzureServiceBus, Testing) and the
+         test suites that cover them: both are LTS (net9.0 left support May 2026, so it's not in
+         the set). A project that must single-target (the Cli tool, Templates, the Roslyn
+         generators/analyzers/code-fixes which stay netstandard2.0, samples, and the CLI/
+         Templates/Generators/Analyzers test suites) sets its own <TargetFramework> in its csproj
+         body — the SDK only cross-targets when TargetFrameworks is set AND TargetFramework is
+         empty, so a project-level TargetFramework cleanly wins over this default with no
+         NETSDK1023 conflict. -->
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>

@@ -41,10 +41,17 @@ jobs:
         with:
           fetch-depth: 0  # MinVer + SourceLink need full history
 
+      # Two SDKs, not a matrix: the seven runtime library packages (+ the test suites that cover
+      # them) multi-target net8.0;net10.0, and `dotnet test` below actually executes both TFMs'
+      # test binaries in-process — the net8.0 apphost needs the net8.0 shared runtime installed,
+      # which the SDK install brings with it. Everything else (Cli/Templates/Generators/
+      # Analyzers, and their tests) stays net10.0-only and unaffected.
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: |
+            8.0.x
+            10.0.x
 
       - name: Restore
         run: dotnet restore
@@ -98,10 +105,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Modulus.Messaging.RabbitMq.IntegrationTests multi-targets net8.0;net10.0 too — same
+      # two-SDK rationale as the build job above.
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: |
+            8.0.x
+            10.0.x
 
       - name: Restore
         run: dotnet restore
@@ -125,10 +136,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Modulus.Messaging.AzureServiceBus.IntegrationTests multi-targets net8.0;net10.0 too —
+      # same two-SDK rationale as the build job above.
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: |
+            8.0.x
+            10.0.x
 
       - name: Restore
         run: dotnet restore

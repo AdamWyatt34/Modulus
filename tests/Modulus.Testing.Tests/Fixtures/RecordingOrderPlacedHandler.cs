@@ -5,7 +5,9 @@ namespace Modulus.Testing.Tests.Fixtures;
 /// <summary>Records every event it handles; call counts serialize with a lock since the transport may deliver concurrently.</summary>
 public sealed class RecordingOrderPlacedHandler : IIntegrationEventHandler<TestOrderPlacedEvent>
 {
-    private readonly System.Threading.Lock _sync = new();
+    // Plain object monitor, not System.Threading.Lock: that type is net9.0+ only and this suite
+    // multi-targets net8.0;net10.0.
+    private readonly object _sync = new();
 
     public List<TestOrderPlacedEvent> HandledEvents { get; } = [];
 
