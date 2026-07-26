@@ -82,7 +82,7 @@ public sealed class OutboxTracePropagationTests : IDisposable
 
         using var readScope = provider.CreateScope();
         var row = (await readScope.ServiceProvider.GetRequiredService<IOutboxStore>()
-            .GetPending(10, int.MaxValue)).ShouldHaveSingleItem();
+            .ClaimPending("test-reader", TimeSpan.FromMinutes(5), 10, int.MaxValue)).ShouldHaveSingleItem();
 
         row.TraceParent.ShouldNotBeNull();
         row.TraceParent.ShouldContain(businessTraceId.ToString());
@@ -103,7 +103,7 @@ public sealed class OutboxTracePropagationTests : IDisposable
 
         using var readScope = provider.CreateScope();
         var row = (await readScope.ServiceProvider.GetRequiredService<IOutboxStore>()
-            .GetPending(10, int.MaxValue)).ShouldHaveSingleItem();
+            .ClaimPending("test-reader", TimeSpan.FromMinutes(5), 10, int.MaxValue)).ShouldHaveSingleItem();
 
         row.TraceParent.ShouldBeNull();
         row.TraceState.ShouldBeNull();

@@ -9,11 +9,12 @@ internal interface IOutboxDispatcher
 {
     /// <summary>
     /// Returns the number of messages that made forward progress this pass: published, or
-    /// durably marked failed (attempt recorded and backed off, so it will not be refetched
-    /// next pass). A message whose own MarkAsFailed bookkeeping call fails does not count — it
-    /// is unchanged in the store and will simply be reconsidered next pass. A full batch of
-    /// progress signals probable backlog so the caller can re-dispatch immediately instead of
-    /// waiting.
+    /// durably marked failed (attempt recorded, claim released, and backed off, so it will not
+    /// be reclaimed until that backoff elapses). A message whose own MarkAsFailed bookkeeping
+    /// call fails does not count — it is unchanged in the store and stays claimed by this
+    /// dispatcher until its claim lease naturally expires, at which point it becomes reclaimable
+    /// again (by this instance or any other). A full batch of progress signals probable backlog
+    /// so the caller can re-dispatch immediately instead of waiting.
     /// </summary>
     Task<int> DispatchPendingAsync(CancellationToken cancellationToken = default);
 }

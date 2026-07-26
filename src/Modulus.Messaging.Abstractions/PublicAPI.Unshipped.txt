@@ -1,1 +1,11 @@
 #nullable enable
+*REMOVED*Modulus.Messaging.Abstractions.IOutboxStore.GetPending(int batchSize, int maxAttempts, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Modulus.Messaging.Abstractions.OutboxMessage!>!>!
+*REMOVED*Modulus.Messaging.Abstractions.IOutboxStore.MarkAsFailed(System.Guid messageId, string! error, System.DateTime? nextAttemptOnUtc, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+*REMOVED*Modulus.Messaging.Abstractions.IOutboxStore.MarkAsProcessed(System.Collections.Generic.IEnumerable<System.Guid>! ids, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Modulus.Messaging.Abstractions.IOutboxStore.ClaimPending(string! ownerId, System.TimeSpan lease, int batchSize, int maxAttempts, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Modulus.Messaging.Abstractions.OutboxMessage!>!>!
+Modulus.Messaging.Abstractions.IOutboxStore.MarkAsFailed(string! ownerId, System.Guid messageId, string! error, System.DateTime? nextAttemptOnUtc, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Modulus.Messaging.Abstractions.IOutboxStore.MarkAsProcessed(string! ownerId, System.Collections.Generic.IEnumerable<System.Guid>! ids, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Modulus.Messaging.Abstractions.OutboxMessage.ClaimedBy.get -> string?
+Modulus.Messaging.Abstractions.OutboxMessage.ClaimedBy.set -> void
+Modulus.Messaging.Abstractions.OutboxMessage.ClaimedUntil.get -> System.DateTime?
+Modulus.Messaging.Abstractions.OutboxMessage.ClaimedUntil.set -> void

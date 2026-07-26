@@ -67,7 +67,9 @@ public sealed class OutboxDispatcherTests : IDisposable
     {
         using var scope = provider.CreateScope();
         var outboxStore = scope.ServiceProvider.GetRequiredService<IOutboxStore>();
-        return await outboxStore.GetPending(100, int.MaxValue);
+        // A fresh, one-off owner id per check: this helper only asserts what remains
+        // claimable, so the claim it takes in the process is incidental to the assertion.
+        return await outboxStore.ClaimPending($"test-checker-{Guid.NewGuid():N}", TimeSpan.FromMinutes(5), 100, int.MaxValue);
     }
 
     /// <summary>All rows regardless of NextAttemptOnUtc backoff eligibility — GetPending
@@ -396,5 +398,92 @@ public sealed class OutboxDispatcherTests : IDisposable
             timeout: TimeSpan.FromSeconds(10),
             because: "the outbox wake signal should dispatch the row without waiting for the poll interval");
         handler.HandledEvents[0].OrderId.ShouldBe(7);
+    }
+
+    // The coverage gap the audit named (docs/audit/wave-b-4.0-plan.md §1): pre-4.0, every
+    // OutboxDispatcher instance polling the same table was a plain fetch, so two replicas would
+    // publish the same pending rows twice. This drives two full, independently-built
+    // IOutboxDispatcher instances — each its own DI container, own MessageTypeRegistry, own
+    // per-instance owner id (OutboxDispatcher's private _ownerId field) — genuinely concurrently
+    // (Task.WhenAll, not sequential) over one shared database, and asserts every seeded message
+    // is published exactly once between them.
+    [Fact]
+    public async Task DispatchPendingAsync_TwoCompetingDispatchers_PublishesEachMessageExactlyOnce()
+    {
+        // Two separate physical SqliteConnections against one *named, shared-cache* in-memory
+        // database: this is what makes real concurrent access safe (a single SqliteConnection
+        // object is not safe to drive from two dispatch passes running at once), while both
+        // sides still observe and race over the same underlying OutboxMessages table.
+        var connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = $"dispatcher-race-{Guid.NewGuid():N}",
+            Mode = SqliteOpenMode.Memory,
+            Cache = SqliteCacheMode.Shared,
+        }.ToString();
+
+        using var keepAlive = new SqliteConnection(connectionString);
+        keepAlive.Open();
+
+        using (var schemaContext = new OutboxDbContext(
+            new DbContextOptionsBuilder<OutboxDbContext>().UseSqlite(connectionString).Options))
+        {
+            schemaContext.Database.EnsureCreated();
+        }
+
+        // Shared between both dispatchers so every publish — from either one — lands in one
+        // history to assert against.
+        var transport = new FakeMessageTransport();
+
+        ServiceProvider BuildCompetingProvider()
+        {
+            var services = new ServiceCollection();
+            services.AddLogging();
+            services.AddDbContext<OutboxDbContext>(options => options.UseSqlite(connectionString));
+            services.AddModulusMessaging(options =>
+            {
+                options.Transport = Transport.InMemory;
+                options.Assemblies.Add(typeof(TestOrderCreatedEvent).Assembly);
+            });
+            services.AddSingleton<IMessageTransport>(transport);
+            return services.BuildServiceProvider();
+        }
+
+        const int messageCount = 30;
+        var seededIds = new List<Guid>();
+        using (var seedProvider = BuildCompetingProvider())
+        {
+            for (var i = 0; i < messageCount; i++)
+            {
+                using var scope = seedProvider.CreateScope();
+                var store = scope.ServiceProvider.GetRequiredService<IOutboxStore>();
+                var @event = new TestOrderCreatedEvent { OrderId = i, CustomerName = $"Customer {i}" };
+                await store.Save(@event);
+                seededIds.Add(@event.EventId);
+            }
+        }
+
+        using var providerA = BuildCompetingProvider();
+        using var providerB = BuildCompetingProvider();
+        var dispatcherA = providerA.GetRequiredService<IOutboxDispatcher>();
+        var dispatcherB = providerB.GetRequiredService<IOutboxDispatcher>();
+
+        // Loops each dispatcher until it stops making progress, the same way OutboxProcessor's
+        // drain-then-wait loop does — tolerant of whichever side's claim race wins any given
+        // pass, including one side claiming (and publishing) everything and the other claiming
+        // nothing at all.
+        static async Task DrainAsync(IOutboxDispatcher dispatcher)
+        {
+            int progressed;
+            do
+            {
+                progressed = await dispatcher.DispatchPendingAsync();
+            }
+            while (progressed > 0);
+        }
+
+        await Task.WhenAll(DrainAsync(dispatcherA), DrainAsync(dispatcherB));
+
+        transport.Published.Count.ShouldBe(messageCount);
+        transport.Published.Select(e => e.MessageId).ShouldBe(seededIds, ignoreOrder: true);
     }
 }

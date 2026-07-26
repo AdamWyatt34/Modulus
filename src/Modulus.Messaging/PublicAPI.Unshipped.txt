@@ -1,1 +1,3 @@
 #nullable enable
+Modulus.Messaging.MessagingOptions.OutboxClaimLease.get -> System.TimeSpan
+Modulus.Messaging.MessagingOptions.OutboxClaimLease.set -> void

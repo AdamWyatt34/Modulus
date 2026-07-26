@@ -29,9 +29,15 @@ public sealed class EfOutboxAdminStore(OutboxDbContext dbContext) : IOutboxAdmin
         message.Attempts = 0;
         message.LastError = null;
         // Clear any pending backoff too: a message an operator explicitly retries must be
-        // eligible for GetPending on the very next poll, not still serving out the wait from
+        // eligible for ClaimPending on the very next poll, not still serving out the wait from
         // whatever attempt originally dead-lettered it.
         message.NextAttemptOnUtc = null;
+        // Clear any stale claim too: a dead-lettered row's claim was already released by
+        // MarkAsFailed, but a row an operator retries mid-flight (still claimed by a live
+        // dispatcher instance) must not stay locked out of the next poll for the rest of that
+        // instance's lease — an explicit operator retry always wins over an in-flight claim.
+        message.ClaimedBy = null;
+        message.ClaimedUntil = null;
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return true;
     }

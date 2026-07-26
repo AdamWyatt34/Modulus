@@ -27,11 +27,16 @@ public sealed class OutboxDbContext : DbContext
             // W3C traceparent is exactly 55 chars; tracestate is spec-capped for propagation.
             entity.Property(e => e.TraceParent).HasMaxLength(55);
             entity.Property(e => e.TraceState).HasMaxLength(512);
+            // Generous but bounded: "{MachineName}:{32-char GUID N-format}" comfortably fits;
+            // custom owner-id schemes (e.g. a pod name) still have ample room.
+            entity.Property(e => e.ClaimedBy).HasMaxLength(100);
+            entity.Property(e => e.ClaimedUntil);
 
-            // Polling query: WHERE ProcessedAt IS NULL AND Attempts < N
+            // Claim query: WHERE ProcessedAt IS NULL AND Attempts < N
             //   AND (NextAttemptOnUtc IS NULL OR NextAttemptOnUtc <= @now)
-            //   AND (ScheduledOnUtc IS NULL OR ScheduledOnUtc <= @now) ORDER BY CreatedAt.
-            entity.HasIndex(e => new { e.ProcessedAt, e.NextAttemptOnUtc, e.ScheduledOnUtc, e.CreatedAt });
+            //   AND (ScheduledOnUtc IS NULL OR ScheduledOnUtc <= @now)
+            //   AND (ClaimedUntil IS NULL OR ClaimedUntil < @now) ORDER BY CreatedAt.
+            entity.HasIndex(e => new { e.ProcessedAt, e.NextAttemptOnUtc, e.ScheduledOnUtc, e.ClaimedUntil, e.CreatedAt });
         });
     }
 }

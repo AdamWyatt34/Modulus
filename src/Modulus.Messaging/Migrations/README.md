@@ -78,7 +78,9 @@ Both contexts are defined in this package and target the same database (or two s
 | `InboxMessages`           | `InboxDbContext` → `InboxMessage`       |
 | `InboxMessageConsumers`   | `InboxDbContext` → composite (Id, Name) |
 
-Since 3.1.0 `OutboxMessages` also carries three new nullable columns — `TraceParent` (max 55) and `TraceState` (max 512) linking outbox dispatch spans back to the saving request, and `ScheduledOnUtc` gating scheduled publishes — and the polling index becomes `{ProcessedAt, NextAttemptOnUtc, ScheduledOnUtc, CreatedAt}`. Upgrading from 3.0.x needs a follow-up migration (below). Rows with `NULL` values behave exactly as before.
+Since 3.1.0 `OutboxMessages` also carries three new nullable columns — `TraceParent` (max 55) and `TraceState` (max 512) linking outbox dispatch spans back to the saving request, and `ScheduledOnUtc` gating scheduled publishes — and the polling index became `{ProcessedAt, NextAttemptOnUtc, ScheduledOnUtc, CreatedAt}`.
+
+Since 4.0.0 `OutboxMessages` additionally carries two new nullable columns — `ClaimedBy` (max 100, the owning dispatcher instance's id) and `ClaimedUntil` (the claim's UTC lease expiry) — backing the multi-instance optimistic claim (`IOutboxStore.ClaimPending`) that replaced the plain `GetPending` fetch, so scaled-out dispatcher replicas no longer publish the same row twice. The polling index becomes `{ProcessedAt, NextAttemptOnUtc, ScheduledOnUtc, ClaimedUntil, CreatedAt}`. Upgrading from 3.x needs a follow-up migration (below); rows with `NULL` values in the new columns are simply unclaimed and behave exactly as before.
 
 The polling indexes (`ProcessedAt, CreatedAt` on Outbox; `ProcessedOnUtc, OccurredOnUtc` on Inbox) are configured in `OnModelCreating` and will be created automatically when you generate the migrations.
 

@@ -59,7 +59,7 @@ public sealed class EfOutboxStoreSchedulingTests : IDisposable
     }
 
     [Fact]
-    public async Task GetPending_excludes_future_scheduled_rows_and_includes_due_ones()
+    public async Task ClaimPending_excludes_future_scheduled_rows_and_includes_due_ones()
     {
         var immediate = NewEvent(1);
         var due = NewEvent(2);
@@ -68,7 +68,7 @@ public sealed class EfOutboxStoreSchedulingTests : IDisposable
         await _store.Save(due, DateTimeOffset.UtcNow.AddMinutes(-5));
         await _store.Save(future, DateTimeOffset.UtcNow.AddHours(1));
 
-        var pending = await _store.GetPending(batchSize: 10, maxAttempts: 5);
+        var pending = await _store.ClaimPending("owner-a", TimeSpan.FromMinutes(5), batchSize: 10, maxAttempts: 5);
 
         pending.Select(m => m.Id).ShouldBe([immediate.EventId, due.EventId], ignoreOrder: true);
     }

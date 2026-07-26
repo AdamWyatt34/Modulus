@@ -65,6 +65,18 @@ public sealed class MessagingOptions
     /// <summary>Gets or sets the maximum number of outbox messages to process per poll cycle. Defaults to 100.</summary>
     public int OutboxBatchSize { get; set; } = 100;
 
+    /// <summary>
+    /// Gets or sets how long an <see cref="Abstractions.IOutboxStore.ClaimPending"/> claim is
+    /// held before it becomes reclaimable by any dispatcher instance — the mechanism that lets
+    /// multiple scaled-out replicas poll the same outbox table without publishing the same row
+    /// twice, and that recovers a crashed instance's in-flight rows automatically once the lease
+    /// elapses. Must comfortably exceed <see cref="OutboxPollInterval"/> plus the time a single
+    /// batch actually takes to dispatch — too short a lease and a slow-but-healthy pass can lose
+    /// its own claim mid-dispatch and race a concurrent claimant over the same rows. Defaults to
+    /// 5 minutes. Minimum: 30 seconds.
+    /// </summary>
+    public TimeSpan OutboxClaimLease { get; set; } = TimeSpan.FromMinutes(5);
+
     /// <summary>Gets or sets the retry policy for the outbox processor's publish attempts before a message is dead-lettered.</summary>
     public RetryPolicyOptions RetryPolicy { get; set; } = new();
 
