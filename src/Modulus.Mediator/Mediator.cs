@@ -250,12 +250,34 @@ internal sealed class Mediator(IServiceProvider serviceProvider) : IMediator
                 throw new OperationCanceledException(cancellationToken);
             }
 
-            // `await whenAll` only rethrows the first faulted task's exception. `whenAll.Exception`
-            // aggregates every faulted task's exception (Task.WhenAll ignores cancelled tasks when
-            // building it), so walk it instead to report every handler's failure.
+            // `await whenAll` only rethrows the first failure, so walk the tasks to report every
+            // handler's. Faulted tasks contribute their exceptions; a task that ended Canceled
+            // (the handler threw OperationCanceledException from a token of its own — the publish
+            // token is checked above and wasn't cancelled) is just as much a handler failure and
+            // must be included: Task.WhenAll's own Exception property ignores cancelled tasks
+            // entirely, and with no faulted task it is null — aggregating from it alone would
+            // throw an AggregateException with zero inner exceptions, losing the failure.
+            var failures = new List<Exception>();
+            foreach (var task in tasks)
+            {
+                if (task.Exception is not null)
+                {
+                    failures.AddRange(task.Exception.InnerExceptions);
+                }
+                else if (task.IsCanceled)
+                {
+                    failures.Add(new TaskCanceledException(task));
+                }
+            }
+
+            if (failures.Count == 0)
+            {
+                throw; // unreachable in practice: await whenAll only throws when a task failed
+            }
+
             throw new AggregateException(
                 $"One or more handlers for {typeof(TEvent).Name} threw an exception.",
-                (IEnumerable<Exception>?)whenAll.Exception?.InnerExceptions ?? Array.Empty<Exception>());
+                failures);
         }
 
         // Every handler completed without faulting or being cancelled, but one of them may have

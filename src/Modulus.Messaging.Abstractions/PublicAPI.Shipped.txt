@@ -3,7 +3,9 @@ Modulus.Messaging.Abstractions.IInboxAdminStore
 Modulus.Messaging.Abstractions.IInboxAdminStore.CountOldAsync(System.DateTime olderThanUtc, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
 Modulus.Messaging.Abstractions.IInboxAdminStore.PurgeOldAsync(System.DateTime olderThanUtc, int batchSize, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
 Modulus.Messaging.Abstractions.IInboxStore
+Modulus.Messaging.Abstractions.IInboxStore.GetPending(int batchSize, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Modulus.Messaging.Abstractions.InboxMessage!>!>!
 Modulus.Messaging.Abstractions.IInboxStore.HasBeenProcessed(System.Guid messageId, string! handlerName, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<bool>!
+Modulus.Messaging.Abstractions.IInboxStore.MarkAsProcessed(System.Collections.Generic.IEnumerable<System.Guid>! ids, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 Modulus.Messaging.Abstractions.IInboxStore.MarkConsumerProcessed(System.Guid messageId, string! handlerName, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 Modulus.Messaging.Abstractions.IInboxStore.ReleaseReservation(System.Guid messageId, string! handlerName, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 Modulus.Messaging.Abstractions.IInboxStore.Save(Modulus.Messaging.Abstractions.IIntegrationEvent! event, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
@@ -25,6 +27,9 @@ Modulus.Messaging.Abstractions.IOutboxAdminStore.PurgeProcessedAsync(System.Date
 Modulus.Messaging.Abstractions.IOutboxAdminStore.RetryAsync(System.Guid messageId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<bool>!
 Modulus.Messaging.Abstractions.IOutboxStore
 Modulus.Messaging.Abstractions.IOutboxStore.CountPending(int maxAttempts, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Modulus.Messaging.Abstractions.IOutboxStore.GetPending(int batchSize, int maxAttempts, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Modulus.Messaging.Abstractions.OutboxMessage!>!>!
+Modulus.Messaging.Abstractions.IOutboxStore.MarkAsFailed(System.Guid messageId, string! error, System.DateTime? nextAttemptOnUtc, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Modulus.Messaging.Abstractions.IOutboxStore.MarkAsProcessed(System.Collections.Generic.IEnumerable<System.Guid>! ids, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 Modulus.Messaging.Abstractions.IOutboxStore.Save(Modulus.Messaging.Abstractions.IIntegrationEvent! event, System.DateTimeOffset enqueueAtUtc, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 Modulus.Messaging.Abstractions.IOutboxStore.Save(Modulus.Messaging.Abstractions.IIntegrationEvent! event, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 Modulus.Messaging.Abstractions.InboxMessage
@@ -35,6 +40,8 @@ Modulus.Messaging.Abstractions.InboxMessage.Id.init -> void
 Modulus.Messaging.Abstractions.InboxMessage.InboxMessage() -> void
 Modulus.Messaging.Abstractions.InboxMessage.OccurredOnUtc.get -> System.DateTime
 Modulus.Messaging.Abstractions.InboxMessage.OccurredOnUtc.init -> void
+Modulus.Messaging.Abstractions.InboxMessage.ProcessedOnUtc.get -> System.DateTime?
+Modulus.Messaging.Abstractions.InboxMessage.ProcessedOnUtc.set -> void
 Modulus.Messaging.Abstractions.InboxMessage.Type.get -> string!
 Modulus.Messaging.Abstractions.InboxMessage.Type.init -> void
 Modulus.Messaging.Abstractions.InboxMessageConsumer

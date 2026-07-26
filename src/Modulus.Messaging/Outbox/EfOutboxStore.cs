@@ -68,16 +68,24 @@ internal sealed class EfOutboxStore(OutboxDbContext dbContext, IOutboxNotifier n
         if (candidateIds.Count == 0)
             return [];
 
-        // Step 2: atomic claim. The WHERE repeats the unclaimed-or-expired clause, evaluated
-        // fresh against the current row state — not the step-1 snapshot — so a competitor that
-        // claimed one of these ids in between just drops that row out of this UPDATE's match
-        // set. This is what makes each row single-winner under concurrency without any
-        // provider-specific locking hint: whichever claimant's UPDATE actually commits first for
-        // a given row wins it; every later UPDATE (from any owner, including this one re-running)
-        // simply no longer matches it.
+        // Step 2: atomic claim. The WHERE repeats the FULL eligibility predicate from step 1 —
+        // not just the claim clause — evaluated fresh against the current row state rather than
+        // the step-1 snapshot. The claim clause alone makes each row single-winner (whichever
+        // claimant's UPDATE commits first wins it; every later UPDATE no longer matches), but a
+        // competitor can do more than claim in the gap: it can claim, fail the publish, and
+        // MarkAsFailed — which clears the claim while bumping Attempts/NextAttemptOnUtc. Against
+        // a claim-only re-check, this stale candidate list would then re-claim a row that just
+        // became dead-lettered or entered retry backoff, publishing past maxAttempts or inside
+        // the backoff window. Re-checking eligibility closes that: a row mutated into
+        // ineligibility between the steps simply drops out of the match set.
         var claimedUntil = utcNow + lease;
         await dbContext.OutboxMessages
-            .Where(m => candidateIds.Contains(m.Id) && (m.ClaimedUntil == null || m.ClaimedUntil < utcNow))
+            .Where(m => candidateIds.Contains(m.Id)
+                && m.ProcessedAt == null
+                && m.Attempts < maxAttempts
+                && (m.NextAttemptOnUtc == null || m.NextAttemptOnUtc <= utcNow)
+                && (m.ScheduledOnUtc == null || m.ScheduledOnUtc <= utcNow)
+                && (m.ClaimedUntil == null || m.ClaimedUntil < utcNow))
             .ExecuteUpdateAsync(
                 s => s.SetProperty(m => m.ClaimedBy, ownerId).SetProperty(m => m.ClaimedUntil, claimedUntil),
                 cancellationToken).ConfigureAwait(false);

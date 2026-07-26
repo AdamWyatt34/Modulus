@@ -222,6 +222,49 @@ public class PublishStrategyTests
     }
 
     [Fact]
+    public async Task Parallel_strategy_surfaces_a_handler_that_cancelled_on_its_own_token()
+    {
+        // The publish token is never cancelled here; one handler throws OperationCanceledException
+        // from an internal token of its own (e.g. an HttpClient timeout). Its async state machine
+        // marks the task Canceled — not Faulted — which Task.WhenAll's Exception property ignores
+        // entirely. The failure must still surface as an aggregated handler failure, not vanish
+        // into an AggregateException with zero inner exceptions (or a success).
+        var succeeding = new OrderPlacedHandler1();
+
+        var services = new ServiceCollection();
+        services.AddSingleton<IDomainEventHandler<OrderPlacedEvent>>(new SelfCancelingHandler());
+        services.AddSingleton<IDomainEventHandler<OrderPlacedEvent>>(succeeding);
+        services.AddModulusMediator(o => o.PublishStrategy = PublishStrategy.Parallel);
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
+
+        var ex = await Should.ThrowAsync<AggregateException>(
+            () => mediator.Publish(new OrderPlacedEvent(1)));
+
+        ex.InnerExceptions.Count.ShouldBe(1);
+        ex.InnerExceptions[0].ShouldBeAssignableTo<OperationCanceledException>();
+        succeeding.HandledOrderIds.ShouldBe([1]);
+    }
+
+    [Fact]
+    public async Task Parallel_strategy_aggregates_self_cancelled_and_faulted_handlers_together()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IDomainEventHandler<OrderPlacedEvent>>(new SelfCancelingHandler());
+        services.AddSingleton<IDomainEventHandler<OrderPlacedEvent>>(new AlwaysFailingHandler("A"));
+        services.AddModulusMediator(o => o.PublishStrategy = PublishStrategy.Parallel);
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
+
+        var ex = await Should.ThrowAsync<AggregateException>(
+            () => mediator.Publish(new OrderPlacedEvent(1)));
+
+        ex.InnerExceptions.Count.ShouldBe(2);
+    }
+
+    [Fact]
     public async Task Parallel_strategy_still_runs_a_handler_started_before_cancellation_was_observed()
     {
         // Unlike Sequential/StopOnFirstFailure, Parallel starts every handler before cancellation
@@ -281,6 +324,19 @@ public class PublishStrategyTests
     {
         public Task Handle(OrderPlacedEvent domainEvent, CancellationToken cancellationToken = default)
             => throw new InvalidOperationException($"Handler {name} failed");
+    }
+
+    private sealed class SelfCancelingHandler : IDomainEventHandler<OrderPlacedEvent>
+    {
+        public async Task Handle(OrderPlacedEvent domainEvent, CancellationToken cancellationToken = default)
+        {
+            // An internal token unrelated to the publish token, cancelled before it is observed —
+            // the state machine ends the returned task Canceled, not Faulted.
+            using var internalCts = new CancellationTokenSource();
+            internalCts.Cancel();
+            await Task.Yield();
+            internalCts.Token.ThrowIfCancellationRequested();
+        }
     }
 
     private sealed class GateHandler(TaskCompletionSource ownSignal, Task waitFor) : IDomainEventHandler<OrderPlacedEvent>
