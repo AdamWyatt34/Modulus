@@ -137,6 +137,20 @@ internal static class ResourceManifest
             = "init/tests/{{SolutionName}}.Tests.Integration/{{SolutionName}}.Tests.Integration.csproj.template",
 
         // ──────────────────────────────────────────────────────
+        // Init / CI (opt-in via --ci github)
+        // ──────────────────────────────────────────────────────
+        ["Modulus.Templates.templates.init.ci._github.workflows.ci.yml.template"]
+            = "init/.github/workflows/ci.yml.template",
+
+        // ──────────────────────────────────────────────────────
+        // Init / Docker (opt-in via --dockerfile)
+        // ──────────────────────────────────────────────────────
+        ["Modulus.Templates.templates.init.docker.Dockerfile.template"]
+            = "init/Dockerfile.template",
+        ["Modulus.Templates.templates.init.docker._dockerignore.template"]
+            = "init/.dockerignore.template",
+
+        // ──────────────────────────────────────────────────────
         // Init / Aspire
         // ──────────────────────────────────────────────────────
         ["Modulus.Templates.templates.init.aspire.AppHost.csproj.template"]

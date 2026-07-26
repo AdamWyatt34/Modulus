@@ -43,6 +43,11 @@ public static class AddEntityCommand
         };
         propertiesOption.Aliases.Add("-p");
 
+        var dryRunOption = new Option<bool>("--dry-run")
+        {
+            Description = "Print what would be created without writing any files.",
+        };
+
         var command = new Command("add-entity", "Add a new entity to an existing module")
         {
             entityNameArg,
@@ -51,6 +56,7 @@ public static class AddEntityCommand
             aggregateOption,
             idTypeOption,
             propertiesOption,
+            dryRunOption,
         };
 
         command.SetAction(async parseResult =>
@@ -61,10 +67,11 @@ public static class AddEntityCommand
             var aggregate = parseResult.GetValue(aggregateOption);
             var idType = parseResult.GetValue(idTypeOption)!;
             var properties = parseResult.GetValue(propertiesOption);
+            var dryRun = parseResult.GetValue(dryRunOption);
 
             var solutionFinder = new SolutionFinder(fileSystem);
             var handler = new AddEntityHandler(fileSystem, console, solutionFinder);
-            return await handler.ExecuteAsync(entityName, moduleName, solution, aggregate, idType, properties);
+            return await handler.ExecuteAsync(entityName, moduleName, solution, aggregate, idType, properties, dryRun);
         });
 
         return command;

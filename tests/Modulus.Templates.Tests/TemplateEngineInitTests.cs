@@ -10,12 +10,16 @@ public class TemplateEngineInitTests
     private static InitOptions CreateOptions(
         bool includeAspire = false,
         string transport = "inmemory",
-        string modulusKitVersion = "1.2.3") => new()
+        string modulusKitVersion = "1.2.3",
+        string? ci = null,
+        bool includeDockerfile = false) => new()
         {
             SolutionName = "EShop",
             IncludeAspire = includeAspire,
             Transport = transport,
             ModulusKitVersion = modulusKitVersion,
+            Ci = ci,
+            IncludeDockerfile = includeDockerfile,
         };
 
     [Fact]
@@ -264,11 +268,80 @@ public class TemplateEngineInitTests
     {
         var engine = new TemplateEngine();
 
-        var outputs = engine.GenerateInit(CreateOptions(includeAspire: true, transport: "rabbitmq"));
+        var outputs = engine.GenerateInit(CreateOptions(
+            includeAspire: true, transport: "rabbitmq", ci: "github", includeDockerfile: true));
 
         foreach (var output in outputs)
         {
             output.Content.ShouldNotContain("{{", customMessage: $"Unresolved token found in {output.RelativePath}");
         }
+    }
+
+    // ── --ci github ───────────────────────────────────────────────
+
+    [Fact]
+    public void GenerateInit_CiOmitted_YieldsNoWorkflowFile()
+    {
+        var engine = new TemplateEngine();
+
+        var outputs = engine.GenerateInit(CreateOptions());
+
+        outputs.ShouldNotContain(o => o.RelativePath.StartsWith(".github/"));
+    }
+
+    [Fact]
+    public void GenerateInit_CiGithub_EmitsWorkflowFile()
+    {
+        var engine = new TemplateEngine();
+
+        var outputs = engine.GenerateInit(CreateOptions(ci: "github"));
+
+        var workflow = outputs.Single(o => o.RelativePath == ".github/workflows/ci.yml");
+        workflow.Content.ShouldContain("dotnet restore EShop.slnx");
+        workflow.Content.ShouldContain("dotnet build EShop.slnx --configuration Release --no-restore");
+        workflow.Content.ShouldContain("dotnet test EShop.slnx --configuration Release --no-build");
+        workflow.Content.ShouldContain("permissions:");
+        workflow.Content.ShouldContain("contents: read");
+        workflow.Content.ShouldContain("uses: actions/checkout@v4");
+        workflow.Content.ShouldContain("uses: actions/setup-dotnet@v4");
+    }
+
+    [Fact]
+    public void GenerateInit_CiGithub_IsCaseInsensitive()
+    {
+        var engine = new TemplateEngine();
+
+        var outputs = engine.GenerateInit(CreateOptions(ci: "GitHub"));
+
+        outputs.ShouldContain(o => o.RelativePath == ".github/workflows/ci.yml");
+    }
+
+    // ── --dockerfile ──────────────────────────────────────────────
+
+    [Fact]
+    public void GenerateInit_DockerfileOmitted_YieldsNoDockerFiles()
+    {
+        var engine = new TemplateEngine();
+
+        var outputs = engine.GenerateInit(CreateOptions());
+
+        outputs.ShouldNotContain(o => o.RelativePath == "Dockerfile");
+        outputs.ShouldNotContain(o => o.RelativePath == ".dockerignore");
+    }
+
+    [Fact]
+    public void GenerateInit_IncludeDockerfile_EmitsDockerfileAndDockerignore()
+    {
+        var engine = new TemplateEngine();
+
+        var outputs = engine.GenerateInit(CreateOptions(includeDockerfile: true));
+
+        var dockerfile = outputs.Single(o => o.RelativePath == "Dockerfile");
+        dockerfile.Content.ShouldContain("FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build");
+        dockerfile.Content.ShouldContain("FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final");
+        dockerfile.Content.ShouldContain("src/EShop.WebApi/EShop.WebApi.csproj");
+        dockerfile.Content.ShouldContain("ENTRYPOINT [\"dotnet\", \"EShop.WebApi.dll\"]");
+
+        outputs.ShouldContain(o => o.RelativePath == ".dockerignore");
     }
 }

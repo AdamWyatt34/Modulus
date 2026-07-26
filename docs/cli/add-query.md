@@ -19,8 +19,9 @@ modulus add-query <query-name> [options]
 | Option | Description | Default |
 |---|---|---|
 | `--module, -m <name>` | **(Required)** Target module where the query will be created. | -- |
-| `--result-type, -r <type>` | **(Required)** The return type wrapped in `Result<T>`. Every query must declare what it returns. Must be a single type identifier (e.g. `ProductDto`); generic types like `List<ProductDto>` are not accepted -- define a wrapper DTO (e.g. `ProductListDto`) instead. | -- |
+| `--result-type, -r <type>` | **(Required)** The return type wrapped in `Result<T>`. Every query must declare what it returns. Accepts built-in aliases, BCL types, fully-qualified names, nullable, arrays, and generic types (e.g. `ProductDto`, `List<ProductDto>`, `IReadOnlyList<ProductDto>`, `PagedResult<OrderSummaryDto>`). | -- |
 | `--solution, -s <path>` | Path to the `.slnx` solution file. | Auto-discovered |
+| `--dry-run` | Print the files that would be created without writing anything. | Disabled |
 
 ## Generated Output
 
@@ -71,22 +72,28 @@ Unlike commands, queries do not generate a validator class. Queries are read-onl
 modulus add-query GetProductById --module Catalog --result-type ProductDto
 ```
 
-**Create a query returning a list (wrap the collection in a DTO -- generic result types are not accepted):**
+**Create a query returning a generic collection directly:**
 
 ```bash
-modulus add-query ListProducts --module Catalog --result-type ProductListDto
+modulus add-query ListProducts --module Catalog --result-type "List<ProductDto>"
 ```
 
-**Create a query returning a paginated result (same rule -- e.g. a record wrapping `PagedResult<OrderSummaryDto>`):**
+**Create a query returning a paginated result:**
 
 ```bash
-modulus add-query SearchOrders --module Orders --result-type OrderSearchResultDto
+modulus add-query SearchOrders --module Orders --result-type "PagedResult<OrderSummaryDto>"
 ```
 
 **Create a query with an explicit solution path:**
 
 ```bash
 modulus add-query GetCustomerProfile --module Identity --result-type CustomerProfileDto --solution ./EShop.slnx
+```
+
+**Preview the files that would be created without writing anything:**
+
+```bash
+modulus add-query GetProductById --module Catalog --result-type ProductDto --dry-run
 ```
 
 ## See Also

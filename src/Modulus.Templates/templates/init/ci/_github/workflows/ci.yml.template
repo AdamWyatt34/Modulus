@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Least privilege: this workflow only reads the repo.
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore {{SolutionName}}.slnx
+
+      - name: Build
+        run: dotnet build {{SolutionName}}.slnx --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test {{SolutionName}}.slnx --configuration Release --no-build

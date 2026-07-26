@@ -14,6 +14,16 @@ To update an existing installation:
 dotnet tool update --global ModulusKit.Cli
 ```
 
+::: tip Is there a `dotnet new` template?
+Not yet. `modulus init` scaffolds a solution at runtime via token-replacement templates and
+programmatic C# generators (`Modulus.Templates`), which is a different model from `dotnet new`'s
+static `template.json` + symbol substitution -- there is no `dotnet new modulus-solution`
+today. The supported bootstrap story is `dotnet tool install --global ModulusKit.Cli` followed by
+`modulus init <SolutionName>`. A native `dotnet new` template package is tracked as a future
+enhancement; it would need either a generated static mirror of the existing templates or a
+custom template engine bridge, rather than a thin wrapper around the current scaffold.
+:::
+
 ## Commands
 
 | Command | Description |

@@ -32,12 +32,18 @@ public static class AddEventCommand
         };
         propertiesOption.Aliases.Add("-p");
 
+        var dryRunOption = new Option<bool>("--dry-run")
+        {
+            Description = "Print what would be created without writing any files.",
+        };
+
         var command = new Command("add-event", "Add a new integration event to an existing module's Integration project")
         {
             eventNameArg,
             moduleOption,
             solutionOption,
             propertiesOption,
+            dryRunOption,
         };
 
         command.SetAction(async parseResult =>
@@ -46,10 +52,11 @@ public static class AddEventCommand
             var moduleName = parseResult.GetValue(moduleOption)!;
             var solution = parseResult.GetValue(solutionOption);
             var properties = parseResult.GetValue(propertiesOption);
+            var dryRun = parseResult.GetValue(dryRunOption);
 
             var solutionFinder = new SolutionFinder(fileSystem);
             var handler = new AddEventHandler(fileSystem, console, solutionFinder);
-            return await handler.ExecuteAsync(eventName, moduleName, solution, properties);
+            return await handler.ExecuteAsync(eventName, moduleName, solution, properties, dryRun);
         });
 
         return command;

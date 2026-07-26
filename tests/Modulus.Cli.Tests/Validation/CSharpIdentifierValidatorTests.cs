@@ -76,10 +76,65 @@ public class CSharpIdentifierValidatorTests
     [InlineData("123Bad", false)]
     [InlineData("", false)]
     [InlineData("?", false)]
-    [InlineData("Foo<Bar>", false)]
     [InlineData("Foo;Bar", false)]
     public void Validates_type_names(string type, bool expected)
     {
         CSharpIdentifierValidator.IsValidTypeName(type).ShouldBe(expected);
+    }
+
+    // ── Generic types, nullable generics, and arrays are now accepted ────────────────────
+
+    [Theory]
+    [InlineData("Foo<Bar>", true)]
+    [InlineData("List<string>", true)]
+    [InlineData("List<Guid>", true)]
+    [InlineData("IReadOnlyList<ProductDto>", true)]
+    [InlineData("Dictionary<string,int>", true)]
+    [InlineData("Dictionary<string, int>", true)]
+    [InlineData("Dictionary<string,List<Guid>>", true)]
+    [InlineData("List<Dictionary<string,int>>", true)]
+    [InlineData("PagedResult<ProductDto>", true)]
+    [InlineData("Some.Namespaced.PagedResult<Some.Namespaced.Dto>", true)]
+    [InlineData("List<int?>", true)]
+    [InlineData("Dictionary<string, List<int>?>", true)]
+    public void Validates_generic_type_names(string type, bool expected)
+    {
+        CSharpIdentifierValidator.IsValidTypeName(type).ShouldBe(expected);
+    }
+
+    [Theory]
+    [InlineData("int[]", true)]
+    [InlineData("string[]", true)]
+    [InlineData("Guid[]", true)]
+    [InlineData("List<int>[]", true)]
+    [InlineData("int[][]", true)]
+    [InlineData("int[,]", true)]
+    [InlineData("int?[]", true)]
+    [InlineData("string[]?", true)]
+    public void Validates_array_type_names(string type, bool expected)
+    {
+        CSharpIdentifierValidator.IsValidTypeName(type).ShouldBe(expected);
+    }
+
+    // ── Still-invalid input is rejected with the wider grammar ───────────────────────────
+
+    [Theory]
+    [InlineData("Foo<Bar")]
+    [InlineData("Foo<Bar>>")]
+    [InlineData("Foo<>")]
+    [InlineData("Foo<,>")]
+    [InlineData("List<>")]
+    [InlineData("List<int")]
+    [InlineData("Dictionary<string,>")]
+    [InlineData("Dictionary<,int>")]
+    [InlineData("Foo<Bar>Baz")]
+    [InlineData("Foo<class>")]
+    [InlineData("int[")]
+    [InlineData("int]")]
+    [InlineData("int[,")]
+    [InlineData("List<int>[")]
+    public void Rejects_unbalanced_or_malformed_generic_and_array_syntax(string type)
+    {
+        CSharpIdentifierValidator.IsValidTypeName(type).ShouldBeFalse();
     }
 }

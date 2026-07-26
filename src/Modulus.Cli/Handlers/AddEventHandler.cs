@@ -13,7 +13,8 @@ public sealed class AddEventHandler(
         string eventName,
         string moduleName,
         string? solutionPath,
-        string? properties)
+        string? properties,
+        bool dryRun = false)
     {
         if (!CSharpIdentifierValidator.IsValid(eventName))
         {
@@ -82,12 +83,22 @@ public sealed class AddEventHandler(
         });
 
         var moduleRoot = Path.Combine("src", "Modules", moduleName);
+        var plannedFiles = outputs
+            .Select(output => PathGuard.EnsureContained(solutionRoot, Path.Combine(moduleRoot, output.RelativePath)))
+            .ToList();
+
+        if (dryRun)
+        {
+            return Task.FromResult(DryRunPrinter.PrintFileList(
+                console,
+                $"Dry run — no files were written. The following would be created for integration event '{eventName}':",
+                plannedFiles));
+        }
+
         var fileCount = 0;
 
-        foreach (var output in outputs)
+        foreach (var (output, fullPath) in outputs.Zip(plannedFiles))
         {
-            var remappedPath = Path.Combine(moduleRoot, output.RelativePath);
-            var fullPath = PathGuard.EnsureContained(solutionRoot, remappedPath);
             var dir = fileSystem.GetDirectoryName(fullPath)
                 ?? throw new InvalidOperationException($"Could not determine directory for path: {fullPath}");
             fileSystem.CreateDirectory(dir);

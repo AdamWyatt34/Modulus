@@ -30,6 +30,18 @@ public sealed record InitOptions
     /// </summary>
     public string ModulusKitVersion { get; init; } = ResolveDefaultVersion();
 
+    /// <summary>
+    /// Opt-in CI provider to scaffold a workflow for (currently only <c>"github"</c> is
+    /// supported). <c>null</c> (the default) scaffolds no CI workflow.
+    /// </summary>
+    public string? Ci { get; init; }
+
+    /// <summary>
+    /// Whether to scaffold a multi-stage <c>Dockerfile</c> (and matching <c>.dockerignore</c>)
+    /// building the host <c>{SolutionName}.WebApi</c> project. Opt-in; defaults to <c>false</c>.
+    /// </summary>
+    public bool IncludeDockerfile { get; init; }
+
     private static string ResolveDefaultVersion()
     {
         var version = typeof(InitOptions).Assembly

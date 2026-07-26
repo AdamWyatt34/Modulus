@@ -193,4 +193,29 @@ public class AddEventHandlerTests
         result.ShouldBe(0);
         _console.SuccessLines.ShouldContain(l => l.Contains("OrderShipped") && l.Contains("Orders"));
     }
+
+    // ── --dry-run ─────────────────────────────────────────────────
+
+    [Fact]
+    public async Task AddEvent_dry_run_writes_no_files()
+    {
+        SeedModulusSolutionWithModule();
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync("OrderShipped", "Orders", @"C:\work\EShop\EShop.slnx", "OrderId:Guid", dryRun: true);
+
+        result.ShouldBe(0);
+        _fs.FileExists(EventPath).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task AddEvent_dry_run_prints_the_file_that_would_be_created()
+    {
+        SeedModulusSolutionWithModule();
+        var handler = CreateHandler();
+
+        await handler.ExecuteAsync("OrderShipped", "Orders", @"C:\work\EShop\EShop.slnx", null, dryRun: true);
+
+        _console.Lines.ShouldContain(l => l.Contains("OrderShipped.cs"));
+    }
 }

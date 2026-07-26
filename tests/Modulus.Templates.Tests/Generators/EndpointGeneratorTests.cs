@@ -52,8 +52,10 @@ public class EndpointGeneratorTests
 
         var output = generator.Generate(CreateOptions(queryName: "GetProductById", resultType: "ProductDto"));
 
-        output.Content.ShouldContain("app.MapGet(\"/{id:guid}\", async (IMediator mediator, CancellationToken ct) =>");
-        output.Content.ShouldContain("mediator.Query(new GetProductById(), ct)");
+        // Default route is "/{id:guid}" — the route parameter is now bound as a leading lambda
+        // parameter and forwarded positionally into the query's constructor.
+        output.Content.ShouldContain("app.MapGet(\"/{id:guid}\", async (Guid id, IMediator mediator, CancellationToken ct) =>");
+        output.Content.ShouldContain("mediator.Query(new GetProductById(id), ct)");
         output.Content.ShouldContain(".Produces<ProductDto>(StatusCodes.Status200OK)");
     }
 
@@ -91,11 +93,11 @@ public class EndpointGeneratorTests
     }
 
     [Fact]
-    public void Generate_PostCommandWithResult_RouteParam_EmitsPlainStringLiteralLocation()
+    public void Generate_PostCommandWithResult_RouteParam_BindsLambdaParameterAndInterpolatesLocation()
     {
-        // H-CLI2: a route containing "{param}" must never land inside a generated C#
-        // interpolated string ($"...") for the Location value — that turns the literal
-        // placeholder into an interpolation hole with no such variable in scope (CS0103).
+        // Route parameters are now bound: "{itemId}" (no constraint) defaults to `string itemId`,
+        // forwarded positionally into the command's constructor, and the Location value
+        // interpolates the *actual* bound value rather than echoing the raw route template.
         var generator = new EndpointGenerator();
 
         var output = generator.Generate(CreateOptions(
@@ -104,22 +106,106 @@ public class EndpointGeneratorTests
             commandName: "CreateProduct",
             resultType: "Guid"));
 
-        output.Content.ShouldContain("Results.Created(\"/api/catalog/items/{itemId}\", value)");
-        output.Content.ShouldNotContain("Results.Created($\"");
+        output.Content.ShouldContain("async (string itemId, IMediator mediator, CancellationToken ct) =>");
+        output.Content.ShouldContain("mediator.Send(new CreateProduct(itemId), ct)");
+        output.Content.ShouldContain("Results.Created($\"/api/catalog/items/{itemId}\", value)");
     }
 
     [Fact]
-    public void Generate_PostCommandWithResult_RouteParam_NotesRouteParamsAreUnbound()
+    public void Generate_PostCommandWithResult_RouteParam_GuidConstraint_StripsConstraintFromLocationInterpolation()
+    {
+        // H-CLI2 regression, now resolved rather than avoided: a route containing "{id:guid}"
+        // must never land inside a generated C# interpolated string verbatim — ":guid" would be
+        // parsed as an interpolation alignment/format-string clause and throw a FormatException
+        // at runtime (Guid has no "guid" format). The bound value must be interpolated via the
+        // bare "{id}" hole instead.
+        var generator = new EndpointGenerator();
+
+        var output = generator.Generate(CreateOptions(
+            httpMethod: "POST",
+            route: "/{id:guid}",
+            commandName: "UpdateProduct",
+            resultType: "Guid"));
+
+        output.Content.ShouldContain("async (Guid id, IMediator mediator, CancellationToken ct) =>");
+        output.Content.ShouldContain("mediator.Send(new UpdateProduct(id), ct)");
+        output.Content.ShouldContain("Results.Created($\"/api/catalog/{id}\", value)");
+
+        // The route template itself (the first MapPost argument) legitimately keeps its
+        // constraint — only the Location interpolation must strip it.
+        output.Content.ShouldNotContain("Results.Created($\"/api/catalog/{id:guid}\"");
+    }
+
+    [Fact]
+    public void Generate_RouteParam_WithIntConstraint_BindsAsInt()
+    {
+        var generator = new EndpointGenerator();
+
+        var output = generator.Generate(CreateOptions(
+            httpMethod: "GET",
+            route: "/{page:int}",
+            queryName: "ListProducts",
+            resultType: "ProductListDto"));
+
+        output.Content.ShouldContain("async (int page, IMediator mediator, CancellationToken ct) =>");
+        output.Content.ShouldContain("mediator.Query(new ListProducts(page), ct)");
+    }
+
+    [Fact]
+    public void Generate_RouteParam_WithOptionalIntConstraint_BindsAsNullableInt()
+    {
+        var generator = new EndpointGenerator();
+
+        var output = generator.Generate(CreateOptions(
+            httpMethod: "GET",
+            route: "/{page:int?}",
+            queryName: "ListProducts",
+            resultType: "ProductListDto"));
+
+        output.Content.ShouldContain("async (int? page, IMediator mediator, CancellationToken ct) =>");
+    }
+
+    [Fact]
+    public void Generate_MultipleRouteParams_BindInDeclaredOrder()
+    {
+        var generator = new EndpointGenerator();
+
+        var output = generator.Generate(CreateOptions(
+            httpMethod: "GET",
+            route: "/{parentId:guid}/items/{itemId:guid}",
+            queryName: "GetItem",
+            resultType: "ItemDto"));
+
+        output.Content.ShouldContain("async (Guid parentId, Guid itemId, IMediator mediator, CancellationToken ct) =>");
+        output.Content.ShouldContain("mediator.Query(new GetItem(parentId, itemId), ct)");
+    }
+
+    [Fact]
+    public void Generate_NoCommandOrQuery_RouteParam_StillBindsLambdaParameter()
+    {
+        var generator = new EndpointGenerator();
+
+        var output = generator.Generate(CreateOptions(
+            httpMethod: "DELETE",
+            route: "/{id:guid}"));
+
+        output.Content.ShouldContain("async (Guid id, CancellationToken ct) =>");
+        output.Content.ShouldContain("// TODO: Wire up to a command or query");
+    }
+
+    [Fact]
+    public void Generate_NoRouteParams_ConstructsParameterlessAsBefore()
     {
         var generator = new EndpointGenerator();
 
         var output = generator.Generate(CreateOptions(
             httpMethod: "POST",
-            route: "/items/{itemId}",
+            route: "",
             commandName: "CreateProduct",
             resultType: "Guid"));
 
-        output.Content.ShouldContain("route parameters");
+        output.Content.ShouldContain("async (IMediator mediator, CancellationToken ct) =>");
+        output.Content.ShouldContain("mediator.Send(new CreateProduct(), ct)");
     }
 
     [Fact]

@@ -24,11 +24,23 @@ public static class AddModuleCommand
             Description = "Skip creating the Api project (for backend-only modules)",
         };
 
+        var dryRunOption = new Option<bool>("--dry-run")
+        {
+            Description = "Print what would be created without writing any files or running any processes.",
+        };
+
+        var noRestoreOption = new Option<bool>("--no-restore")
+        {
+            Description = "Skip running 'dotnet restore' after scaffolding.",
+        };
+
         var command = new Command("add-module", "Add a new module to an existing Modulus solution")
         {
             moduleNameArg,
             solutionOption,
             noEndpointsOption,
+            dryRunOption,
+            noRestoreOption,
         };
 
         command.SetAction(async parseResult =>
@@ -36,10 +48,12 @@ public static class AddModuleCommand
             var moduleName = parseResult.GetValue(moduleNameArg)!;
             var solution = parseResult.GetValue(solutionOption);
             var noEndpoints = parseResult.GetValue(noEndpointsOption);
+            var dryRun = parseResult.GetValue(dryRunOption);
+            var noRestore = parseResult.GetValue(noRestoreOption);
 
             var solutionFinder = new SolutionFinder(fileSystem);
             var handler = new AddModuleHandler(fileSystem, processRunner, console, solutionFinder);
-            return await handler.ExecuteAsync(moduleName, solution, noEndpoints);
+            return await handler.ExecuteAsync(moduleName, solution, noEndpoints, dryRun, noRestore);
         });
 
         return command;

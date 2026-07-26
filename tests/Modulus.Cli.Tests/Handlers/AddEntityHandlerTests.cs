@@ -455,4 +455,45 @@ public class AddEntityHandlerTests
         result.ShouldBe(0);
         _console.SuccessLines.ShouldContain(l => l.Contains("entity"));
     }
+
+    // ── --dry-run ─────────────────────────────────────────────────
+
+    [Fact]
+    public async Task AddEntity_dry_run_writes_no_files()
+    {
+        SeedModulusSolutionWithModule();
+        var handler = CreateHandler();
+
+        var result = await handler.ExecuteAsync("Product", "Catalog", @"C:\work\EShop\EShop.slnx",
+            isAggregate: false, idType: "guid", properties: "Name:string", dryRun: true);
+
+        result.ShouldBe(0);
+        _fs.FileExists(@"C:\work\EShop\src\Modules\Catalog\src\Catalog.Domain\Entities\Product.cs").ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task AddEntity_dry_run_prints_the_files_that_would_be_created()
+    {
+        SeedModulusSolutionWithModule();
+        var handler = CreateHandler();
+
+        await handler.ExecuteAsync("Product", "Catalog", @"C:\work\EShop\EShop.slnx",
+            isAggregate: false, idType: "guid", properties: null, dryRun: true);
+
+        _console.Lines.ShouldContain(l => l.Contains("Product.cs"));
+        _console.Lines.ShouldContain(l => l.Contains("IProductRepository.cs"));
+    }
+
+    [Fact]
+    public async Task AddEntity_dry_run_with_custom_strongly_typed_id_lists_id_file()
+    {
+        SeedModulusSolutionWithModule();
+        var handler = CreateHandler();
+
+        await handler.ExecuteAsync("Product", "Catalog", @"C:\work\EShop\EShop.slnx",
+            isAggregate: false, idType: "ProductId", properties: null, dryRun: true);
+
+        _console.Lines.ShouldContain(l => l.Contains("ProductId.cs"));
+        _fs.FileExists(@"C:\work\EShop\src\Modules\Catalog\src\Catalog.Domain\Identifiers\ProductId.cs").ShouldBeFalse();
+    }
 }

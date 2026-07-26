@@ -15,7 +15,9 @@ public sealed class AddModuleHandler(
     public async Task<int> ExecuteAsync(
         string moduleName,
         string? solutionPath,
-        bool noEndpoints)
+        bool noEndpoints,
+        bool dryRun = false,
+        bool noRestore = false)
     {
         if (!CSharpIdentifierValidator.IsValid(moduleName))
         {
@@ -92,13 +94,44 @@ public sealed class AddModuleHandler(
         }
 
         var moduleRoot = Path.Combine("src", "Modules", moduleName);
+        var plannedFiles = filtered
+            .Select(output => (Output: output, FullPath: PathGuard.EnsureContained(solutionRoot, Path.Combine(moduleRoot, output.RelativePath))))
+            .ToList();
+
+        if (dryRun)
+        {
+            console.WriteLine($"Dry run — no files were written and no processes were run. The following would happen for module '{moduleName}':");
+
+            foreach (var (_, fullPath) in plannedFiles)
+            {
+                console.WriteLine($"  create  {fullPath}");
+            }
+
+            var (hostCsprojPath, wouldAddHostReference) = PreviewHostProjectReference(solutionRoot, solutionName, moduleName);
+            if (wouldAddHostReference)
+            {
+                console.WriteLine($"  edit    {hostCsprojPath}  -- add ProjectReference to {moduleName}.Infrastructure (required for module discovery)");
+            }
+
+            var csprojCount = plannedFiles.Count(p => p.FullPath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase));
+            if (csprojCount > 0)
+            {
+                console.WriteLine($"  run     dotnet sln add  ({csprojCount} project(s), in {solutionRoot})");
+            }
+
+            console.WriteLine(!noRestore
+                ? $"  run     dotnet restore  (in {solutionRoot})"
+                : "  skip    dotnet restore  (--no-restore)");
+
+            console.WriteLine("Re-run without --dry-run to apply.");
+            return 0;
+        }
+
         var csprojEntries = new List<(string FullPath, bool IsTestProject)>();
         var fileCount = 0;
 
-        foreach (var output in filtered)
+        foreach (var (output, fullPath) in plannedFiles)
         {
-            var remappedPath = Path.Combine(moduleRoot, output.RelativePath);
-            var fullPath = PathGuard.EnsureContained(solutionRoot, remappedPath);
             var dir = fileSystem.GetDirectoryName(fullPath)
                 ?? throw new InvalidOperationException($"Could not determine directory for path: {fullPath}");
             fileSystem.CreateDirectory(dir);
@@ -121,15 +154,25 @@ public sealed class AddModuleHandler(
 
         await AddProjectsToSolution(slnxPath, solutionRoot, moduleName, csprojEntries);
 
-        var restoreResult = await processRunner.RunAsync("dotnet", ["restore"], solutionRoot);
-        if (restoreResult != 0)
+        var restoreStatus = "Skipped (--no-restore)";
+        if (!noRestore)
         {
-            console.WriteError($"Warning: dotnet restore failed with exit code {restoreResult}. You may need to run it manually.");
+            var restoreResult = await processRunner.RunAsync("dotnet", ["restore"], solutionRoot);
+            if (restoreResult != 0)
+            {
+                console.WriteError($"Warning: dotnet restore failed with exit code {restoreResult}. You may need to run it manually.");
+                restoreStatus = $"Failed (exit code {restoreResult})";
+            }
+            else
+            {
+                restoreStatus = "OK";
+            }
         }
 
         console.WriteSuccess($"Module '{moduleName}' added successfully.");
         console.WriteLine($"  Projects: {csprojEntries.Count}");
         console.WriteLine($"  Endpoints: {(noEndpoints ? "Skipped" : "Included")}");
+        console.WriteLine($"  Restore: {restoreStatus}");
 
         if (hostReferenceAdded)
         {
@@ -137,6 +180,41 @@ public sealed class AddModuleHandler(
         }
 
         return 0;
+    }
+
+    /// <summary>
+    /// Read-only preview of what <see cref="AddHostProjectReference"/> would do, for
+    /// <c>--dry-run</c>: same detection (file exists, well-formed XML, has a closing tag, not
+    /// already referenced) but never writes and never emits warnings — a dry run should describe
+    /// a clean plan, not the failure-path diagnostics of the real edit.
+    /// </summary>
+    private (string HostCsprojPath, bool WouldAdd) PreviewHostProjectReference(string solutionRoot, string solutionName, string moduleName)
+    {
+        var hostCsprojPath = Path.Combine(solutionRoot, "src", $"{solutionName}.WebApi", $"{solutionName}.WebApi.csproj");
+        var infrastructureCsprojFileName = $"{moduleName}.Infrastructure.csproj";
+
+        if (!fileSystem.FileExists(hostCsprojPath))
+        {
+            return (hostCsprojPath, false);
+        }
+
+        var content = fileSystem.ReadAllText(hostCsprojPath);
+
+        try
+        {
+            _ = XDocument.Parse(content);
+        }
+        catch (XmlException)
+        {
+            return (hostCsprojPath, false);
+        }
+
+        if (!content.Contains("</Project>", StringComparison.Ordinal))
+        {
+            return (hostCsprojPath, false);
+        }
+
+        return (hostCsprojPath, !ProjectReferenceEditor.HasReferenceTo(content, infrastructureCsprojFileName));
     }
 
     /// <summary>

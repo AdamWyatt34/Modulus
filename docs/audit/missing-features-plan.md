@@ -46,6 +46,7 @@ One line each; details live in the linked docs, tests, and CHANGELOG.
 
 ### On demand
 
+- **`dotnet new` template package** — deferred from the 3.1.0 CLI-ergonomics wave: `Modulus.Templates` renders solutions via runtime token replacement and programmatic C# generators, which is incompatible with `dotnet new`'s static `template.json` symbol-substitution model. A faithful implementation needs a generated static mirror of the templates (or a custom engine bridge) in its own package (e.g. `ModulusKit.Templates.DotnetNew` with `<PackageType>Template</PackageType>`, its own MinVer tag prefix, ci.yml publish-map entry, and README/table rows). Revisit if discoverability via `dotnet new` proves to matter; the documented bootstrap is `dotnet tool install -g ModulusKit.Cli` + `modulus init`.
 - **`rename-module` implementation** — still deferred as high-risk cross-cutting rename; the manual procedure is documented (`docs/cli/rename-module.md`). Revisit if users report doing it often.
 - **PR26 — BenchmarkDotNet baseline** — deferred pre-adoption; revisit when real consumers ask for perf numbers.
 - **Inbox reservation stale-sweep tuning** — `ConsumerReservationTimeout` is a fixed option; a per-handler override or background sweeper only if field feedback demands it.
