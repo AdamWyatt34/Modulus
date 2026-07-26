@@ -8,10 +8,6 @@
     <EnforcePublicApi>true</EnforcePublicApi>
     <MinVerTagPrefix>testing-v</MinVerTagPrefix>
     <MinVerDefaultPreReleaseIdentifiers>alpha.0</MinVerDefaultPreReleaseIdentifiers>
-    <!-- No published version exists yet, so there is no package-validation baseline to
-         compare against. Remove this after the first release and let Directory.Build.props
-         apply the shared baseline version. -->
-    <NoPackageBaseline>true</NoPackageBaseline>
   </PropertyGroup>
 
   <ItemGroup>

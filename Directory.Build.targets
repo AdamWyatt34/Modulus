@@ -28,7 +28,7 @@
        conditions evaluate. -->
   <PropertyGroup Condition="'$(IsPackable)' != 'false' and '$(IsTestProject)' != 'true'">
     <EnablePackageValidation>true</EnablePackageValidation>
-    <PackageValidationBaselineVersion Condition="'$(PackAsTool)' != 'true' and '$(NoPackageBaseline)' != 'true'">3.0.0</PackageValidationBaselineVersion>
+    <PackageValidationBaselineVersion Condition="'$(PackAsTool)' != 'true' and '$(NoPackageBaseline)' != 'true'">3.1.0</PackageValidationBaselineVersion>
   </PropertyGroup>
 
 </Project>
