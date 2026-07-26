@@ -176,10 +176,14 @@ public sealed class AuthorizationBehavior<TRequest, TResponse>(ICurrentUser user
             return ResultFactory.CreateFailureResult<TResponse>(
                 Error.Unauthorized("Auth.Required", "Authentication required."));
 
-        return await next();
+        return await next(cancellationToken);
     }
 }
 ```
+
+Since 4.0, `RequestHandlerDelegate<TResponse>` takes `CancellationToken cancellationToken = default`. A bare `next()` flows the token the current behavior received (never `CancellationToken.None`); `next(someOtherToken)` substitutes that token for every inner behavior and the handler — the mechanism for timeout/linked-token behaviors (`using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken); linked.CancelAfter(timeout); return await next(linked.Token);`). Prefer passing the token explicitly as above.
+
+`IMediator.Publish` (domain events) dispatch is configurable since 4.0: `AddModulusMediator(o => o.PublishStrategy = PublishStrategy.Parallel)` — `Sequential` (default; every handler runs, failures aggregate), `Parallel` (all handlers concurrently, failures aggregate), `StopOnFirstFailure` (first failure rethrown unwrapped, later handlers never run).
 
 ---
 
@@ -278,6 +282,8 @@ public sealed class PlaceOrderHandler(AppDbContext db, IOutboxStore outbox)
 ## Immediate Outbox Dispatch (Change Notification)
 
 New outbox rows wake the `OutboxProcessor` the moment they commit — dispatch latency is milliseconds, not the poll interval. Polling survives only as the fallback sweep (crash recovery, other replicas, external writers).
+
+Since 4.0 every replica can run the dispatcher: rows are fetched via an optimistic claim (`IOutboxStore.ClaimPending(ownerId, lease, ...)` stamping `ClaimedBy`/`ClaimedUntil`), so concurrent instances never publish the same row twice; a crashed instance's claims self-heal when the lease (`MessagingOptions.OutboxClaimLease`, default 5 min) expires. Still at-least-once — pair with the inbox. Custom `IOutboxStore` implementations must implement the claim members (`GetPending` is gone; `MarkAsProcessed`/`MarkAsFailed` take a leading `ownerId`).
 
 - `AddModulusOutbox` auto-attaches the notifying interceptor to the library's `OutboxDbContext` — nothing to do.
 - CLI-scaffolded module DbContexts come pre-wired.

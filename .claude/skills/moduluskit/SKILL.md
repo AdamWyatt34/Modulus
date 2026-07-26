@@ -96,7 +96,7 @@ app.MapPost("/orders", async (PlaceOrderCommand cmd, IMediator mediator, Cancell
 });
 ```
 
-`IMediator` members: `Send(ICommand)`, `Send<TResult>(ICommand<TResult>)`, `Query<TResult>(IQuery<TResult>)`, `Stream<TResult>(IStreamQuery<TResult>)`, `Publish<TEvent>` (domain events, in-process only).
+`IMediator` members: `Send(ICommand)`, `Send<TResult>(ICommand<TResult>)`, `Query<TResult>(IQuery<TResult>)`, `Stream<TResult>(IStreamQuery<TResult>)`, `Publish<TEvent>` (domain events, in-process only; dispatch strategy configurable since 4.0 via `AddModulusMediator(o => o.PublishStrategy = ...)` — Sequential default / Parallel / StopOnFirstFailure).
 
 ## Quick Start — Messaging (Integration Events)
 
