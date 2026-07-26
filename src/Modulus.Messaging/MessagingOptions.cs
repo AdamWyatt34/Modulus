@@ -76,6 +76,17 @@ public sealed class MessagingOptions
     public RetryPolicyOptions ConsumerRetry { get; set; } = new();
 
     /// <summary>
+    /// Gets or sets how <see cref="ConsumerRetry"/> waits between attempts. The default,
+    /// <see cref="ConsumerRetryMode.InProcess"/>, sleeps in the handler's concurrency slot;
+    /// <see cref="ConsumerRetryMode.Broker"/> re-schedules the message on the broker instead
+    /// (RabbitMQ TTL retry queue, Azure Service Bus scheduled messages, in-memory timer), so a
+    /// failing message frees its slot and the backoff survives a crash. Broker mode requires a
+    /// transport with native delayed-redelivery support — all shipped transports have it;
+    /// custom transports must handle <see cref="Transports.MessageDispatchResult.Retry"/>.
+    /// </summary>
+    public ConsumerRetryMode ConsumerRetryMode { get; set; } = ConsumerRetryMode.InProcess;
+
+    /// <summary>
     /// Gets or sets how long an inbox consumer reservation may sit unprocessed before another
     /// delivery may take it over (e.g. after the owning process crashed mid-handler). Must
     /// exceed the worst-case handler execution time, or a slow handler and a concurrent
@@ -128,6 +139,16 @@ public sealed class RetentionOptions
     /// Defaults to 500.
     /// </summary>
     public int PurgeBatchSize { get; set; } = 500;
+}
+
+/// <summary>How the consumer pipeline waits out retry backoff. See <see cref="MessagingOptions.ConsumerRetryMode"/>.</summary>
+public enum ConsumerRetryMode
+{
+    /// <summary>Sleep in process between attempts (pins a concurrency slot; backoff lost on crash).</summary>
+    InProcess,
+
+    /// <summary>Re-schedule the message on the broker with the backoff as a delay (durable, non-blocking).</summary>
+    Broker,
 }
 
 /// <summary>

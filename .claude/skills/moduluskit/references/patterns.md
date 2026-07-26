@@ -304,6 +304,25 @@ Register with `AddModulusInbox(...)`. Consumption is **reservation-based**: each
 
 ---
 
+## Delayed Redelivery & Scheduled Publishing
+
+```csharp
+// Broker-native consumer retry (opt-in): backoff waits on the broker, not in-process.
+// One handler pass per delivery; failed messages come back via RabbitMQ TTL retry queue /
+// ASB scheduled copy / in-memory timer. Frees the concurrency slot; survives crashes.
+builder.Services.AddModulusMessaging(options =>
+    options.ConsumerRetryMode = ConsumerRetryMode.Broker);   // default: InProcess
+
+// Scheduled publish — broker holds the message until due:
+await bus.PublishScheduled(new ReminderDue(id), DateTimeOffset.UtcNow.AddHours(4), ct);
+
+// Durable variant through the outbox (transactional with business data; precision =
+// OutboxPollInterval). Far-future rows don't count as backlog for the health check.
+await outbox.Save(new ReminderDue(id), DateTimeOffset.UtcNow.AddDays(3), ct);
+```
+
+RabbitMQ caveat: per-message TTL expires only at the queue head, so mixed delays on one event type release in publish order (`PublishScheduled`); retry backoff is non-decreasing so the retry queue is unaffected in practice. ASB redelivery copies fan out with a `modulus-redeliver-endpoint` property; other endpoints ack them unrun.
+
 ## Retention (Outbox + Inbox Cleanup)
 
 Delivered rows accumulate forever unless retention is on. Opt in via `MessagingOptions.Retention`:

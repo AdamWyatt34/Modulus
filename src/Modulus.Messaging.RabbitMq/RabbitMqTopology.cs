@@ -31,6 +31,21 @@ public static class RabbitMqTopology
         => EnsureWithinLimit($"{QueueName(endpointName)}.dead-letter", "dead-letter queue");
 
     /// <summary>
+    /// The endpoint's broker-native retry queue: failed messages are published here with a
+    /// per-message TTL and dead-letter straight back into the work queue on expiry
+    /// (<c>ConsumerRetryMode.Broker</c>).
+    /// </summary>
+    public static string RetryQueueName(string endpointName)
+        => EnsureWithinLimit($"{QueueName(endpointName)}.retry", "retry queue");
+
+    /// <summary>
+    /// The per-event-type holding queue for scheduled publishes: messages sit here with a
+    /// per-message TTL and dead-letter into the event's fanout exchange when due.
+    /// </summary>
+    public static string ScheduledQueueName(string messageTypeName)
+        => EnsureWithinLimit($"{ExchangeName(messageTypeName)}.scheduled", "scheduled queue");
+
+    /// <summary>
     /// Guards against RabbitMQ's 255-UTF-8-byte limit on exchange and queue names, surfacing a
     /// descriptive error at topology-resolution time instead of an opaque broker-side rejection
     /// on the first <c>exchange.declare</c>/<c>queue.declare</c>.

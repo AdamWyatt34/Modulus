@@ -37,6 +37,17 @@ public sealed class OutboxMessage
     public DateTime? NextAttemptOnUtc { get; set; }
 
     /// <summary>
+    /// Gets the earliest UTC time this message may be dispatched, or <see langword="null"/>
+    /// for immediate eligibility. Set by the scheduled
+    /// <see cref="IOutboxStore.Save(IIntegrationEvent, DateTimeOffset, CancellationToken)"/>
+    /// overload; distinct from <see cref="NextAttemptOnUtc"/>, which is strictly the retry
+    /// backoff written after a failed attempt (and overwritten on every failure). Rows
+    /// scheduled for the future are excluded from both dispatch and the backlog count — a
+    /// message scheduled a week out is not outstanding work for the health check.
+    /// </summary>
+    public DateTime? ScheduledOnUtc { get; init; }
+
+    /// <summary>
     /// Gets the W3C <c>traceparent</c> of the operation that saved this message, or
     /// <see langword="null"/> when no trace was active at save time (or the row predates
     /// trace capture). The outbox dispatcher links its publish span to this context so the

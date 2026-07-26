@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using Microsoft.Extensions.Logging;
+using Modulus.Messaging.Dispatch;
 using Modulus.Messaging.Internals;
 using Modulus.Messaging.Transports;
 using RabbitMQ.Client;
@@ -25,6 +27,10 @@ internal sealed class RabbitMqTransport(
 
     private readonly SemaphoreSlim _connectionLock = new(1, 1);
     private readonly ConcurrentDictionary<string, byte> _declaredExchanges = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, byte> _declaredScheduledQueues = new(StringComparer.Ordinal);
+
+    // Captured by StartConsumingAsync for the broker-native redelivery path.
+    private volatile string? _consumeQueue;
 
     private IConnection? _connection;
     private IChannel? _publishChannel;
@@ -127,13 +133,46 @@ internal sealed class RabbitMqTransport(
             _declaredExchanges.TryAdd(exchange, 0);
         }
 
+        // Scheduled publish: park the message in the event type's TTL holding queue, whose
+        // dead-letter exchange is the event's fanout exchange — on expiry the broker routes
+        // it to subscribers exactly as an immediate publish would have.
+        var delay = envelope.ScheduledEnqueueTimeUtc is { } enqueueAt
+            ? enqueueAt - DateTimeOffset.UtcNow
+            : TimeSpan.Zero;
+
+        var properties = RabbitMqEnvelopeMapper.ToBasicProperties(envelope);
+        var targetExchange = exchange;
+        var routingKey = string.Empty;
+
+        if (delay > TimeSpan.Zero)
+        {
+            var scheduledQueue = RabbitMqTopology.ScheduledQueueName(envelope.MessageType);
+
+            if (options.AutoProvision && !_declaredScheduledQueues.ContainsKey(scheduledQueue))
+            {
+                await channel.QueueDeclareAsync(
+                    scheduledQueue, durable: true, exclusive: false, autoDelete: false,
+                    arguments: new Dictionary<string, object?>
+                    {
+                        ["x-dead-letter-exchange"] = exchange,
+                    },
+                    cancellationToken: cancellationToken).ConfigureAwait(false);
+                _declaredScheduledQueues.TryAdd(scheduledQueue, 0);
+            }
+
+            properties.Expiration = Math.Max(1L, (long)delay.TotalMilliseconds)
+                .ToString(CultureInfo.InvariantCulture);
+            targetExchange = string.Empty;
+            routingKey = scheduledQueue;
+        }
+
         try
         {
             await channel.BasicPublishAsync(
-                exchange,
-                routingKey: string.Empty,
+                targetExchange,
+                routingKey,
                 mandatory: false,
-                basicProperties: RabbitMqEnvelopeMapper.ToBasicProperties(envelope),
+                basicProperties: properties,
                 body: envelope.Body,
                 cancellationToken: cancellationToken).ConfigureAwait(false);
         }
@@ -144,6 +183,7 @@ internal sealed class RabbitMqTransport(
             // failures, so evict unconditionally. The cost is one redundant, idempotent
             // re-declare on the next attempt instead of failing against this exchange forever.
             _declaredExchanges.TryRemove(exchange, out _);
+            _declaredScheduledQueues.TryRemove(RabbitMqTopology.ScheduledQueueName(envelope.MessageType), out _);
             throw;
         }
     }
@@ -210,6 +250,21 @@ internal sealed class RabbitMqTransport(
                 },
                 cancellationToken: cancellationToken).ConfigureAwait(false);
 
+            if (options.ConsumerRetryMode == ConsumerRetryMode.Broker)
+            {
+                // Broker-native retry parking lot: expired messages dead-letter through the
+                // default exchange straight back into the work queue (routing key = queue).
+                await consumeChannel.QueueDeclareAsync(
+                    RabbitMqTopology.RetryQueueName(endpointName),
+                    durable: true, exclusive: false, autoDelete: false,
+                    arguments: new Dictionary<string, object?>
+                    {
+                        ["x-dead-letter-exchange"] = string.Empty,
+                        ["x-dead-letter-routing-key"] = queue,
+                    },
+                    cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
+
             foreach (var subscription in subscriptions)
             {
                 var exchange = RabbitMqTopology.ExchangeName(subscription.MessageTypeName);
@@ -244,6 +299,8 @@ internal sealed class RabbitMqTransport(
             return Task.CompletedTask;
         };
 
+        _consumeQueue = queue;
+
         var consumer = new AsyncEventingBasicConsumer(consumeChannel);
 
         consumer.ReceivedAsync += async (_, delivery) =>
@@ -254,10 +311,30 @@ internal sealed class RabbitMqTransport(
                 var envelope = RabbitMqEnvelopeMapper.ToEnvelope(delivery.BasicProperties, delivery.Body);
                 var result = await onMessage(envelope, delivery.CancellationToken).ConfigureAwait(false);
 
+                if (result == MessageDispatchResult.Retry)
+                {
+                    // Publish the delayed copy before consuming the original; a scheduling
+                    // failure downgrades to an immediate requeue so no attempt is lost.
+                    try
+                    {
+                        await ScheduleRedeliveryAsync(envelope, delivery.CancellationToken).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogWarning(
+                            ex,
+                            "Failed to schedule broker redelivery for message {MessageId}; requeueing for immediate redelivery instead.",
+                            envelope.MessageId);
+                        await consumeChannel.BasicNackAsync(delivery.DeliveryTag, multiple: false, requeue: true, delivery.CancellationToken)
+                            .ConfigureAwait(false);
+                        return;
+                    }
+                }
+
                 // Ack/nack via the channel that delivered this message (captured above), not a
                 // mutable field: a stop/restart cycle can otherwise ack against a channel this
                 // delivery never arrived on, which the broker closes with a 406.
-                if (result == MessageDispatchResult.Acknowledge)
+                if (result is MessageDispatchResult.Acknowledge or MessageDispatchResult.Retry)
                 {
                     await consumeChannel.BasicAckAsync(delivery.DeliveryTag, multiple: false, delivery.CancellationToken)
                         .ConfigureAwait(false);
@@ -308,6 +385,38 @@ internal sealed class RabbitMqTransport(
     {
         _consumerFault = new ConsumerFault(DateTimeOffset.UtcNow, reason);
         logger.LogWarning("RabbitMQ consumer fault recorded: {Reason}", reason);
+    }
+
+    /// <summary>
+    /// Publishes the failed message's delayed copy into the endpoint's retry queue: the
+    /// incremented attempt rides the headers, the backoff rides the per-message TTL, and on
+    /// expiry the broker routes the copy straight back into the work queue. Uses the
+    /// confirming publish channel so a lost copy surfaces as an exception (the caller then
+    /// requeues the original instead of acking).
+    /// </summary>
+    private async Task ScheduleRedeliveryAsync(TransportEnvelope envelope, CancellationToken cancellationToken)
+    {
+        if (_consumeQueue is null)
+            throw new InvalidOperationException("Consumption has not started.");
+
+        var retryQueue = RabbitMqTopology.RetryQueueName(EndpointNameResolver.Resolve(options));
+
+        var attempt = RedeliveryHeaders.GetAttempt(envelope);
+        var delay = RetryDelayCalculator.GetDelay(options.ConsumerRetry, attempt);
+        var copy = envelope with { Headers = RedeliveryHeaders.ForRedelivery(envelope) };
+
+        var properties = RabbitMqEnvelopeMapper.ToBasicProperties(copy);
+        properties.Expiration = Math.Max(1L, (long)delay.TotalMilliseconds)
+            .ToString(CultureInfo.InvariantCulture);
+
+        var channel = await GetPublishChannelAsync(cancellationToken).ConfigureAwait(false);
+        await channel.BasicPublishAsync(
+            exchange: string.Empty,
+            routingKey: retryQueue,
+            mandatory: false,
+            basicProperties: properties,
+            body: copy.Body,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     public async ValueTask<TransportHealth> CheckHealthAsync(CancellationToken cancellationToken = default)

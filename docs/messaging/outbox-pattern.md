@@ -355,6 +355,19 @@ flowchart TD
     H -->|No| I[Dead-lettered: visible in modulus outbox list-failed]
 ```
 
+## Scheduled Publishing
+
+The scheduled `Save` overload gives delayed publishing the outbox's durability: the row commits with your business data and the processor simply refuses to dispatch it before it is due.
+
+```csharp
+// Publish OrderFollowUpDue no earlier than three days from now.
+await outbox.Save(new OrderFollowUpDue(order.Id), DateTimeOffset.UtcNow.AddDays(3), ct);
+```
+
+The row's `ScheduledOnUtc` gates `GetPending`, and — deliberately — the backlog count: a message scheduled a week out is not outstanding work, so it never trips the backlog health check. Once due, the message dispatches like any other; precision is bounded by `OutboxPollInterval` (default 5 seconds). For sub-poll precision without durability, `IMessageBus.PublishScheduled` hands the delay to the broker instead — see [Message Bus](./message-bus#imessagebus-interface).
+
+Custom `IOutboxStore` implementations opt in by overriding the scheduled `Save` overload (the default implementation throws `NotSupportedException`).
+
 ## Retention & Cleanup
 
 Delivered rows accumulate forever unless something removes them, and an ever-growing `OutboxMessages` table slowly degrades the polling query. The built-in retention sweep bounds that growth:

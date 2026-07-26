@@ -94,6 +94,25 @@ public class AzureServiceBusEnvelopeHeaderTests
     }
 
     [Fact]
+    public void ToServiceBusMessage_maps_the_scheduled_enqueue_time()
+    {
+        var enqueueAt = DateTimeOffset.UtcNow.AddMinutes(30);
+        var envelope = EnvelopeWithHeaders(null) with { ScheduledEnqueueTimeUtc = enqueueAt };
+
+        var message = AzureServiceBusEnvelopeMapper.ToServiceBusMessage(envelope);
+
+        message.ScheduledEnqueueTime.ShouldBe(enqueueAt);
+    }
+
+    [Fact]
+    public void ToServiceBusMessage_without_schedule_leaves_the_default()
+    {
+        var message = AzureServiceBusEnvelopeMapper.ToServiceBusMessage(EnvelopeWithHeaders(null));
+
+        message.ScheduledEnqueueTime.ShouldBe(default);
+    }
+
+    [Fact]
     public void ToEnvelope_with_no_application_properties_yields_null_headers()
     {
         var received = ServiceBusModelFactory.ServiceBusReceivedMessage(

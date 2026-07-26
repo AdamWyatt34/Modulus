@@ -168,6 +168,8 @@ internal sealed class AzureServiceBusTransport(
                 MaxAutoLockRenewalDuration = ComputeMaxAutoLockRenewalDuration(options.ConsumerRetry),
             });
 
+            var subscriptionTopic = topic;
+
             processor.ProcessMessageAsync += async args =>
             {
                 // A message was delivered for this entity, proving it currently exists and is
@@ -177,12 +179,35 @@ internal sealed class AzureServiceBusTransport(
                 var envelope = AzureServiceBusEnvelopeMapper.ToEnvelope(args.Message);
                 var result = await onMessage(envelope, args.CancellationToken).ConfigureAwait(false);
 
+                if (result == MessageDispatchResult.Retry)
+                {
+                    // Schedule the delayed copy before settling the original; a scheduling
+                    // failure abandons the original for an immediate redelivery so no attempt
+                    // is lost. Topics have no per-subscription send, so the copy fans out with
+                    // a target-endpoint property and foreign endpoints acknowledge it unrun.
+                    try
+                    {
+                        await ScheduleRedeliveryAsync(subscriptionTopic, envelope, endpointName, args.CancellationToken)
+                            .ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogWarning(
+                            ex,
+                            "Failed to schedule broker redelivery for message {MessageId}; abandoning for immediate redelivery instead.",
+                            envelope.MessageId);
+                        await args.AbandonMessageAsync(args.Message, cancellationToken: CancellationToken.None)
+                            .ConfigureAwait(false);
+                        return;
+                    }
+                }
+
                 // Settle with CancellationToken.None: the handler already ran to completion (or
                 // exhausted retries) by this point, so a shutdown-triggered cancellation on
                 // args.CancellationToken must not prevent telling the broker the outcome — that
                 // would abandon an already-processed message and force a duplicate redelivery on
                 // the next deploy.
-                if (result == MessageDispatchResult.Acknowledge)
+                if (result is MessageDispatchResult.Acknowledge or MessageDispatchResult.Retry)
                 {
                     await args.CompleteMessageAsync(args.Message, CancellationToken.None).ConfigureAwait(false);
                 }
@@ -218,6 +243,34 @@ internal sealed class AzureServiceBusTransport(
             _processors.Add(processor);
             await processor.StartProcessingAsync(cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// Schedules the failed message's delayed copy back onto its topic with the incremented
+    /// attempt header, the endpoint that owns the retry, and
+    /// <see cref="ServiceBusMessage.ScheduledEnqueueTime"/> as the backoff. Other endpoints'
+    /// subscriptions receive the copy too (topics cannot target one subscription) and
+    /// acknowledge it without dispatching via the target-endpoint header.
+    /// </summary>
+    private async Task ScheduleRedeliveryAsync(
+        string topic,
+        TransportEnvelope envelope,
+        string endpointName,
+        CancellationToken cancellationToken)
+    {
+        var attempt = RedeliveryHeaders.GetAttempt(envelope);
+        var delay = RetryDelayCalculator.GetDelay(options.ConsumerRetry, attempt);
+
+        var copy = envelope with
+        {
+            Headers = RedeliveryHeaders.ForRedelivery(envelope, targetEndpoint: endpointName),
+            ScheduledEnqueueTimeUtc = DateTimeOffset.UtcNow + delay,
+        };
+
+        var sender = _senders.GetOrAdd(topic, name => Client.CreateSender(name));
+        await sender.SendMessageAsync(
+            AzureServiceBusEnvelopeMapper.ToServiceBusMessage(copy),
+            cancellationToken).ConfigureAwait(false);
     }
 
     private async Task EnsureTopicExistsAsync(string topic, CancellationToken cancellationToken)

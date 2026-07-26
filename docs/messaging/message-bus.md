@@ -12,10 +12,20 @@ public interface IMessageBus
         TEvent @event,
         CancellationToken cancellationToken = default)
         where TEvent : IIntegrationEvent;
+
+    // Default implementation throws NotSupportedException so custom buses keep compiling;
+    // the shipped bus overrides it.
+    Task PublishScheduled<TEvent>(
+        TEvent @event,
+        DateTimeOffset enqueueAtUtc,
+        CancellationToken cancellationToken = default)
+        where TEvent : IIntegrationEvent;
 }
 ```
 
 `Publish<TEvent>()` publishes an integration event to **all** subscribers (fan-out). Events are the only cross-module messaging primitive in Modulus: something happened, and zero or more other modules react to it.
+
+`PublishScheduled<TEvent>()` hands the event to the broker with a **not-before time**: Azure Service Bus schedules natively (`ScheduledEnqueueTime`), RabbitMQ parks the message in a per-event-type TTL queue that dead-letters into the event's exchange when due, and the in-memory transport delays in process. A time at or before now publishes immediately. Two caveats: a broker-scheduled message is fire-and-forget once handed over (cancel/reschedule is not surfaced), and on RabbitMQ mixed delays for one event type release in publish order — a long delay ahead of a short one holds the short one back (per-message TTL expires only at the queue head). For durable scheduling with transactional guarantees — or many mixed delays on RabbitMQ — prefer the outbox route: `outbox.Save(@event, enqueueAtUtc)` holds the row until due and dispatches it like any other message (precision bounded by the outbox poll interval; see [Outbox Pattern](./outbox-pattern#scheduled-publishing)).
 
 ::: info Where did `Send` go?
 Earlier versions exposed point-to-point `Send<TCommand>()` overloads. They were removed in 2.0: Modulus never ran a consuming pipeline for commands (the receiving side had to consume the queue itself), so the API implied a feature that didn't exist. In-process commands go through the mediator; cross-module communication goes through integration events. If a designed point-to-point story lands later, it will come back with real consumer support.

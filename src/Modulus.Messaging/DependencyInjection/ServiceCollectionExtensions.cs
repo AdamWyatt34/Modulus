@@ -161,7 +161,7 @@ public static class ServiceCollectionExtensions
         var options = provider.GetRequiredService<MessagingOptions>();
 
         if (options.Transport == Transport.InMemory)
-            return new InMemoryTransport(provider.GetRequiredService<ILogger<InMemoryTransport>>());
+            return new InMemoryTransport(provider.GetRequiredService<ILogger<InMemoryTransport>>(), options);
 
         var factory = provider
             .GetServices<ITransportFactory>()

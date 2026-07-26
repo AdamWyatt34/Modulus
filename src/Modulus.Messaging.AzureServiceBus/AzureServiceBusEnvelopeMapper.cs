@@ -43,6 +43,10 @@ internal static class AzureServiceBusEnvelopeMapper
                 message.ApplicationProperties[key] = value;
         }
 
+        // Native scheduling: the broker holds the message until the enqueue time.
+        if (envelope.ScheduledEnqueueTimeUtc is { } enqueueAt)
+            message.ScheduledEnqueueTime = enqueueAt;
+
         return message;
     }
 

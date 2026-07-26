@@ -18,7 +18,23 @@ internal sealed class TransportMessageBus(
 {
     private static readonly ActivitySource Source = new(MessagingDiagnostics.ActivitySourceName);
 
-    public async Task Publish<TEvent>(TEvent @event, CancellationToken cancellationToken = default)
+    public Task Publish<TEvent>(TEvent @event, CancellationToken cancellationToken = default)
+        where TEvent : IIntegrationEvent
+        => PublishCore(@event, scheduledEnqueueTimeUtc: null, cancellationToken);
+
+    public Task PublishScheduled<TEvent>(TEvent @event, DateTimeOffset enqueueAtUtc, CancellationToken cancellationToken = default)
+        where TEvent : IIntegrationEvent
+        => PublishCore(
+            @event,
+            // At-or-before-now schedules publish immediately rather than round-tripping a
+            // zero delay through the broker's scheduling machinery.
+            enqueueAtUtc <= DateTimeOffset.UtcNow ? null : enqueueAtUtc,
+            cancellationToken);
+
+    private async Task PublishCore<TEvent>(
+        TEvent @event,
+        DateTimeOffset? scheduledEnqueueTimeUtc,
+        CancellationToken cancellationToken)
         where TEvent : IIntegrationEvent
     {
         var eventType = @event.GetType();
@@ -27,6 +43,8 @@ internal sealed class TransportMessageBus(
         using var activity = Source.StartActivity($"{messageTypeName} publish", ActivityKind.Producer);
         activity?.SetTag("modulus.message_id", @event.EventId);
         activity?.SetTag("modulus.message_type", messageTypeName);
+        if (scheduledEnqueueTimeUtc is { } scheduled)
+            activity?.SetTag("modulus.scheduled_enqueue_time", scheduled.UtcDateTime.ToString("O"));
 
         var envelope = new TransportEnvelope(
             messageTypeName,
@@ -38,6 +56,7 @@ internal sealed class TransportMessageBus(
             // Fall back to the ambient activity when this publish wasn't sampled, so an
             // instrumented caller still propagates its context across the broker.
             Headers = TraceContextPropagation.Inject(activity ?? Activity.Current),
+            ScheduledEnqueueTimeUtc = scheduledEnqueueTimeUtc,
         };
 
         try
