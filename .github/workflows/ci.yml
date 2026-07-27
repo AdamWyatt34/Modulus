@@ -73,7 +73,7 @@ jobs:
         run: dotnet test --no-build --configuration Release --verbosity normal --filter "Category!=E2E&Category!=Integration" --collect:"XPlat Code Coverage" --results-directory ./coverage
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v7
         # Requires the CODECOV_TOKEN repository secret; harmless no-op failure until it exists.
         continue-on-error: true
         with:
