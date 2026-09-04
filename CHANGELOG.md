@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **Dependency floors — Microsoft.Extensions.\* 10.0.11**: every `Microsoft.Extensions.*` reference (DependencyInjection, Logging, Configuration, Hosting.Abstractions, Diagnostics.\*) moves from 10.0.3 to 10.0.11 as one coordinated set, so the published packages' minimum versions stay consistent with each other. The `modulus init` scaffold and `samples/SampleApp` pin the same versions — a scaffold that pins the Microsoft.Extensions packages *below* what ModulusKit requires fails restore with NU1605/NU1109 downgrade errors, so existing solutions upgrading to this release should raise their own `Directory.Packages.props` pins to 10.0.11 alongside the ModulusKit packages.
+- **Testcontainers 4.14.0** (`Testcontainers.RabbitMq`/`.ServiceBus` in the repo test suites; `Testcontainers.MsSql` in the scaffold and sample): 4.13.0 and earlier depend on SSH.NET 2025.1.0, which carries GHSA-q939-rpr3-3284 (High) and fails the CI vulnerability scan; 4.14.0 moves to SSH.NET 2026.0.0.
+- Test/build tooling: Microsoft.NET.Test.Sdk 18.9.0, coverlet.collector 10.0.1, xunit.runner.visualstudio 4.0.0 (still on xunit 2.9.3), MinVer 7.0.0, Microsoft.SourceLink.GitHub 10.0.400, System.CommandLine 2.0.11, RabbitMQ.Client 7.2.2. GitHub Actions: `actions/checkout` v7, `actions/setup-node` v7, `actions/upload-pages-artifact` v5, `github/codeql-action` v4, `codecov/codecov-action` v7.
+
 ## [4.0.0] - 2026-07-26
 
 Coordinated release of all ten packages at 4.0.0 — Wave B from the 2026-07-25 full audit: the parked **breaking** items (`docs/audit/wave-b-4.0-plan.md`). Custom `IOutboxStore`/`IInboxStore` implementations and code referencing `RequestHandlerDelegate` by its old shape must update; both messaging schemas change (consumer-owned migrations — generate and apply them **before** deploying 4.0 binaries). The wave also brings the library packages to .NET 8 LTS consumers via multi-targeting (additive on its own, but it rides the same coordinated major).
