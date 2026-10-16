@@ -19,7 +19,7 @@
     <PackageVersion Include="ModulusKit.Messaging.AzureServiceBus" Version="{{ModulusKitVersion}}" />
 
     <!-- Application -->
-    <PackageVersion Include="FluentValidation" Version="12.1.1" />
+    <PackageVersion Include="FluentValidation" Version="12.2.0" />
     <PackageVersion Include="ModulusKit.Analyzers" Version="{{ModulusKitVersion}}" />
     <PackageVersion Include="ModulusKit.Generators" Version="{{ModulusKitVersion}}" />
 
@@ -27,17 +27,19 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.3" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.3" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.3" />
+    <!-- Directly referenced by module infrastructure to pin SqlClient's vulnerable transitive dependency. -->
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="9.0.21" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.3" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.3" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.3" />
 
     <!-- Microsoft Extensions -->
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.11" />
     <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.11" />
     <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
 
     <!-- API Documentation -->
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.4" />
