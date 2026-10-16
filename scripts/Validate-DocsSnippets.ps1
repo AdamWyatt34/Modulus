@@ -130,6 +130,8 @@ $($projectReferences -join "`n")
     <PackageReference Include="FluentValidation" Version="12.2.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.3" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.3" />
+    <!-- Direct pin via SqlClient: fixes GHSA-846f-f764-76mx and GHSA-2fmv-rv2c-59x7. -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="9.0.21" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.3" />
   </ItemGroup>
 
